@@ -10,7 +10,7 @@
     "dev:runner": "pnpm --filter @dante/runner dev",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
-    "typecheck": "pnpm --filter @dante/web exec tsc --noEmit && pnpm --filter @dante/runner exec tsc --noEmit",
+    "typecheck": "pnpm -r --if-present typecheck",
     "db:generate": "pnpm --filter @dante/db generate",
     "db:migrate": "pnpm --filter @dante/db migrate",
     "db:studio": "pnpm --filter @dante/db studio",
