@@ -42,12 +42,20 @@ husky + lint-staged + commitlint + prettier (설정은 리포 루트). Conventio
 - 커밋 시 스테이징된 파일에 `prettier --write` 자동 실행 (pre-commit)
 - 작게 자주 커밋. 하나의 커밋 = 하나의 논리적 단위
 
-## 브랜치 · PR
+## 작업 흐름 (에이전트 주도)
+
+1. 개발자가 작업을 **한 문장**으로 준다 (1 PR = 1 목적)
+2. 에이전트: 브랜치 생성 → 코드 + 작은 커밋 → `git push`(feature 브랜치) → `gh pr create`
+3. 개발자/팀원이 PR diff 리뷰
+4. **작성자가 아닌** 팀원이 Squash merge
+5. 에이전트는 **merge 하지 않고, `main`에 직접 push 하지 않는다** (`--no-verify`는 부트스트랩 외 금지)
+
+## 브랜치 · PR 규칙
 
 - 브랜치 이름: `<type>/<kebab-desc>` — type은 커밋과 같은 11종. 예: `feat/chat-infinite-scroll`, `fix/login-redirect`
   - `pre-push` 훅이 규칙 위반 브랜치와 `main`/`master` 직접 push를 막는다
-- `main` 직접 push 금지. 무조건 브랜치 → PR → **다른 사람**이 diff 보고 merge (셀프 merge 금지)
 - **Squash merge만** 사용 → PR 하나 = main 커밋 하나. 그래서 **PR 제목도 커밋 컨벤션 형식**(`feat(chat): ...`)
+- PR 본문은 `.github/pull_request_template.md` 형식을 채운다
 - PR 크기 기준 (lockfile·생성 파일·포맷팅·rename 제외한 "의미 있는 줄"):
   - `200줄 이하` 이상적 · `200–400` 정상 · `400–600` 왜 못 쪼갰는지 설명 · `600 초과` 쪼개라
   - 한 문장으로 설명할 때 "그리고"가 들어가면 쪼갠다. 1 PR = 1 목적
@@ -59,10 +67,11 @@ husky + lint-staged + commitlint + prettier (설정은 리포 루트). Conventio
 - **이 저장소 기여자는 해당 스택/툴 경험이 적다고 가정한다.** 설명은 "왜 그런지 + 대안 + 트레이드오프"까지 풀고, 낯선 용어는 짧게 풀이한다. "그냥 이렇게 하세요"로 끝내지 않는다.
 - **새 의존성(npm 패키지) 추가는 사람 승인 필수.** PR 설명에 "왜 필요한지 / 직접 구현 대비 이득" 한 줄. 몇 줄로 될 일은 라이브러리 대신 직접 짠다.
 - 디버깅용 스크립트·로그·실험 파일은 리포 안에 만들지 않는다. 리포 밖 임시 폴더 사용. 리포에 남겨야 하면 먼저 묻는다.
-- **`git push` 는 크기 무관 항상 사람 승인 후.** 로컬 commit은 자유(되돌리기 쉬움), push만 확인받는다
+- feature 브랜치 `git push` + `gh pr create`는 에이전트가 한다. **`main` push와 PR merge는 안 한다.**
 - 기능 단위가 컴파일/통과되어 끝날 때마다 `git diff --stat` 결과를 보고한다 (감으로 추정하지 말고 실제로 실행)
-- 마지막 커밋 이후 diff가 **400줄 초과 또는 파일 10개 초과**면 commit 전에 멈추고 개발자에게 쪼갤지 물어본다
+- 마지막 커밋 이후 diff가 **400줄 초과 또는 파일 10개 초과**면 commit/PR 전에 멈추고 개발자에게 쪼갤지 물어본다
 - 5줄마다 보고하란 뜻 아님 — "논리적 단위 완료" 시점에만
+- CI(GitHub Actions)가 빨간불이면 merge 대상 아님. 로컬에서 `pnpm lint && pnpm typecheck && pnpm build` 통과 확인 후 PR 올린다
 
 ## 주의
 
