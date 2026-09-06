@@ -1,0 +1,23 @@
+# deps
+node_modules/
+.pnpm-store/
+
+# build
+.next/
+dist/
+build/
+out/
+
+# env
+.env
+.env.local
+.env*.local
+
+# prisma
+packages/db/generated/
+
+# misc
+.DS_Store
+*.log
+coverage/
+*.tsbuildinfo

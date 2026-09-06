@@ -1,0 +1,5 @@
+# 줄바꿈은 전부 LF로 통일 (윈도우 CRLF 방지)
+* text=auto eol=lf
+
+# 생성 파일: GitHub diff에서 접고, 언어 통계에서 제외
+pnpm-lock.yaml linguist-generated=true -diff

@@ -1,0 +1,18 @@
+branch="$(git branch --show-current)"
+
+if [ -z "$branch" ] || [ "$branch" = "main" ] || [ "$branch" = "master" ]; then
+  echo "✖ ${branch:-detached HEAD} 에서 직접 push 금지. 브랜치 파서 PR 올려."
+  echo "  (원격 최초 세팅 등 정말 필요하면: git push --no-verify)"
+  exit 1
+fi
+
+valid='^(feat|fix|docs|hotfix|refactor|test|chore|rename|asset|design|a11y)/[a-z0-9._-]+$'
+if ! printf '%s' "$branch" | grep -Eq "$valid"; then
+  echo "✖ 브랜치 이름 규칙 위반: $branch"
+  echo "  형식: <type>/<kebab-desc>   예: feat/chat-infinite-scroll"
+  echo "  type: feat fix docs hotfix refactor test chore rename asset design a11y"
+  exit 1
+fi
+
+echo "▶ typecheck..."
+pnpm typecheck || exit 1

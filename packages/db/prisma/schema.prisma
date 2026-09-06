@@ -1,0 +1,12 @@
+// Prisma schema — 스키마/모델은 팀에서 별도로 채운다 (기술 스택 세팅 단계에서는 datasource/generator만).
+// 문서의 데이터 모델(User/Team/Project/Component/TestFile/TestFileVersion/TestRun ...)을 여기에 추가.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL") // 풀러(6543) + ?pgbouncer=true&connection_limit=1
+  directUrl = env("DIRECT_URL")   // 직접(5432), migrate 전용
+}

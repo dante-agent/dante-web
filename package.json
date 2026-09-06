@@ -1,0 +1,32 @@
+{
+  "name": "dante-web",
+  "private": true,
+  "packageManager": "pnpm@12.3.4",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @dante/web dev",
+    "dev:runner": "pnpm --filter @dante/runner dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm --filter @dante/web exec tsc --noEmit && pnpm --filter @dante/runner exec tsc --noEmit",
+    "db:generate": "pnpm --filter @dante/db generate",
+    "db:migrate": "pnpm --filter @dante/db migrate",
+    "db:studio": "pnpm --filter @dante/db studio",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,json,md,css,scss}": [
+      "prettier --write"
+    ]
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.2.2",
+    "@commitlint/config-conventional": "^21.2.2",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.5.0",
+    "prettier": "^3.9.6",
+    "prettier-plugin-tailwindcss": "^0.8.1"
+  }
+}
