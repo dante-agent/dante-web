@@ -5,5 +5,11 @@
 //   - 없거나 멤버가 아니면 notFound()  ← 권한 검사는 앱 코드에서 (AGENTS.md)
 //   - 사이드바(대시보드 / 폴더 / 추천 / 설정) 렌더
 export default function ProjectLayout({ children }: LayoutProps<"/project/[projectRef]">) {
-  return <div className="min-h-svh">{children}</div>;
+  // <main> 은 여기 한 곳에만 둔다. 페이지마다 반복하지 않고, 문서에 <main> 이 둘 이상
+  // 생기지 않는다. 사이드바가 붙으면 그 형제로 들어간다.
+  return (
+    <div className="min-h-svh">
+      <main className="p-8">{children}</main>
+    </div>
+  );
 }
