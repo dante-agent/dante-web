@@ -32,7 +32,7 @@ export default function LoginPage() {
         {/* flex-1 + 가운데 정렬: 로고/약관 높이와 무관하게 폼이 세로 중앙에 온다 */}
         <div className="flex flex-1 items-center justify-center py-16">
           <div className="w-full max-w-sm">
-            <h1 className="text-3xl font-medium tracking-tight">Welcome back</h1>
+            <h1 className="font-heading text-3xl font-semibold tracking-tight">Welcome back</h1>
             <p className="text-muted-foreground mt-2 text-sm">Sign in to your account</p>
 
             <div className="mt-8 flex flex-col gap-3">
@@ -68,11 +68,11 @@ export default function LoginPage() {
               absolute 라서 문단 흐름에 영향을 주지 않고, 스크린리더는 aria-hidden 으로 건너뛴다. */}
           <span
             aria-hidden="true"
-            className="text-muted-foreground/25 pointer-events-none absolute -top-10 left-6 font-serif text-9xl leading-none select-none"
+            className="text-muted-foreground/25 pointer-events-none absolute -top-10 left-6 text-9xl leading-none select-none"
           >
             &ldquo;
           </span>
-          <p className="relative text-3xl leading-snug font-medium">
+          <p className="font-heading relative text-3xl leading-snug font-semibold">
             Stop letting tests hold up your features. Dante reads your repository, suggests the
             tests you are missing, and runs them for you.
           </p>
