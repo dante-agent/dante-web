@@ -1,10 +1,24 @@
 import Image from "next/image";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import danteLogo from "@/assets/dante-logo.png";
 import { Button } from "@/components/ui/button";
 import { GitHubIcon, GoogleIcon } from "@/components/brand-icons";
+import { signInWithGoogle } from "@/lib/auth/actions";
+import { createClient } from "@/lib/supabase/server";
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  // 이미 로그인한 사람에게 로그인 화면을 다시 보여줄 이유가 없다.
+  // getSession() 이 아니라 getUser() 를 쓴다 — 쿠키만 믿지 않고 Supabase 에 실제로 물어본다.
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    redirect("/dashboard");
+  }
+
   return (
     // 좌우 분할 비율은 Supabase 기준 약 38.5 : 61.5 (5fr:8fr = 38.46%). 1:1 이 아니다.
     // lg 미만에서는 오른쪽 패널을 숨기고 왼쪽 컬럼이 화면을 다 쓴다
@@ -40,10 +54,14 @@ export default function LoginPage() {
                 <GitHubIcon className="size-4" />
                 Continue with GitHub
               </Button>
-              <Button variant="outline" size="lg" className="h-10 w-full gap-2.5">
-                <GoogleIcon className="size-4" />
-                Continue with Google
-              </Button>
+              {/* form + Server Action — 버튼 하나 때문에 클라이언트 컴포넌트를 만들지 않는다.
+                  JS 가 아직 안 떠도 폼 제출은 동작한다. */}
+              <form action={signInWithGoogle}>
+                <Button type="submit" variant="outline" size="lg" className="h-10 w-full gap-2.5">
+                  <GoogleIcon className="size-4" />
+                  Continue with Google
+                </Button>
+              </form>
             </div>
           </div>
         </div>
