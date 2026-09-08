@@ -1,3 +1,5 @@
+import { StepStrip } from "@/components/projects/step-strip";
+
 // 온보딩 단계 머리말.
 //
 // CodeRabbit 브랜드 사이트의 편집디자인 장치를 실측해서 가져왔다:
@@ -9,34 +11,23 @@
 // 48px 제목은 마케팅 페이지 기준이라 앱 화면에서는 32px 로 줄이되
 // weight·tracking·행간 비율은 그대로 뒀다.
 
-const TOTAL_STEPS = 4;
-
 export function StepHeader({
   step,
-  label,
   title,
   description,
 }: {
   step: number;
-  label: string;
   title: string;
   description: string;
 }) {
-  const current = String(step).padStart(2, "0");
-
   return (
     <header>
       <SegmentedRule />
+      <div className="mt-6">
+        <StepStrip current={step} />
+      </div>
 
-      <p className="mt-8 flex items-baseline gap-3 font-mono text-xs font-bold tracking-[0.1em]">
-        <span className="text-[#ff801f]">{current}</span>
-        <span className="uppercase">{label}</span>
-        <span className="text-muted-foreground ml-auto tabular-nums">
-          {current} / {String(TOTAL_STEPS).padStart(2, "0")}
-        </span>
-      </p>
-
-      <h1 className="font-heading mt-5 text-[32px] leading-[1.125] font-medium tracking-[-0.02em]">
+      <h1 className="font-heading mt-8 text-[32px] leading-[1.125] font-medium tracking-[-0.02em]">
         {title}
       </h1>
       <p className="text-muted-foreground mt-4 max-w-[488px] text-base leading-relaxed">

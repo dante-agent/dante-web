@@ -119,7 +119,13 @@ function RepoRow({
   installationId?: string;
 }) {
   return (
-    <li className="hover:bg-muted/30 flex items-center gap-4 px-6 py-4 transition-colors">
+    <li className="group hover:bg-muted/30 relative flex items-center gap-4 px-6 py-4 transition-colors duration-[180ms] ease-out">
+      {/* 왼쪽 액센트 바. 세로로 펼쳐지며 들어온다 — CodeRabbit 활성 표시와 같은 장치.
+          420ms expo-out 은 칸 확장용이고, 이런 작은 요소는 180ms 가 맞다. */}
+      <span
+        aria-hidden="true"
+        className="absolute inset-y-0 left-0 w-0.5 origin-center scale-y-0 bg-[#ff570a] transition-transform duration-[180ms] ease-out group-hover:scale-y-100 motion-reduce:transition-none"
+      />
       <div className="min-w-0 flex-1">
         <p className="flex items-center gap-2 truncate text-[15px] font-medium">
           {repo.name}

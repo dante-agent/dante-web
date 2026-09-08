@@ -68,7 +68,6 @@ export default async function GitHubConnectPage({
 
       <StepHeader
         step={2}
-        label="GitHub 연결"
         title="어떤 레포로 시작할까요"
         description="지금 하나만 골라도 됩니다. 나중에 프로젝트를 더 만들 수 있습니다."
       />
@@ -158,10 +157,10 @@ function ConnectPrompt() {
         {/* 서버 라우트가 state 쿠키를 심고 GitHub 설치 화면으로 보낸다. */}
         <a
           href="/api/github/install"
-          className={buttonVariants({ size: "lg", className: "shrink-0 rounded-[4px]" })}
+          className={buttonVariants({ size: "lg", className: "group shrink-0 rounded-[4px]" })}
         >
           설치
-          <ArrowRight />
+          <ArrowRight className="transition-transform duration-[180ms] ease-out group-hover:translate-x-0.5 motion-reduce:transition-none" />
         </a>
       </div>
 
