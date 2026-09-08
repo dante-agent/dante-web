@@ -36,7 +36,10 @@ export default async function DashboardPage() {
       </div>
 
       <form action={signOut}>
-        <Button variant="outline" size="lg" className="h-10">
+        {/* type="submit" 필수. Base UI Button 은 기본으로 type="button" 을 넣어서
+            (useButton 의 nativeButton 기본값) 안 주면 폼이 제출되지 않는다.
+            Radix 기반 shadcn Button 과 다른 지점이라 폼 안에서는 매번 명시한다. */}
+        <Button type="submit" variant="outline" size="lg" className="h-10">
           Sign out
         </Button>
       </form>
