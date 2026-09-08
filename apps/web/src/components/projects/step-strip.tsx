@@ -36,10 +36,26 @@ const STEPS: Step[] = [
 // 펼친 칸이 가져가는 비율. CodeRabbit 은 4.75 인데 그건 스트립이 1370px 일
 // 때다. 우리 콘텐츠 폭은 688px 이라 4.75 를 쓰면 접힌 칸이 89px 로 좁아져
 // 라벨이 잘린다. 688/(4+3) ≈ 98px 이 되도록 4 로 낮췄다.
-const EXPANDED_GROW = 4;
+const EXPANDED_RATIO = 4;
+const TOTAL_RATIO = EXPANDED_RATIO + (STEPS.length - 1);
+
+/**
+ * 칸 너비를 flex-basis 퍼센트로 준다.
+ *
+ * flex-grow 로 하면 안 된다 — CodeRabbit 이 transition-property 에 flex-grow 를
+ * 걸어둬서 그대로 옮겼다가, 브라우저가 flex-grow 를 아예 보간하지 않는 걸
+ * 확인했다(transition 자체가 생성되지 않고 최종값으로 점프한다). 그쪽은 JS 로
+ * 매 프레임 스타일을 쓰는 방식일 것이다.
+ * flex-basis 는 길이라서 정상적으로 보간된다. grow/shrink 를 0 으로 묶어
+ * 너비가 basis 와 같아지게 한다.
+ */
+function basisFor(isExpanded: boolean) {
+  const ratio = isExpanded ? EXPANDED_RATIO : 1;
+  return `${((100 * ratio) / TOTAL_RATIO).toFixed(4)}%`;
+}
 
 // 실측값. Tailwind 임의값으로 매번 쓰기엔 길어서 묶어둔다.
-const EXPAND = "transition-[flex-grow] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)]";
+const EXPAND = "transition-[flex-basis] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)]";
 const TINT = "transition-[color,border-color,opacity] duration-[180ms] ease-out";
 
 export function StepStrip({ current }: { current: number }) {
@@ -75,11 +91,13 @@ export function StepStrip({ current }: { current: number }) {
             >
               {step.label}
             </span>
-            {/* 꼬리말은 펼쳐졌을 때만. 자리를 차지하지 않게 폭까지 접는다. */}
+            {/* 꼬리말은 펼쳐졌을 때만 보인다. 접히면 부모의 overflow-hidden 이
+                잘라내므로 폭을 따로 접지 않고 투명도만 바꾼다
+                (여기서도 flex-grow 는 보간되지 않는다). */}
             <span
               aria-hidden={!isExpanded}
-              className={`text-muted-foreground overflow-hidden text-[13px] whitespace-nowrap ${EXPAND} ${
-                isExpanded ? "flex-grow opacity-100" : "flex-grow-0 opacity-0"
+              className={`text-muted-foreground min-w-0 text-[13px] whitespace-nowrap ${TINT} ${
+                isExpanded ? "opacity-100" : "opacity-0"
               }`}
             >
               {step.detail}
@@ -94,7 +112,7 @@ export function StepStrip({ current }: { current: number }) {
         return (
           <li
             key={step.label}
-            style={{ flexGrow: isExpanded ? EXPANDED_GROW : 1, flexBasis: 0 }}
+            style={{ flexGrow: 0, flexShrink: 0, flexBasis: basisFor(isExpanded) }}
             className={`min-w-0 ${EXPAND} motion-reduce:transition-none`}
             onMouseEnter={() => setFocused(number)}
             onMouseLeave={() => setFocused(null)}
