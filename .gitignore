@@ -24,3 +24,6 @@ packages/db/generated/
 *.log
 coverage/
 *.tsbuildinfo
+
+# local claude instructions
+CLAUDE.local.md
