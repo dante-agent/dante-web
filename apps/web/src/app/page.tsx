@@ -1,10 +1,20 @@
 import Image from "next/image";
 import Link from "next/link";
 import danteLogo from "@/assets/dante-logo.png";
-import { Button } from "@/components/ui/button";
-import { GitHubIcon, GoogleIcon } from "@/components/brand-icons";
+import { SocialLoginButtons } from "@/components/auth/social-login-buttons";
+import { safeNext } from "@/lib/auth/redirect";
 
-export default function LoginPage() {
+// /auth/callback 이 실패하면 ?error=<코드> 를 달고 여기로 돌려보낸다.
+// 보여줄 문구는 코드로만 고른다 — 쿼리 문자열을 화면에 그대로 찍지 않는다.
+const ERROR_MESSAGES: Record<string, string> = {
+  denied: "Sign in was cancelled.",
+  exchange: "Sign in failed. Please try again.",
+};
+
+export default async function LoginPage({ searchParams }: PageProps<"/">) {
+  const { next, error } = await searchParams;
+  const errorMessage = typeof error === "string" ? ERROR_MESSAGES[error] : undefined;
+
   return (
     // 좌우 분할 비율은 Supabase 기준 약 38.5 : 61.5 (5fr:8fr = 38.46%). 1:1 이 아니다.
     // lg 미만에서는 오른쪽 패널을 숨기고 왼쪽 컬럼이 화면을 다 쓴다
@@ -35,16 +45,16 @@ export default function LoginPage() {
             <h1 className="font-heading text-3xl font-semibold tracking-tight">Welcome back</h1>
             <p className="text-muted-foreground mt-2 text-sm">Sign in to your account</p>
 
-            <div className="mt-8 flex flex-col gap-3">
-              <Button variant="outline" size="lg" className="h-10 w-full gap-2.5">
-                <GitHubIcon className="size-4" />
-                Continue with GitHub
-              </Button>
-              <Button variant="outline" size="lg" className="h-10 w-full gap-2.5">
-                <GoogleIcon className="size-4" />
-                Continue with Google
-              </Button>
-            </div>
+            {errorMessage && (
+              <p
+                role="alert"
+                className="border-destructive/40 bg-destructive/10 text-destructive mt-6 rounded-md border px-3 py-2 text-sm"
+              >
+                {errorMessage}
+              </p>
+            )}
+
+            <SocialLoginButtons next={safeNext(next)} />
           </div>
         </div>
 
