@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { LOGIN_PATH, safeNext } from "@/lib/auth/redirect";
 import { createClient } from "@/lib/supabase/server";
 
-// GitHub 동의 → Supabase → 여기로 돌아온다.
+// GitHub·Google 동의 → Supabase → 여기로 돌아온다.
 // 받은 1회용 code 를 세션(쿠키)으로 바꾸는 곳. 회원가입/로그인 모두 이 경로를 탄다
-// (GitHub 계정으로 처음 들어오면 Supabase 가 auth.users 에 새 사용자를 만든다).
+// (해당 계정으로 처음 들어오면 Supabase 가 auth.users 에 새 사용자를 만든다).
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const next = safeNext(searchParams.get("next"));
@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   const isLocal = process.env.NODE_ENV === "development";
   const baseUrl = !isLocal && forwardedHost ? `https://${forwardedHost}` : origin;
 
-  // 사용자가 GitHub 동의 화면에서 취소하면 code 대신 error 가 온다.
+  // 사용자가 프로바이더 동의 화면에서 취소하면 code 대신 error 가 온다.
   if (searchParams.get("error")) {
     return NextResponse.redirect(`${baseUrl}${LOGIN_PATH}?error=denied`);
   }
