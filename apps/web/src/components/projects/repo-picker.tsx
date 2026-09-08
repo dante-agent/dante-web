@@ -6,7 +6,6 @@ import { formatDistanceToNow } from "date-fns";
 import { ko } from "date-fns/locale";
 import { Lock, Search } from "lucide-react";
 import { importRepo } from "@/app/projects/new/github/actions";
-import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { InstallationRepo } from "@/lib/github/repos";
@@ -15,6 +14,9 @@ import type { InstallationRepo } from "@/lib/github/repos";
 //
 // 행마다 Import 버튼을 둔다 (Vercel 방식). "선택 → 하단 버튼" 2단계보다 클릭이
 // 하나 적고, 어떤 레포를 고른 상태인지 기억할 필요가 없다.
+//
+// 생김새는 CodeRabbit 기준 — 각진 테두리(radius 0), 행 사이는 헤어라인,
+// 기술적인 메타데이터는 Hack mono (DESIGN.md §3).
 //
 // bigint 는 서버 컴포넌트에서 클라이언트로 넘길 때 직렬화되지 않는다.
 // 그래서 설치 ID·프로젝트 ref 는 문자열 맵으로 받는다.
@@ -52,8 +54,7 @@ export function RepoPicker({
           aria-label="계정"
           value={activeOwner}
           onChange={(event) => setOwner(event.target.value)}
-          // 높이·글자 크기는 Supabase 대시보드 실측(h26 / 12px)에 맞춘다
-          className="border-input bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 h-7 shrink-0 rounded-md border px-2 text-xs outline-none focus-visible:ring-3"
+          className="border-input bg-card focus-visible:border-ring focus-visible:ring-ring/40 h-9 shrink-0 rounded-[4px] border px-3 font-mono text-xs outline-none focus-visible:ring-2"
         >
           {owners.map((name) => (
             <option key={name} value={name}>
@@ -63,18 +64,18 @@ export function RepoPicker({
         </select>
 
         <div className="relative flex-1">
-          <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2 size-3 -translate-y-1/2" />
+          <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2" />
           <Input
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="레포 검색"
-            className="h-7 rounded-md pl-7 text-xs md:text-xs"
+            className="bg-card h-9 rounded-[4px] pl-9 text-sm md:text-sm"
           />
         </div>
       </div>
 
-      <ul className="border-border divide-border mt-3 divide-y overflow-hidden rounded-lg border">
+      <ul className="border-border divide-border bg-card mt-3 divide-y border">
         {visible.map((repo) => (
           <RepoRow
             key={repo.id}
@@ -84,7 +85,7 @@ export function RepoPicker({
           />
         ))}
         {visible.length === 0 && (
-          <li className="text-muted-foreground px-4 py-14 text-center text-[13px]">
+          <li className="text-muted-foreground px-6 py-16 text-center text-[15px]">
             {repos.length === 0
               ? "설치할 때 레포를 고르지 않았습니다. 아래에서 레포를 추가하세요."
               : `"${query}" 와 일치하는 레포가 없습니다`}
@@ -93,15 +94,15 @@ export function RepoPicker({
       </ul>
 
       {/* 처음 설치할 때 레포를 일부만 연 사용자가 되돌아갈 길. 없으면 막힌다. */}
-      <p className="text-muted-foreground mt-3 text-center text-[13px]">
+      <p className="text-muted-foreground mt-4 font-mono text-[11px] tracking-wide">
         찾는 레포가 없나요?{" "}
         <a
           href={settingsUrl}
           target="_blank"
           rel="noreferrer noopener"
-          className="text-foreground underline underline-offset-2"
+          className="text-foreground underline underline-offset-4"
         >
-          GitHub 에서 레포 추가하기
+          GITHUB 에서 레포 추가하기 ↗
         </a>
       </p>
     </>
@@ -118,13 +119,13 @@ function RepoRow({
   installationId?: string;
 }) {
   return (
-    <li className="hover:bg-muted/40 flex items-center gap-3 px-4 py-2.5 transition-colors">
+    <li className="hover:bg-muted/30 flex items-center gap-4 px-6 py-4 transition-colors">
       <div className="min-w-0 flex-1">
-        <p className="flex items-center gap-1.5 truncate text-[13px] font-semibold">
+        <p className="flex items-center gap-2 truncate text-[15px] font-medium">
           {repo.name}
           {repo.private && <Lock className="text-muted-foreground size-3 shrink-0" />}
         </p>
-        <p className="text-muted-foreground mt-0.5 font-mono text-[11px]">
+        <p className="text-muted-foreground mt-1 font-mono text-[11px] tracking-wide">
           {repo.language ?? "—"}
           {repo.pushedAt &&
             ` · ${formatDistanceToNow(repo.pushedAt, { addSuffix: true, locale: ko })}`}
@@ -133,12 +134,12 @@ function RepoRow({
 
       {projectRef ? (
         <>
-          <Badge variant="outline" className="text-muted-foreground">
-            연결됨
-          </Badge>
+          <span className="text-brand-mint font-mono text-[10px] font-bold tracking-[0.12em]">
+            CONNECTED
+          </span>
           <Link
             href={`/project/${projectRef}/dashboard`}
-            className={buttonVariants({ variant: "ghost", size: "sm" })}
+            className={buttonVariants({ variant: "ghost", size: "sm", className: "rounded-[4px]" })}
           >
             열기
           </Link>
@@ -148,7 +149,13 @@ function RepoRow({
         <form action={importRepo}>
           <input type="hidden" name="repoId" value={repo.id} />
           <input type="hidden" name="installationId" value={installationId ?? ""} />
-          <Button type="submit" size="sm" disabled={!installationId}>
+          <Button
+            type="submit"
+            variant="outline"
+            size="sm"
+            className="rounded-[4px]"
+            disabled={!installationId}
+          >
             Import
           </Button>
         </form>

@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import { prisma } from "@dante/db";
 import { GitHubIcon } from "@/components/brand-icons";
 import { RepoPicker } from "@/components/projects/repo-picker";
+import { StepHeader } from "@/components/projects/step-header";
 import { buttonVariants } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth/user";
 import { installationSettingsUrl } from "@/lib/github/app";
@@ -15,6 +16,7 @@ export default async function GitHubConnectPage({
   searchParams,
 }: PageProps<"/projects/new/github">) {
   const user = await requireUser();
+
   // searchParams 값은 같은 키가 여러 번 오면 배열이 된다. 첫 값만 쓴다.
   const params = await searchParams;
   const error = first(params.error);
@@ -57,19 +59,19 @@ export default async function GitHubConnectPage({
         className={buttonVariants({
           variant: "ghost",
           size: "sm",
-          className: "text-muted-foreground -ml-2.5",
+          className: "text-muted-foreground mb-8 -ml-2.5",
         })}
       >
         <ArrowLeft />
         프로젝트 연결
       </Link>
 
-      <h1 className="font-heading mt-3 text-[22px] leading-tight font-semibold tracking-tight">
-        GitHub 연결
-      </h1>
-      <p className="text-muted-foreground mt-1.5 text-[15px]">
-        테스트를 만들 레포를 고르세요. 나중에 설정에서 바꿀 수 있습니다.
-      </p>
+      <StepHeader
+        step={2}
+        label="GitHub 연결"
+        title="어떤 레포로 시작할까요"
+        description="지금 하나만 골라도 됩니다. 나중에 프로젝트를 더 만들 수 있습니다."
+      />
 
       {error && <Banner tone="error">{errorMessage(error)}</Banner>}
       {notice === "requested" && (
@@ -84,7 +86,7 @@ export default async function GitHubConnectPage({
         </Banner>
       )}
 
-      <div className="mt-10">
+      <div className="mt-12">
         {installations.length === 0 ? (
           <ConnectPrompt />
         ) : (
@@ -120,14 +122,16 @@ function errorMessage(code: string) {
   }
 }
 
+// 상태 색은 DESIGN.md §1 을 따른다 — 오류는 destructive, 안내는 Cobalt(정보).
+// 각진 테두리 대신 왼쪽 굵은 선만 쓴다. 배너가 패널처럼 보이면 시선을 뺏는다.
 function Banner({ tone, children }: { tone: "error" | "notice"; children: React.ReactNode }) {
   return (
     <p
       role="alert"
-      className={`mt-6 rounded-lg border px-4 py-3 text-[13px] ${
+      className={`mt-8 border-l-2 py-1 pl-4 text-[15px] leading-relaxed ${
         tone === "error"
-          ? "border-destructive/30 text-destructive"
-          : "border-brand-cobalt/30 text-brand-cobalt"
+          ? "border-destructive text-destructive"
+          : "border-brand-cobalt text-brand-cobalt"
       }`}
     >
       {children}
@@ -139,39 +143,33 @@ function Banner({ tone, children }: { tone: "error" | "notice"; children: React.
 // 고를 수 있고, 우리가 사용자 토큰을 저장하지 않아도 되기 때문이다.
 function ConnectPrompt() {
   return (
-    <>
-      <div className="flex items-start gap-4">
-        <div className="border-border bg-card flex size-14 shrink-0 items-center justify-center rounded-lg border">
-          <GitHubIcon className="size-6" />
-        </div>
-        {/* 설명 컬럼은 패널(688)보다 좁다 — Supabase 실측 488px */}
-        <div className="max-w-[488px] min-w-0 pt-1">
-          <h2 className="font-heading text-lg leading-tight font-semibold">
-            GitHub 계정을 연결하세요
+    <div className="border-border bg-card border p-8">
+      <div className="flex items-start gap-5">
+        <GitHubIcon className="mt-0.5 size-7 shrink-0" />
+        <div className="min-w-0 flex-1">
+          <h2 className="font-heading text-2xl leading-tight font-medium tracking-[-0.01em]">
+            GitHub App 설치
           </h2>
-          <p className="text-muted-foreground mt-1 text-[13px]">
-            Dante 는 선택한 레포만 읽습니다. 설치할 때 어떤 레포를 열어줄지 직접 고를 수 있고,
-            나중에 GitHub 설정에서 언제든 바꾸거나 해제할 수 있습니다.
-          </p>
-        </div>
-      </div>
-
-      <div className="border-border bg-card mt-4 flex items-center justify-between gap-4 rounded-lg border px-5 py-4">
-        <div className="min-w-0">
-          <p className="text-[13px] font-medium">GitHub App 설치</p>
-          <p className="text-muted-foreground mt-0.5 text-[13px]">
-            설치 화면에서 열어줄 레포를 고릅니다
+          <p className="text-muted-foreground mt-2 text-base leading-relaxed">
+            GitHub 으로 넘어가 열어줄 레포를 고르면 여기로 돌아옵니다. 나중에 GitHub 설정에서 언제든
+            바꾸거나 해제할 수 있습니다.
           </p>
         </div>
         {/* 서버 라우트가 state 쿠키를 심고 GitHub 설치 화면으로 보낸다. */}
         <a
           href="/api/github/install"
-          className={buttonVariants({ size: "sm", className: "shrink-0" })}
+          className={buttonVariants({ size: "lg", className: "shrink-0 rounded-[4px]" })}
         >
-          <GitHubIcon />
-          GitHub 연결
+          설치
+          <ArrowRight />
         </a>
       </div>
-    </>
+
+      <div className="border-border mt-6 border-t pt-4">
+        <p className="text-muted-foreground font-mono text-[11px] tracking-wide">
+          액세스 토큰은 저장하지 않습니다 · 필요할 때 1시간짜리로 발급합니다
+        </p>
+      </div>
+    </div>
   );
 }

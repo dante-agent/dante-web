@@ -1,17 +1,14 @@
 import Link from "next/link";
-import { ArrowLeft, GitBranch, Lock } from "lucide-react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import { GitHubIcon } from "@/components/brand-icons";
+import { StepHeader } from "@/components/projects/step-header";
 import { buttonVariants } from "@/components/ui/button";
 
 // 온보딩 1단계 — 어디에서 코드를 가져올지 고른다.
 //
-// 레이아웃은 Supabase 대시보드의 Settings → Integrations 를 그대로 따랐다.
-//   [56px 타일] 제목(18/600) + 설명(13, muted)
-//   그 아래 별도 패널(border, radius 8)에 라벨 + 액션 버튼
-//
-// 지원하지 않는 제공자를 숨기지 않고 남겨두는 이유도 같은 화면에서 가져왔다
-// (Supabase 는 AWS PrivateLink 를 "Available on Team and Enterprise plans" 로 보여준다).
-// "없는 것"과 "아직인 것"을 구분해줘야 사용자가 헤매지 않는다.
+// 생김새는 CodeRabbit 브랜드 사이트 기준이다: 각진 패널(radius 0), 넉넉한
+// 패딩(32), 정보와 액션을 가르는 헤어라인, 오렌지 모노 라벨.
+// 지원 예정 제공자는 흐린 죽은 카드가 아니라 SOON 뱃지로 상태를 말해준다.
 export default function NewProjectPage() {
   return (
     <>
@@ -20,104 +17,68 @@ export default function NewProjectPage() {
         className={buttonVariants({
           variant: "ghost",
           size: "sm",
-          className: "text-muted-foreground -ml-2.5",
+          className: "text-muted-foreground mb-8 -ml-2.5",
         })}
       >
         <ArrowLeft />
         프로젝트
       </Link>
 
-      <h1 className="font-heading mt-3 text-[22px] leading-tight font-semibold tracking-tight">
-        프로젝트 연결
-      </h1>
-      <p className="text-muted-foreground mt-1.5 text-[15px]">
-        테스트를 만들 코드가 어디에 있나요? 레포 하나가 프로젝트 하나입니다.
-      </p>
+      <StepHeader
+        step={1}
+        label="프로젝트 연결"
+        title="어디에 코드가 있나요"
+        description="레포 하나가 프로젝트 하나입니다. 연결하면 Dante 가 코드를 읽고 빠진 테스트를 찾아냅니다."
+      />
 
-      <div className="mt-10 flex flex-col gap-10">
-        <section>
-          <ProviderHeading
-            icon={<GitHubIcon className="size-6" />}
-            name="GitHub"
-            description="연결할 레포를 직접 고릅니다. Dante 는 고른 레포만 읽습니다."
-          />
-          <Panel>
-            <div className="min-w-0">
-              <p className="text-[13px] font-medium">GitHub 레포</p>
-              <p className="text-muted-foreground mt-0.5 text-[13px]">
-                레포를 연결해 테스트 생성을 시작합니다
+      <div className="mt-12 flex flex-col gap-4">
+        <Panel>
+          <div className="flex items-start gap-5">
+            <GitHubIcon className="mt-0.5 size-7 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <h2 className="font-heading text-2xl leading-tight font-medium tracking-[-0.01em]">
+                GitHub
+              </h2>
+              <p className="text-muted-foreground mt-2 text-base leading-relaxed">
+                설치할 때 열어줄 레포를 직접 고릅니다. 고른 레포 밖은 보지 않습니다.
               </p>
             </div>
             <Link
               href="/projects/new/github"
-              className={buttonVariants({ size: "sm", className: "shrink-0" })}
+              className={buttonVariants({ size: "lg", className: "shrink-0 rounded-[4px]" })}
             >
-              <GitHubIcon />
-              GitHub 연결
+              연결
+              <ArrowRight />
             </Link>
-          </Panel>
-        </section>
+          </div>
 
-        <UnsupportedProvider name="GitLab" description="GitLab 레포에서 테스트를 만듭니다." />
-        <UnsupportedProvider name="Bitbucket" description="Bitbucket 레포에서 테스트를 만듭니다." />
+          {/* 정보와 메타를 가르는 헤어라인 — CodeRabbit 카드의 구조 */}
+          <div className="border-border mt-6 border-t pt-4">
+            <p className="text-muted-foreground font-mono text-[11px] tracking-wide">
+              CONTENTS · PULL REQUESTS · METADATA 권한만 요청합니다
+            </p>
+          </div>
+        </Panel>
+
+        <ComingSoon name="GitLab" />
+        <ComingSoon name="Bitbucket" />
       </div>
     </>
   );
 }
 
-function ProviderHeading({
-  icon,
-  name,
-  description,
-  muted,
-}: {
-  icon: React.ReactNode;
-  name: string;
-  description: string;
-  muted?: boolean;
-}) {
-  return (
-    <div className="flex items-start gap-4">
-      {/* 56px 정사각 타일 — Supabase 통합 목록과 같은 치수 */}
-      <div
-        className={`border-border bg-card flex size-14 shrink-0 items-center justify-center rounded-lg border ${
-          muted ? "text-muted-foreground" : ""
-        }`}
-      >
-        {icon}
-      </div>
-      {/* 설명 컬럼은 패널(688)보다 좁다 — Supabase 실측 488px */}
-      <div className="max-w-[488px] min-w-0 pt-1">
-        <h2 className="font-heading text-lg leading-tight font-semibold">{name}</h2>
-        <p className="text-muted-foreground mt-1 text-[13px]">{description}</p>
-      </div>
-    </div>
-  );
-}
-
+// radius 0 · border 1 · padding 32 — CodeRabbit 카드 실측값
 function Panel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="border-border bg-card mt-4 flex items-center justify-between gap-4 rounded-lg border px-5 py-4">
-      {children}
-    </div>
-  );
+  return <div className="border-border bg-card border p-8">{children}</div>;
 }
 
-function UnsupportedProvider({ name, description }: { name: string; description: string }) {
+function ComingSoon({ name }: { name: string }) {
   return (
-    <section>
-      <ProviderHeading
-        icon={<GitBranch className="size-6" />}
-        name={name}
-        description={description}
-        muted
-      />
-      <Panel>
-        <div className="text-muted-foreground flex items-center gap-2.5 text-[13px]">
-          <Lock className="size-3.5 shrink-0" />
-          아직 지원하지 않습니다. GitHub 부터 지원합니다.
-        </div>
-      </Panel>
-    </section>
+    <div className="border-border/60 flex items-center gap-5 border border-dashed px-8 py-5">
+      <span className="text-muted-foreground font-heading text-lg font-medium">{name}</span>
+      <span className="text-muted-foreground/70 border-border ml-auto border px-2 py-0.5 font-mono text-[10px] font-bold tracking-[0.12em]">
+        SOON
+      </span>
+    </div>
   );
 }
