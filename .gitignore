@@ -13,6 +13,9 @@ out/
 .env.local
 .env*.local
 
+# secrets — GitHub App private key 를 리포 안에 떨어뜨려도 커밋되지 않게
+*.pem
+
 # prisma
 packages/db/generated/
 
@@ -21,3 +24,6 @@ packages/db/generated/
 *.log
 coverage/
 *.tsbuildinfo
+
+# local claude instructions
+CLAUDE.local.md
