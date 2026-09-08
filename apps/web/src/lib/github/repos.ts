@@ -4,6 +4,8 @@ import { githubApp } from "@/lib/github/app";
 
 /** 화면이 필요로 하는 필드만 추린 모양. Octokit 응답을 그대로 흘려보내지 않는다. */
 export type InstallationRepo = {
+  /// GitHub 숫자 ID. Octokit 은 number|bigint 로 타이핑하지만 실제 값은
+  /// 2^53 안쪽이라 number 로 좁혀 쓴다 (DB 에는 BigInt 로 넣는다).
   id: number;
   owner: string;
   name: string;
@@ -39,7 +41,7 @@ export async function listInstallationRepos(installationId: number): Promise<Ins
 
     for (const repo of data.repositories) {
       collected.push({
-        id: repo.id,
+        id: Number(repo.id),
         owner: repo.owner.login,
         name: repo.name,
         private: repo.private,
