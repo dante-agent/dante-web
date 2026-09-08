@@ -90,7 +90,10 @@
   --chart-3: var(--brand-cobalt);
   --chart-4: #ff801f; /* Orange 10 */
   --chart-5: #95afff; /* Cobalt 11 */
-  --radius: 0.625rem;
+  /* Supabase 대시보드 실측: 카드·패널 8px, 버튼 6px.
+     0.5rem 을 기준으로 두면 --radius-lg(=8px)가 카드, --radius-md(=6.4px)가
+     버튼에 그대로 맞는다. shadcn 기본값은 0.625rem(10px)이었다. */
+  --radius: 0.5rem;
   --sidebar: #1a181d;
   --sidebar-foreground: #eeedf0;
   --sidebar-primary: var(--brand-orange);

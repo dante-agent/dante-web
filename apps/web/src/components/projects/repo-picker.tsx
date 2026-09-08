@@ -52,7 +52,8 @@ export function RepoPicker({
           aria-label="계정"
           value={activeOwner}
           onChange={(event) => setOwner(event.target.value)}
-          className="border-input bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 h-8 shrink-0 rounded-lg border px-2.5 text-sm outline-none focus-visible:ring-3"
+          // 높이·글자 크기는 Supabase 대시보드 실측(h26 / 12px)에 맞춘다
+          className="border-input bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 h-7 shrink-0 rounded-md border px-2 text-xs outline-none focus-visible:ring-3"
         >
           {owners.map((name) => (
             <option key={name} value={name}>
@@ -62,18 +63,18 @@ export function RepoPicker({
         </select>
 
         <div className="relative flex-1">
-          <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
+          <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2 size-3 -translate-y-1/2" />
           <Input
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="레포 검색"
-            className="pl-8"
+            className="h-7 rounded-md pl-7 text-xs md:text-xs"
           />
         </div>
       </div>
 
-      <ul className="border-border divide-border mt-4 divide-y overflow-hidden rounded-xl border">
+      <ul className="border-border divide-border mt-3 divide-y overflow-hidden rounded-lg border">
         {visible.map((repo) => (
           <RepoRow
             key={repo.id}
@@ -83,7 +84,7 @@ export function RepoPicker({
           />
         ))}
         {visible.length === 0 && (
-          <li className="text-muted-foreground px-4 py-14 text-center text-sm">
+          <li className="text-muted-foreground px-4 py-14 text-center text-[13px]">
             {repos.length === 0
               ? "설치할 때 레포를 고르지 않았습니다. 아래에서 레포를 추가하세요."
               : `"${query}" 와 일치하는 레포가 없습니다`}
@@ -92,7 +93,7 @@ export function RepoPicker({
       </ul>
 
       {/* 처음 설치할 때 레포를 일부만 연 사용자가 되돌아갈 길. 없으면 막힌다. */}
-      <p className="text-muted-foreground mt-4 text-center text-sm">
+      <p className="text-muted-foreground mt-3 text-center text-[13px]">
         찾는 레포가 없나요?{" "}
         <a
           href={settingsUrl}
@@ -117,13 +118,13 @@ function RepoRow({
   installationId?: string;
 }) {
   return (
-    <li className="hover:bg-muted/40 flex items-center gap-3 px-4 py-3 transition-colors">
+    <li className="hover:bg-muted/40 flex items-center gap-3 px-4 py-2.5 transition-colors">
       <div className="min-w-0 flex-1">
-        <p className="flex items-center gap-1.5 truncate text-sm font-medium">
+        <p className="flex items-center gap-1.5 truncate text-[13px] font-semibold">
           {repo.name}
           {repo.private && <Lock className="text-muted-foreground size-3 shrink-0" />}
         </p>
-        <p className="text-muted-foreground mt-0.5 font-mono text-xs">
+        <p className="text-muted-foreground mt-0.5 font-mono text-[11px]">
           {repo.language ?? "—"}
           {repo.pushedAt &&
             ` · ${formatDistanceToNow(repo.pushedAt, { addSuffix: true, locale: ko })}`}
