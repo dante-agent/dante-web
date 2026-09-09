@@ -3,6 +3,8 @@
 // 지금은 GitHub App 설치도, Project 테이블도 없다. 그래서 화면이 어떤 상태를
 // 그려야 하는지(프로젝트 0개 / 미연결 / 레포 목록)를 여기서 고정값으로 준다.
 
+import type { FileEntry } from "@/lib/file-tree";
+
 export type MockProject = {
   /** URL 에 쓰는 불투명 식별자. 레포 이름을 쓰지 않는 이유는 rename·이관 때문. */
   ref: string;
@@ -114,3 +116,30 @@ export const mockRepos: MockRepo[] = [
 
 /** 설치된 GitHub App 이 접근할 수 있는 계정 목록 (개인 + 조직). */
 export const mockOwners = ["acme", "seojigwon"];
+
+// 폴더 보기 서브 사이드바용. 연결된 레포의 소스 파일 목록 = GitHub `git/trees?recursive=1`
+// 응답에서 확장자 필터를 통과한 blob 들. status 는 나중에 테스트 존재/신선도로 계산할 값.
+// `*.test.*` 는 항목에 없다 — 소스의 status 로만 표현.
+export const mockFileTree: FileEntry[] = [
+  { path: "src/app/layout.tsx", status: "none" },
+  { path: "src/app/page.tsx", status: "none" },
+  { path: "src/app/dashboard/page.tsx", status: "has" },
+  { path: "src/app/dashboard/loading.tsx", status: "none" },
+  { path: "src/components/Button.tsx", status: "has" },
+  { path: "src/components/Card.tsx", status: "none" },
+  { path: "src/components/Modal.tsx", status: "none" },
+  { path: "src/components/icons/Logo.tsx", status: "none" },
+  { path: "src/hooks/useAuth.ts", status: "has" },
+  { path: "src/hooks/useDebounce.ts", status: "has" },
+  { path: "src/hooks/useLocalStorage.ts", status: "none" },
+  { path: "src/lib/api.ts", status: "has" },
+  { path: "src/lib/format.ts", status: "has" },
+  { path: "src/lib/validate.ts", status: "has" },
+  { path: "src/lib/utils.ts", status: "none" },
+  { path: "src/features/checkout/steps/Payment.tsx", status: "none" },
+  { path: "src/features/checkout/steps/Review.tsx", status: "has" },
+  { path: "src/store/cart.ts", status: "has" },
+  { path: "src/store/user.ts", status: "none" },
+  { path: "src/worker.js", status: "none" },
+  { path: "src/legacy/jquery-shim.jsx", status: "none" },
+];
