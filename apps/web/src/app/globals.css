@@ -7,6 +7,7 @@
 
 @theme inline {
   --color-background: var(--background);
+  --color-background-warm: var(--background-warm);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
@@ -62,6 +63,10 @@
   --font-mono: "Hack", ui-monospace, "SF Mono", Menlo, monospace;
 
   --background: #121014; /* Mauve 1 */
+  /* 오렌지로 틴트한 근접 블랙. Supabase 대시보드 배경 oklch(0.19 0.0025 159) 를 재서
+     명도·채도는 그대로 두고 색상만 초록(159°) → 브랜드 오렌지(39°)로 돌린 값.
+     채도 0.0025 는 8bit hex 로는 거의 뭉개지므로(#151313) oklch 로 적는다. */
+  --background-warm: oklch(0.177 0.0025 39);
   --foreground: #eeedf0; /* Mauve 12 */
   --card: #1a181d; /* Mauve 2 */
   --card-foreground: #eeedf0;
