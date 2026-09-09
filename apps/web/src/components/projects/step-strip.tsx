@@ -20,17 +20,25 @@ type Step = {
   label: string;
   /** 펼쳤을 때만 따라붙는 꼬리말. CodeRabbit 도 활성 탭에서만 뒷말을 보여준다. */
   detail: string;
-  /** 아직 만들지 않은 단계는 href 가 없다 — 링크가 아니라 표시만 한다. */
-  href?: string;
+  /**
+   * 이동할 곳. 프로젝트가 생긴 뒤에야 갈 수 있는 단계는 projectRef 를 받아
+   * 경로를 만든다. null 을 돌려주면 링크가 아니라 표시만 한다.
+   */
+  href: (projectRef?: string) => string | null;
 };
 
 // 라벨은 접혔을 때도 읽혀야 해서 한 낱말로 줄였다. 설명은 detail 이 맡는다
 // (CodeRabbit 도 Review / Prioritize / Understand / Secure 로 한 낱말이다).
 const STEPS: Step[] = [
-  { label: "프로젝트", detail: "코드가 어디 있는지", href: "/projects/new" },
-  { label: "GitHub", detail: "어떤 레포로 시작할지", href: "/projects/new/github" },
-  { label: "러너", detail: "vitest 인지 jest 인지" },
-  { label: "API 키", detail: "어떤 모델로 만들지" },
+  { label: "프로젝트", detail: "코드가 어디 있는지", href: () => "/projects/new" },
+  { label: "GitHub", detail: "어떤 레포로 시작할지", href: () => "/projects/new/github" },
+  {
+    label: "러너",
+    detail: "vitest 인지 jest 인지",
+    href: (ref) => (ref ? `/projects/setup/${ref}/framework` : null),
+  },
+  // TODO(다음 PR): /projects/setup/<ref>/api-key
+  { label: "API 키", detail: "어떤 모델로 만들지", href: () => null },
 ];
 
 // 펼친 칸이 가져가는 비율. CodeRabbit 은 4.75 인데 그건 스트립이 1370px 일
@@ -64,7 +72,7 @@ function basisFor(isExpanded: boolean) {
 const EXPAND = "transition-[flex-basis] duration-[420ms] ease-[cubic-bezier(0.2,0,0,1)]";
 const TINT = "transition-[color,border-color,opacity] duration-[180ms] ease-out";
 
-export function StepStrip({ current }: { current: number }) {
+export function StepStrip({ current, projectRef }: { current: number; projectRef?: string }) {
   // null 이면 "아무 데도 안 올림" → 현재 단계가 펼쳐진다.
   const [focused, setFocused] = useState<number | null>(null);
   const expanded = focused ?? current;
@@ -115,6 +123,8 @@ export function StepStrip({ current }: { current: number }) {
           isCurrent ? "border-[#ff570a]" : "border-border"
         }`;
 
+        const href = step.href(projectRef);
+
         return (
           <li
             key={step.label}
@@ -123,9 +133,9 @@ export function StepStrip({ current }: { current: number }) {
             onMouseEnter={() => setFocused(number)}
             onMouseLeave={() => setFocused(null)}
           >
-            {step.href ? (
+            {href ? (
               <Link
-                href={step.href}
+                href={href}
                 aria-current={isCurrent ? "step" : undefined}
                 className={`${shared} hover:border-input focus-visible:ring-ring/40 rounded-none outline-none focus-visible:ring-2`}
                 onFocus={() => setFocused(number)}

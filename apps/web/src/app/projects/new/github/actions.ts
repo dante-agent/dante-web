@@ -52,7 +52,6 @@ export async function importRepo(formData: FormData) {
     },
   });
 
-  // TODO(다음 PR): /project/<ref>/setup/framework 로 보낸다 (vitest·jest → API 키).
-  // 그 화면들이 생기기 전까지는 대시보드로 보낸다.
-  redirect(`/project/${ref}/dashboard`);
+  // 온보딩 3단계로 이어진다. 대시보드로 바로 보내면 러너·API 키를 못 고른다.
+  redirect(`/projects/setup/${ref}/framework`);
 }

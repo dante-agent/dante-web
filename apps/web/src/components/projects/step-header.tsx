@@ -15,16 +15,19 @@ export function StepHeader({
   step,
   title,
   description,
+  projectRef,
 }: {
   step: number;
   title: string;
   description: string;
+  /** 3단계부터는 프로젝트가 이미 있어서 앞뒤 단계로 오갈 수 있다. */
+  projectRef?: string;
 }) {
   return (
     <header>
       <SegmentedRule />
       <div className="mt-6">
-        <StepStrip current={step} />
+        <StepStrip current={step} projectRef={projectRef} />
       </div>
 
       <h1 className="font-heading mt-8 text-[32px] leading-[1.125] font-medium tracking-[-0.02em]">
