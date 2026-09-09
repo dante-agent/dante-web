@@ -1,18 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { FolderOpen } from "lucide-react";
 import { iconForFile } from "@/components/file-icons";
-import { clearRecent, getRecent } from "@/lib/recent-files";
+import { clearRecent, useRecent } from "@/lib/recent-files";
 
 export function FolderEmptyState({ projectRef }: { projectRef: string }) {
-  // 서버·첫 페인트는 빈 배열(하이드레이션 일치), 마운트 후 localStorage 값으로 교체.
-  const [recent, setRecent] = useState<string[]>([]);
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setRecent(getRecent(projectRef));
-  }, [projectRef]);
+  const recent = useRecent(projectRef);
 
   return (
     <div className="border-border flex h-[calc(100svh-7rem)] flex-col items-center justify-center gap-4 rounded-lg border">
@@ -48,10 +42,7 @@ export function FolderEmptyState({ projectRef }: { projectRef: string }) {
           </div>
           <button
             type="button"
-            onClick={() => {
-              clearRecent(projectRef);
-              setRecent([]);
-            }}
+            onClick={() => clearRecent(projectRef)}
             className="text-muted-foreground hover:text-foreground self-end text-[10px]"
           >
             Clear
