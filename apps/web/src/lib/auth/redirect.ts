@@ -3,7 +3,7 @@ export const LOGIN_PATH = "/";
 
 // 로그인 후 기본 도착지. 로그인이 필요한 페이지로 들어오려다 튕긴 경우에만
 // proxy 가 ?next=<원래 경로> 를 붙여주고, 그때는 그쪽을 우선한다.
-export const DEFAULT_NEXT = "/dashboard";
+export const DEFAULT_NEXT = "/projects";
 
 /**
  * ?next= 값을 그대로 믿지 않는다 (오픈 리다이렉트 방지).

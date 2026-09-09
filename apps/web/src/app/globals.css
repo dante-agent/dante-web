@@ -93,7 +93,14 @@
   --chart-3: var(--brand-cobalt);
   --chart-4: #ff801f; /* Orange 10 */
   --chart-5: #95afff; /* Cobalt 11 */
-  --radius: 0.625rem;
+  /* Supabase 대시보드 실측: 카드·패널 8px, 버튼 6px.
+     0.5rem 을 기준으로 두면 --radius-lg(=8px)가 카드, --radius-md(=6.4px)가
+     버튼에 그대로 맞는다. shadcn 기본값은 0.625rem(10px)이었다. */
+  /* 다크 단일 앱이라고 브라우저에게도 알려준다. 이게 없으면 <select> 드롭다운·
+     스크롤바·기본 폼 컨트롤이 OS 기본(밝은) 모양으로 뜬다. */
+  color-scheme: dark;
+
+  --radius: 0.5rem;
   --sidebar: #1a181d;
   --sidebar-foreground: #eeedf0;
   --sidebar-primary: var(--brand-orange);
@@ -113,5 +120,11 @@
   }
   html {
     @apply font-sans;
+  }
+  /* 한국어는 단어 중간에서 줄이 끊기면 안 된다("빠진 테스/트를"). 브라우저 기본값이
+     그렇게 끊으므로 어절(띄어쓰기) 단위로 끊게 바꾼다. 영문은 원래 공백에서만
+     끊기니 영향이 없다. lang="ko" 문서라 전역으로 건다. */
+  body {
+    word-break: keep-all;
   }
 }
