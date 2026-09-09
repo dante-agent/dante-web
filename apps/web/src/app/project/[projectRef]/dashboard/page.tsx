@@ -90,7 +90,7 @@ export default async function DashboardPage({
         />
       </div>
 
-      {/* 폴더별 테스트 코드 비율(메인) · AI 사용량 breakdown */}
+      {/* 폴더별 테스트 코드 비율(메인) · AI 별 사용량 */}
       <div className="grid gap-4 md:grid-cols-[1.4fr_1fr]">
         <FolderRatioCard
           totalFiles={folderTestRatio.totalFiles}
