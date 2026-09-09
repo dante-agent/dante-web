@@ -8,7 +8,17 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Monaco } from "@monaco-editor/react";
-import { Copy, Download, Loader2, Maximize2, Minimize2, Save, Wand2, X } from "lucide-react";
+import {
+  Copy,
+  Download,
+  Loader2,
+  Maximize2,
+  Minimize2,
+  Pencil,
+  Play,
+  RotateCcw,
+  Sparkles,
+} from "lucide-react";
 import { iconForFile } from "@/components/file-icons";
 import { Button, buttonVariants } from "@/components/ui/button";
 import type { MockFileContent } from "@/lib/mock-data";
@@ -90,7 +100,15 @@ function CodePane({ lang, value }: { lang: string; value: string }) {
   );
 }
 
-function FileActions({ text, filename }: { text: string; filename: string }) {
+function FileActions({
+  text,
+  filename,
+  trailing,
+}: {
+  text: string;
+  filename: string;
+  trailing?: ReactNode;
+}) {
   const copy = () => void navigator.clipboard.writeText(text).catch(() => {});
   const download = () => {
     const url = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
@@ -120,6 +138,7 @@ function FileActions({ text, filename }: { text: string; filename: string }) {
       >
         <Copy />
       </Button>
+      {trailing}
     </div>
   );
 }
@@ -241,32 +260,33 @@ export function FileView({
       <div className={GRID} style={{ gridTemplateColumns: expandedCols }}>
         <Cell show={showLeft} className="bg-sidebar flex items-center border-b px-2.5 text-xs">
           <span className="font-semibold">Before</span>
-          <span className="ml-auto">
-            <ExpandButton active={expanded === "left"} onToggle={() => toggle("left")} />
-          </span>
         </Cell>
         <Cell show={showRight} className="bg-sidebar flex items-center border-b px-2.5 text-xs">
           <span className="font-semibold">After</span>
-          <div className="ml-auto flex items-center gap-0.5">
-            <Link
-              href={viewHref}
-              title="취소"
-              aria-label="취소"
-              className={cn(buttonVariants({ variant: "ghost", size: "icon-sm" }))}
-            >
-              <X />
+          <div className="ml-auto flex items-center gap-1">
+            <Link href={viewHref} className={cn(buttonVariants({ variant: "ghost", size: "xs" }))}>
+              Cancel
             </Link>
+            {/* ponytail: 저장 동작은 다음 PR */}
+            <Button variant="ghost" size="xs" disabled className="text-brand-orange">
+              Save
+            </Button>
+            <span className="bg-border mx-0.5 h-4 w-px" />
+            {/* ponytail: 되돌리기(After→원본) 다음 PR */}
+            <Button size="icon-sm" variant="ghost" disabled title="되돌리기" aria-label="되돌리기">
+              <RotateCcw />
+            </Button>
+            {/* ponytail: AI (재)생성 다음 PR */}
             <Button
               size="icon-sm"
               variant="ghost"
               disabled
-              title="저장"
-              aria-label="저장"
+              title="AI 생성"
+              aria-label="AI 생성"
               className="text-brand-orange"
             >
-              <Save />
+              <Sparkles />
             </Button>
-            <ExpandButton active={expanded === "right"} onToggle={() => toggle("right")} />
           </div>
         </Cell>
 
@@ -276,14 +296,24 @@ export function FileView({
         >
           <FileHeading name={testName} />
           <ReadOnlyBadge />
-          <FileActions text={original} filename={testName} />
+          <FileActions
+            text={original}
+            filename={testName}
+            trailing={<ExpandButton active={expanded === "left"} onToggle={() => toggle("left")} />}
+          />
         </Cell>
         <Cell
           show={showRight}
           className="bg-sidebar flex items-center gap-2.5 border-b px-2.5 text-xs"
         >
           <FileHeading name={testName} />
-          <FileActions text={draft} filename={testName} />
+          <FileActions
+            text={draft}
+            filename={testName}
+            trailing={
+              <ExpandButton active={expanded === "right"} onToggle={() => toggle("right")} />
+            }
+          />
         </Cell>
 
         <div className={cn("min-h-0 bg-black", !expanded && "col-span-2")}>
@@ -335,31 +365,38 @@ export function FileView({
         )}
       >
         <span className="font-semibold">Source Code</span>
-        <span className="ml-auto">
-          <ExpandButton active={expanded === "left"} onToggle={() => toggle("left")} />
-        </span>
       </Cell>
       <Cell
         show={showRight}
         className="bg-sidebar flex items-center gap-1.5 border-b px-2.5 text-xs"
       >
         <span className="font-semibold">Test Code</span>
-        <div className="ml-auto flex items-center gap-0.5">
-          {content.test && (
+        {content.test && (
+          <div className="ml-auto flex items-center gap-0.5">
+            {/* ponytail: 실행 동작은 runner PR */}
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              disabled
+              title="Run"
+              aria-label="Run"
+              className="text-brand-orange"
+            >
+              <Play />
+            </Button>
             <Link
               href={editHref}
-              title="테스트 수정"
-              aria-label="테스트 수정"
+              title="편집"
+              aria-label="편집"
               className={cn(
                 buttonVariants({ variant: "ghost", size: "icon-sm" }),
                 "text-brand-orange hover:bg-brand-orange/10 hover:text-brand-orange"
               )}
             >
-              <Wand2 className="size-4" />
+              <Pencil />
             </Link>
-          )}
-          <ExpandButton active={expanded === "right"} onToggle={() => toggle("right")} />
-        </div>
+          </div>
+        )}
       </Cell>
 
       <Cell
@@ -371,7 +408,11 @@ export function FileView({
       >
         <FileHeading name={file} />
         <ReadOnlyBadge />
-        <FileActions text={content.source} filename={file.split("/").pop() ?? "source.txt"} />
+        <FileActions
+          text={content.source}
+          filename={file.split("/").pop() ?? "source.txt"}
+          trailing={<ExpandButton active={expanded === "left"} onToggle={() => toggle("left")} />}
+        />
       </Cell>
       <Cell
         show={showRight}
@@ -381,7 +422,13 @@ export function FileView({
           <>
             <FileHeading name={testName} />
             <ReadOnlyBadge />
-            <FileActions text={content.test} filename={testName} />
+            <FileActions
+              text={content.test}
+              filename={testName}
+              trailing={
+                <ExpandButton active={expanded === "right"} onToggle={() => toggle("right")} />
+              }
+            />
           </>
         )}
       </Cell>
