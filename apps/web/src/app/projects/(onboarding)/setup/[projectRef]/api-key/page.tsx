@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { prisma } from "@dante/db";
 import { ApiKeyForm } from "@/components/projects/api-key-form";
 import { BackLink } from "@/components/projects/back-link";
@@ -17,9 +17,15 @@ export default async function ApiKeyPage({
 
   const project = await prisma.project.findFirst({
     where: { ref: projectRef, userId: user.id },
-    select: { repoOwner: true, repoName: true },
+    select: { repoOwner: true, repoName: true, testFramework: true },
   });
   if (!project) notFound();
+
+  // 3단계를 건너뛰고 이 URL 로 바로 들어오는 걸 막는다. 그냥 두면 러너를 안 고른
+  // 채로 온보딩이 완료 처리되고(testFramework = null), 나중에 테스트를 만들 때
+  // 파일 이름 규칙과 import 를 정할 근거가 없어진다.
+  // "이미 끝난 온보딩" 검사는 이 폴더의 layout.tsx 가 맡는다.
+  if (!project.testFramework) redirect(`/projects/setup/${projectRef}/framework`);
 
   // 키는 사용자 단위라 다른 프로젝트에서 넣어둔 게 있으면 그대로 쓸 수 있다.
   // 평문·암호문은 절대 클라이언트로 내리지 않는다 — 끝 4자리만.
