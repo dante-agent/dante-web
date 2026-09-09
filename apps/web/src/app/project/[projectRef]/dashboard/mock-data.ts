@@ -24,8 +24,8 @@ export interface FolderTestShare {
   pct: number;
 }
 
-export interface AiUsageSlice {
-  label: string;
+export interface AiModelUsage {
+  model: string;
   pct: number;
 }
 
@@ -67,12 +67,12 @@ export const dashboardMock = {
       { name: "utils/", count: 12, pct: 10 },
     ] as FolderTestShare[],
   },
-  aiUsageBreakdown: [
-    { label: "테스트 생성", pct: 42 },
-    { label: "테스트 실행", pct: 28 },
-    { label: "리포트 생성", pct: 18 },
-    { label: "디버깅", pct: 12 },
-  ] as AiUsageSlice[],
+  // AI 종류/모델별 사용 비중. 프로젝트에서 여러 엔진·모델을 선택해 쓸 수 있음.
+  aiModelUsage: [
+    { model: "Claude Sonnet 5", pct: 52 },
+    { model: "GPT-5.2", pct: 30 },
+    { model: "Gemini 3 Pro", pct: 18 },
+  ] as AiModelUsage[],
   // 최근 91일(13주) 커밋 활동. 0(없음) ~ 4(많음). 표시는 오래된 날짜 → 최신순.
   commitHeatmap: [
     0, 1, 0, 2, 0, 3, 1, 0, 2, 0, 1, 0, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 1, 0, 2, 3, 0, 1,

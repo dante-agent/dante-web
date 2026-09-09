@@ -29,16 +29,8 @@ export default async function DashboardPage({
   params,
 }: PageProps<"/project/[projectRef]/dashboard">) {
   const { projectRef } = await params;
-  const {
-    project,
-    team,
-    tests,
-    ai,
-    folderTestRatio,
-    aiUsageBreakdown,
-    commitHeatmap,
-    pullRequests,
-  } = dashboardMock;
+  const { project, team, tests, ai, folderTestRatio, aiModelUsage, commitHeatmap, pullRequests } =
+    dashboardMock;
 
   return (
     <div className="flex flex-col gap-6">
@@ -104,7 +96,7 @@ export default async function DashboardPage({
           totalFiles={folderTestRatio.totalFiles}
           folders={folderTestRatio.folders}
         />
-        <AiUsageChart data={aiUsageBreakdown} />
+        <AiUsageChart data={aiModelUsage} />
       </div>
 
       {/* 커밋 히트맵 · 최근 PR */}
