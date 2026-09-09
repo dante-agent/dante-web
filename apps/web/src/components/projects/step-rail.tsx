@@ -12,10 +12,10 @@ import { usePathname } from "next/navigation";
 // 번호 표기(Hack mono · Orange 10)와 색 전환 180ms 는 CodeRabbit 실측 그대로.
 
 const STEPS = [
-  { label: "프로젝트 연결", detail: "코드가 어디 있는지 고릅니다" },
-  { label: "GitHub 연결", detail: "어떤 레포로 시작할지 고릅니다" },
-  { label: "테스트 러너", detail: "vitest 인지 jest 인지 고릅니다" },
-  { label: "API 키", detail: "어떤 모델로 만들지 고릅니다" },
+  { label: "Provider", detail: "Where your code lives" },
+  { label: "Repository", detail: "Which repo to start with" },
+  { label: "Test runner", detail: "Vitest or Jest" },
+  { label: "API key", detail: "Which model writes the tests" },
 ];
 
 const TINT = "transition-colors duration-[180ms] ease-out motion-reduce:transition-none";

@@ -12,8 +12,8 @@ export default function NewProjectPage() {
   return (
     <>
       <StepHeader
-        title="어디에 코드가 있나요"
-        description="레포 하나가 프로젝트 하나입니다. 연결하면 Dante 가 코드를 읽고 빠진 테스트를 찾아냅니다."
+        title="Where is your code?"
+        description="One repository becomes one project. Dante reads the code and finds the tests you are missing"
       />
 
       <div className="mt-8 flex flex-col gap-3">
@@ -28,7 +28,7 @@ export default function NewProjectPage() {
             <ArrowRight className="text-muted-foreground size-4 shrink-0 transition-transform duration-[180ms] ease-out group-hover:translate-x-0.5 motion-reduce:transition-none" />
           </div>
           <p className="text-muted-foreground mt-3 text-[13px] leading-relaxed">
-            설치할 때 열어줄 레포를 직접 고릅니다. 고른 레포 밖은 보지 않습니다.
+            You choose which repositories to open during install. Dante never looks outside them.
           </p>
           {/* 정보와 메타를 가르는 헤어라인 — CodeRabbit 카드의 구조 */}
           <div className="border-border group-hover:border-input mt-5 border-t pt-3 transition-colors duration-[180ms] ease-out">
@@ -43,7 +43,7 @@ export default function NewProjectPage() {
       </div>
 
       <p className="text-muted-foreground mt-8 text-[13px]">
-        이미 만든 프로젝트를 찾으시나요?{" "}
+        Looking for an existing project?{" "}
         <Link
           href="/projects"
           className={buttonVariants({
@@ -52,7 +52,7 @@ export default function NewProjectPage() {
             className: "h-auto p-0 text-[13px]",
           })}
         >
-          프로젝트 목록
+          Projects
         </Link>
       </p>
     </>

@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
-import { ko } from "date-fns/locale";
 import { Lock, Search } from "lucide-react";
 import { importRepo } from "@/app/projects/(onboarding)/new/github/actions";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -51,7 +50,7 @@ export function RepoPicker({
         {/* shadcn Select 대신 네이티브 <select>. 계정 수가 적고 검색이 필요 없어서
             컴포넌트를 하나 더 들이는 것보다 가볍다. 늘어나면 교체한다. */}
         <select
-          aria-label="계정"
+          aria-label="Account"
           value={activeOwner}
           onChange={(event) => setOwner(event.target.value)}
           className="border-input bg-card focus-visible:border-ring focus-visible:ring-ring/40 h-9 shrink-0 rounded-[4px] border px-3 font-mono text-xs outline-none focus-visible:ring-2"
@@ -69,7 +68,7 @@ export function RepoPicker({
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="레포 검색"
+            placeholder="Search repositories"
             className="bg-card h-9 rounded-[4px] pl-9 text-sm md:text-sm"
           />
         </div>
@@ -87,22 +86,22 @@ export function RepoPicker({
         {visible.length === 0 && (
           <li className="text-muted-foreground px-6 py-16 text-center text-[15px]">
             {repos.length === 0
-              ? "설치할 때 레포를 고르지 않았습니다. 아래에서 레포를 추가하세요."
-              : `"${query}" 와 일치하는 레포가 없습니다`}
+              ? "No repositories were opened during install. Add one below."
+              : `No repositories match "${query}"`}
           </li>
         )}
       </ul>
 
       {/* 처음 설치할 때 레포를 일부만 연 사용자가 되돌아갈 길. 없으면 막힌다. */}
       <p className="text-muted-foreground mt-4 font-mono text-[11px] tracking-wide">
-        찾는 레포가 없나요?{" "}
+        Missing a repository?{" "}
         <a
           href={settingsUrl}
           target="_blank"
           rel="noreferrer noopener"
           className="text-foreground underline underline-offset-4"
         >
-          GITHUB 에서 레포 추가하기 ↗
+          ADD ONE ON GITHUB ↗
         </a>
       </p>
     </>
@@ -133,8 +132,7 @@ function RepoRow({
         </p>
         <p className="text-muted-foreground mt-1 font-mono text-[11px] tracking-wide">
           {repo.language ?? "—"}
-          {repo.pushedAt &&
-            ` · ${formatDistanceToNow(repo.pushedAt, { addSuffix: true, locale: ko })}`}
+          {repo.pushedAt && ` · ${formatDistanceToNow(repo.pushedAt, { addSuffix: true })}`}
         </p>
       </div>
 
@@ -147,7 +145,7 @@ function RepoRow({
             href={`/project/${projectRef}/dashboard`}
             className={buttonVariants({ variant: "ghost", size: "sm", className: "rounded-[4px]" })}
           >
-            열기
+            Open
           </Link>
         </>
       ) : (

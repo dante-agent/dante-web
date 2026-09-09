@@ -63,24 +63,24 @@ export default async function GitHubConnectPage({
         })}
       >
         <ArrowLeft />
-        제공자 다시 고르기
+        Change provider
       </Link>
 
       <StepHeader
-        title="어떤 레포로 시작할까요"
-        description="지금 하나만 골라도 됩니다. 나중에 프로젝트를 더 만들 수 있습니다."
+        title="Which repository?"
+        description="One is enough to start. You can add more projects later"
       />
 
       {error && <Banner tone="error">{errorMessage(error)}</Banner>}
       {notice === "requested" && (
         <Banner tone="notice">
-          조직 관리자에게 설치 승인을 요청했습니다. 승인되면 여기에서 레포가 보입니다.
+          Requested approval from your organization owner. Repositories appear here once approved.
         </Banner>
       )}
       {failed && !error && (
         <Banner tone="error">
-          일부 설치에서 레포를 가져오지 못했습니다. GitHub 에서 연결이 유지되고 있는지 확인해
-          주세요.
+          Could not load repositories from some installations. Check that the connection is still
+          active on GitHub.
         </Banner>
       )}
 
@@ -110,13 +110,13 @@ function errorMessage(code: string) {
   switch (code) {
     case "state":
       // 대개는 공격이 아니라 오래 걸렸거나 다른 탭에서 시작한 경우다.
-      return "설치 확인에 실패했습니다. 시간이 오래 지났을 수 있으니 다시 시도해 주세요.";
+      return "Could not verify the installation. It may have taken too long — please try again.";
     case "mismatch":
-      return "로그인한 GitHub 계정과 설치한 계정이 다릅니다.";
+      return "The GitHub account you installed with is not the one you signed in with.";
     case "account":
-      return "Enterprise 계정은 아직 지원하지 않습니다.";
+      return "Enterprise accounts are not supported yet.";
     default:
-      return "GitHub 설치 정보를 가져오지 못했습니다. 다시 시도해 주세요.";
+      return "Could not load the GitHub installation. Please try again.";
   }
 }
 
@@ -145,12 +145,12 @@ function ConnectPrompt() {
       <div className="flex items-center gap-4">
         <GitHubIcon className="size-6 shrink-0" />
         <span className="font-heading flex-1 text-lg leading-tight font-medium">
-          GitHub App 설치
+          Install the GitHub App
         </span>
       </div>
       <p className="text-muted-foreground mt-3 text-[13px] leading-relaxed">
-        GitHub 으로 넘어가 열어줄 레포를 고르면 여기로 돌아옵니다. 나중에 GitHub 설정에서 언제든
-        바꾸거나 해제할 수 있습니다.
+        You will pick which repositories to open on GitHub, then land back here. You can change or
+        revoke it any time in GitHub settings.
       </p>
 
       {/* 서버 라우트가 state 쿠키를 심고 GitHub 설치 화면으로 보낸다. */}
@@ -159,13 +159,13 @@ function ConnectPrompt() {
         className={buttonVariants({ size: "lg", className: "group mt-5 w-full rounded-[4px]" })}
       >
         <GitHubIcon />
-        GitHub 연결
+        Connect GitHub
         <ArrowRight className="transition-transform duration-[180ms] ease-out group-hover:translate-x-0.5 motion-reduce:transition-none" />
       </a>
 
       <div className="border-border mt-5 border-t pt-3">
         <p className="text-muted-foreground font-mono text-[10px] tracking-wide">
-          액세스 토큰은 저장하지 않습니다 · 필요할 때 1시간짜리로 발급
+          WE NEVER STORE ACCESS TOKENS · ISSUED FOR ONE HOUR WHEN NEEDED
         </p>
       </div>
     </div>

@@ -7,14 +7,14 @@ export const TEST_FRAMEWORKS = [
   {
     id: "vitest",
     name: "Vitest",
-    tagline: "Vite 기반. ESM·TypeScript 를 설정 없이 그대로 읽는다.",
+    tagline: "Built on Vite. Reads ESM and TypeScript with no extra config.",
     /** 이 러너를 골랐을 때 만들어질 파일 모양 — 고르기 전에 결과를 보여준다. */
     example: "src/utils/format.test.ts",
   },
   {
     id: "jest",
     name: "Jest",
-    tagline: "가장 널리 쓰인다. CRA·Next 기본 예제가 이 형식이다.",
+    tagline: "The most widely used. CRA and Next examples ship in this shape.",
     example: "src/utils/__tests__/format.test.ts",
   },
 ] as const;

@@ -29,8 +29,8 @@ export default async function FrameworkPage({
   return (
     <>
       <StepHeader
-        title="테스트를 무엇으로 돌리나요"
-        description="고른 러너에 맞춰 테스트 파일을 만듭니다. 파일 위치와 import 구문이 달라집니다."
+        title="How do you run tests?"
+        description="Dante writes test files to match. File location and imports differ by runner"
       />
 
       <p className="text-muted-foreground mt-4 font-mono text-[11px] tracking-wide">
@@ -41,7 +41,7 @@ export default async function FrameworkPage({
         <input type="hidden" name="projectRef" value={projectRef} />
 
         <fieldset className="flex flex-col gap-3">
-          <legend className="sr-only">테스트 러너</legend>
+          <legend className="sr-only">Test runner</legend>
 
           {TEST_FRAMEWORKS.map((framework) => (
             // 라디오를 숨기고 label 전체를 누르게 한다. 선택 표시는 has-[:checked]
@@ -80,7 +80,7 @@ export default async function FrameworkPage({
         </fieldset>
 
         <Button type="submit" size="lg" className="mt-6 w-full rounded-[4px]">
-          계속
+          Continue
         </Button>
       </form>
     </>

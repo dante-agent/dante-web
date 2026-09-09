@@ -20,7 +20,7 @@ export async function selectFramework(formData: FormData) {
 
   // 폼 값은 조작될 수 있다. 아는 값만 통과시킨다.
   if (!isTestFramework(framework)) {
-    throw new Error(`알 수 없는 테스트 러너입니다: ${framework}`);
+    throw new Error(`Unknown test runner: ${framework}`);
   }
 
   // 내 프로젝트가 맞는지 확인 — 권한 검사는 앱 코드에서 (AGENTS.md).

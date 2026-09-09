@@ -14,7 +14,7 @@ export default async function ProjectsLayout({ children }: LayoutProps<"/project
     (user.user_metadata.user_name as string | undefined) ??
     (user.user_metadata.full_name as string | undefined) ??
     user.email ??
-    "계정";
+    "Account";
 
   return (
     <SplitShell
@@ -26,7 +26,7 @@ export default async function ProjectsLayout({ children }: LayoutProps<"/project
               이라 submit 을 명시하지 않으면 폼이 제출되지 않는다. */}
           <form action={signOut}>
             <Button type="submit" variant="ghost" size="sm" className="text-muted-foreground">
-              로그아웃
+              Sign out
             </Button>
           </form>
         </div>

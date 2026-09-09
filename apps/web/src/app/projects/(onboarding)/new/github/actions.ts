@@ -20,7 +20,7 @@ export async function importRepo(formData: FormData) {
   const installationId = BigInt(String(formData.get("installationId") ?? "0"));
 
   if (!Number.isSafeInteger(repoId) || repoId <= 0) {
-    throw new Error("잘못된 레포입니다.");
+    throw new Error("Invalid repository.");
   }
 
   // 남의 설치 ID 를 끼워 넣어도 여기서 걸린다.
@@ -28,7 +28,7 @@ export async function importRepo(formData: FormData) {
     where: { id: installationId, userId: user.id },
   });
   if (!installation) {
-    throw new Error("연결되지 않은 GitHub 설치입니다.");
+    throw new Error("That GitHub installation is not connected to your account.");
   }
 
   const octokit = await githubApp().getInstallationOctokit(Number(installationId));
