@@ -32,7 +32,11 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title }}
         run: echo "$PR_TITLE" | pnpm exec commitlint
 
+      # Prisma Client 는 생성물이라 저장소에 없다. 만들기 전에는 @prisma/client 가
+      # PrismaClient 를 export 하지 않아서 packages/db/index.ts 부터 타입이 깨진다.
+      # DB 접속은 필요 없고 스키마만 읽는다.
+      - run: pnpm db:generate
+
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm build
-      # 참고: packages/db 에 모델이 생기면 여기 앞에 `pnpm db:generate` 추가
