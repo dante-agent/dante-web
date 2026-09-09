@@ -1,0 +1,401 @@
+"use client";
+
+// 폴더 보기 본문. view = 소스|테스트 2-pane(구분선 드래그로 비율 조절), edit = 테스트 Before|After DiffEditor.
+// Monaco 는 SSR 에서 깨져 dynamic({ ssr:false }) (AGENTS.md). 데이터는 목업(content).
+
+import { useRef, useState, type ReactNode } from "react";
+import dynamic from "next/dynamic";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import type { Monaco } from "@monaco-editor/react";
+import { Copy, Download, Loader2, Maximize2, Minimize2, Save, Wand2, X } from "lucide-react";
+import { iconForFile } from "@/components/file-icons";
+import { Button, buttonVariants } from "@/components/ui/button";
+import type { MockFileContent } from "@/lib/mock-data";
+import { cn } from "@/lib/utils";
+
+const Fallback = () => (
+  <div className="flex h-full items-center justify-center bg-black">
+    <Loader2 className="text-muted-foreground size-5 animate-spin" />
+  </div>
+);
+
+const Editor = dynamic(() => import("@monaco-editor/react").then((m) => m.Editor), {
+  ssr: false,
+  loading: Fallback,
+});
+const DiffEditor = dynamic(() => import("@monaco-editor/react").then((m) => m.DiffEditor), {
+  ssr: false,
+  loading: Fallback,
+});
+
+const THEME = "dante-black";
+
+const setupMonaco = (monaco: Monaco) => {
+  monaco.editor.defineTheme(THEME, {
+    base: "vs-dark",
+    inherit: true,
+    rules: [],
+    colors: {
+      "editor.background": "#000000",
+      "editorGutter.background": "#000000",
+      "editorLineNumber.background": "#000000",
+      "diffEditor.insertedLineBackground": "#132a1c",
+      "diffEditor.removedLineBackground": "#331a1c",
+      "diffEditor.insertedTextBackground": "#2ea04340",
+      "diffEditor.removedTextBackground": "#f8514940",
+      "diffEditor.border": "#00000000",
+    },
+  });
+  // 목업 코드 뷰어 — 미설치 모듈("vitest" 등) 진단 안 띄운다.
+  const diag = { noSemanticValidation: true, noSuggestionDiagnostics: true };
+  monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions(diag);
+  monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions(diag);
+};
+
+const OPTIONS = {
+  readOnly: true,
+  minimap: { enabled: false },
+  fontSize: 13,
+  scrollBeyondLastLine: false,
+  automaticLayout: true,
+  padding: { top: 12 },
+} as const;
+
+function langOf(path: string): string {
+  const ext = path.split(".").pop();
+  if (ext === "ts" || ext === "tsx") return "typescript";
+  if (ext === "js" || ext === "jsx" || ext === "mjs" || ext === "cjs") return "javascript";
+  return "plaintext";
+}
+
+/** `src/lib/format.ts` → `format.test.ts` (목업 — 실제 테스트 경로는 나중에 데이터로 온다) */
+function testFileName(path: string): string {
+  const base = path.split("/").pop() ?? path;
+  const dot = base.lastIndexOf(".");
+  return dot === -1 ? `${base}.test` : `${base.slice(0, dot)}.test${base.slice(dot)}`;
+}
+
+function CodePane({ lang, value }: { lang: string; value: string }) {
+  return (
+    <Editor
+      language={lang}
+      theme={THEME}
+      beforeMount={setupMonaco}
+      loading={<Fallback />}
+      value={value}
+      options={OPTIONS}
+    />
+  );
+}
+
+function FileActions({ text, filename }: { text: string; filename: string }) {
+  const copy = () => void navigator.clipboard.writeText(text).catch(() => {});
+  const download = () => {
+    const url = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  return (
+    <div className="ml-auto flex items-center gap-0.5">
+      <Button
+        size="icon-sm"
+        variant="ghost"
+        onClick={download}
+        title="다운로드"
+        aria-label="다운로드"
+      >
+        <Download />
+      </Button>
+      <Button
+        size="icon-sm"
+        variant="ghost"
+        onClick={copy}
+        title="전체 복사"
+        aria-label="전체 복사"
+      >
+        <Copy />
+      </Button>
+    </div>
+  );
+}
+
+function ReadOnlyBadge() {
+  return (
+    <span className="bg-muted text-muted-foreground shrink-0 rounded px-1 py-0.5 text-[10px]">
+      Read-only
+    </span>
+  );
+}
+
+function Cell({
+  className,
+  show = true,
+  children,
+}: {
+  className?: string;
+  show?: boolean;
+  children: ReactNode;
+}) {
+  if (!show) return null;
+  return <div className={cn("border-border min-w-0", className)}>{children}</div>;
+}
+
+const GRID =
+  "border-border relative grid h-[calc(100svh-7rem)] grid-cols-2 grid-rows-[2.25rem_2.25rem_minmax(0,1fr)] overflow-hidden rounded-lg border";
+
+function FileHeading({ name }: { name: string }) {
+  return (
+    <span className="flex min-w-0 items-center gap-1.5">
+      {iconForFile(name.split("/").pop() ?? name, { className: "size-3.5 shrink-0" })}
+      <span className="truncate font-mono font-semibold">{name}</span>
+    </span>
+  );
+}
+
+function ExpandButton({ active, onToggle }: { active: boolean; onToggle: () => void }) {
+  return (
+    <Button
+      size="icon-sm"
+      variant="ghost"
+      onClick={onToggle}
+      title={active ? "복원" : "확대"}
+      aria-label={active ? "복원" : "확대"}
+    >
+      {active ? <Minimize2 /> : <Maximize2 />}
+    </Button>
+  );
+}
+
+function DragDivider({
+  pct,
+  onDown,
+  onMove,
+}: {
+  pct: number;
+  onDown: (e: React.PointerEvent<HTMLDivElement>) => void;
+  onMove: (e: React.PointerEvent<HTMLDivElement>) => void;
+}) {
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      onPointerDown={onDown}
+      onPointerMove={onMove}
+      style={{ left: `${pct}%` }}
+      className="group absolute inset-y-0 z-10 flex w-2 -translate-x-1/2 cursor-col-resize touch-none justify-center"
+    >
+      <span className="group-hover:bg-brand-orange/70 h-full w-0.5 rounded-full bg-transparent transition-colors" />
+    </div>
+  );
+}
+
+export function FileView({
+  file,
+  mode,
+  content,
+}: {
+  file: string;
+  mode: "view" | "edit";
+  content: MockFileContent;
+}) {
+  const pathname = usePathname();
+  const lang = langOf(file);
+  const viewHref = `${pathname}?file=${encodeURIComponent(file)}`;
+  const editHref = `${viewHref}&mode=edit`;
+  const testName = testFileName(file);
+
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [leftPct, setLeftPct] = useState(50);
+  const onDividerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const onDividerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.buttons !== 1 || !gridRef.current) return;
+    const r = gridRef.current.getBoundingClientRect();
+    setLeftPct(Math.min(80, Math.max(20, ((e.clientX - r.left) / r.width) * 100)));
+  };
+
+  const [expanded, setExpanded] = useState<null | "left" | "right">(null);
+  const toggle = (s: "left" | "right") => setExpanded((e) => (e === s ? null : s));
+  const showLeft = expanded !== "right";
+  const showRight = expanded !== "left";
+  const expandedCols = expanded ? "minmax(0,1fr)" : undefined;
+
+  if (mode === "edit") {
+    const original = content.test ?? "";
+    const draft = content.testDraft ?? original;
+
+    return (
+      <div className={GRID} style={{ gridTemplateColumns: expandedCols }}>
+        <Cell show={showLeft} className="bg-sidebar flex items-center border-b px-2.5 text-xs">
+          <span className="font-semibold">Before</span>
+          <span className="ml-auto">
+            <ExpandButton active={expanded === "left"} onToggle={() => toggle("left")} />
+          </span>
+        </Cell>
+        <Cell show={showRight} className="bg-sidebar flex items-center border-b px-2.5 text-xs">
+          <span className="font-semibold">After</span>
+          <div className="ml-auto flex items-center gap-0.5">
+            <Link
+              href={viewHref}
+              title="취소"
+              aria-label="취소"
+              className={cn(buttonVariants({ variant: "ghost", size: "icon-sm" }))}
+            >
+              <X />
+            </Link>
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              disabled
+              title="저장"
+              aria-label="저장"
+              className="text-brand-orange"
+            >
+              <Save />
+            </Button>
+            <ExpandButton active={expanded === "right"} onToggle={() => toggle("right")} />
+          </div>
+        </Cell>
+
+        <Cell
+          show={showLeft}
+          className="bg-sidebar flex items-center gap-2.5 border-b px-2.5 text-xs"
+        >
+          <FileHeading name={testName} />
+          <ReadOnlyBadge />
+          <FileActions text={original} filename={testName} />
+        </Cell>
+        <Cell
+          show={showRight}
+          className="bg-sidebar flex items-center gap-2.5 border-b px-2.5 text-xs"
+        >
+          <FileHeading name={testName} />
+          <FileActions text={draft} filename={testName} />
+        </Cell>
+
+        <div className={cn("min-h-0 bg-black", !expanded && "col-span-2")}>
+          {expanded === "left" ? (
+            <CodePane lang={lang} value={original} />
+          ) : expanded === "right" ? (
+            <Editor
+              language={lang}
+              theme={THEME}
+              beforeMount={setupMonaco}
+              loading={<Fallback />}
+              value={draft}
+              options={{ ...OPTIONS, readOnly: false }}
+            />
+          ) : (
+            <DiffEditor
+              language={lang}
+              theme={THEME}
+              beforeMount={setupMonaco}
+              loading={<Fallback />}
+              original={original}
+              modified={draft}
+              options={{
+                ...OPTIONS,
+                readOnly: false,
+                originalEditable: false,
+                renderSideBySide: true,
+                renderSideBySideInlineBreakpoint: 0,
+                useInlineViewWhenSpaceIsLimited: false,
+                enableSplitViewResizing: false,
+                overviewRulerBorder: false,
+              }}
+            />
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const cols = expanded ? "minmax(0,1fr)" : `minmax(0,${leftPct}fr) minmax(0,${100 - leftPct}fr)`;
+
+  return (
+    <div ref={gridRef} className={GRID} style={{ gridTemplateColumns: cols }}>
+      <Cell
+        show={showLeft}
+        className={cn(
+          "bg-sidebar flex items-center border-b px-2.5 text-xs",
+          showRight && "border-r"
+        )}
+      >
+        <span className="font-semibold">Source Code</span>
+        <span className="ml-auto">
+          <ExpandButton active={expanded === "left"} onToggle={() => toggle("left")} />
+        </span>
+      </Cell>
+      <Cell
+        show={showRight}
+        className="bg-sidebar flex items-center gap-1.5 border-b px-2.5 text-xs"
+      >
+        <span className="font-semibold">Test Code</span>
+        <div className="ml-auto flex items-center gap-0.5">
+          {content.test && (
+            <Link
+              href={editHref}
+              title="테스트 수정"
+              aria-label="테스트 수정"
+              className={cn(
+                buttonVariants({ variant: "ghost", size: "icon-sm" }),
+                "text-brand-orange hover:bg-brand-orange/10 hover:text-brand-orange"
+              )}
+            >
+              <Wand2 className="size-4" />
+            </Link>
+          )}
+          <ExpandButton active={expanded === "right"} onToggle={() => toggle("right")} />
+        </div>
+      </Cell>
+
+      <Cell
+        show={showLeft}
+        className={cn(
+          "bg-sidebar flex items-center gap-2.5 border-b px-2.5 text-xs",
+          showRight && "border-r"
+        )}
+      >
+        <FileHeading name={file} />
+        <ReadOnlyBadge />
+        <FileActions text={content.source} filename={file.split("/").pop() ?? "source.txt"} />
+      </Cell>
+      <Cell
+        show={showRight}
+        className="bg-sidebar flex items-center gap-2.5 border-b px-2.5 text-xs"
+      >
+        {content.test && (
+          <>
+            <FileHeading name={testName} />
+            <ReadOnlyBadge />
+            <FileActions text={content.test} filename={testName} />
+          </>
+        )}
+      </Cell>
+
+      <Cell show={showLeft} className={cn("bg-black", showRight && "border-r")}>
+        <CodePane lang={lang} value={content.source} />
+      </Cell>
+      <Cell show={showRight} className="bg-black">
+        {content.test ? (
+          <CodePane lang={lang} value={content.test} />
+        ) : (
+          <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+            <p className="text-sm">아직 테스트가 없습니다.</p>
+            <Button size="sm" disabled>
+              테스트 생성
+            </Button>
+          </div>
+        )}
+      </Cell>
+
+      {!expanded && <DragDivider pct={leftPct} onDown={onDividerDown} onMove={onDividerMove} />}
+    </div>
+  );
+}

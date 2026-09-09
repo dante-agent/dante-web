@@ -128,3 +128,10 @@
     word-break: keep-all;
   }
 }
+
+/* 폴더 보기 수정 모드 DiffEditor (components/file-view.tsx) — 리사이즈 off 상태라 sash 불필요,
+   Before 쪽 오버뷰 눈금은 빈 영역까지 내려가는 세로선이라 숨김 (After 쪽은 유지). */
+.monaco-diff-editor .monaco-sash,
+.monaco-diff-editor .editor.original .decorationsOverviewRuler {
+  display: none !important;
+}
