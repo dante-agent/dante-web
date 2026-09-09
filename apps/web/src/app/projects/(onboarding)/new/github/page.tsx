@@ -1,7 +1,7 @@
-import Link from "next/link";
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { prisma } from "@dante/db";
 import { GitHubIcon } from "@/components/brand-icons";
+import { BackLink } from "@/components/projects/back-link";
 import { RepoPicker } from "@/components/projects/repo-picker";
 import { StepHeader } from "@/components/projects/step-header";
 import { buttonVariants } from "@/components/ui/button";
@@ -54,17 +54,9 @@ export default async function GitHubConnectPage({
 
   return (
     <>
-      <Link
-        href="/projects/new"
-        className={buttonVariants({
-          variant: "ghost",
-          size: "sm",
-          className: "text-muted-foreground mb-6 -ml-2.5",
-        })}
-      >
-        <ArrowLeft />
-        Change provider
-      </Link>
+      <div className="mb-6">
+        <BackLink href="/projects/new">Change provider</BackLink>
+      </div>
 
       <StepHeader
         title="Which repository?"

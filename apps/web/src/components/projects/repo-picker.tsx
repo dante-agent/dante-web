@@ -7,6 +7,13 @@ import { Lock, Search } from "lucide-react";
 import { importRepo } from "@/app/projects/(onboarding)/new/github/actions";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { InstallationRepo } from "@/lib/github/repos";
 
 // 설치가 열어준 레포 목록.
@@ -47,20 +54,27 @@ export function RepoPicker({
   return (
     <>
       <div className="flex gap-2">
-        {/* shadcn Select 대신 네이티브 <select>. 계정 수가 적고 검색이 필요 없어서
-            컴포넌트를 하나 더 들이는 것보다 가볍다. 늘어나면 교체한다. */}
-        <select
-          aria-label="Account"
-          value={activeOwner}
-          onChange={(event) => setOwner(event.target.value)}
-          className="border-input bg-card focus-visible:border-ring focus-visible:ring-ring/40 h-9 shrink-0 rounded-[4px] border px-3 font-mono text-xs outline-none focus-visible:ring-2"
-        >
-          {owners.map((name) => (
-            <option key={name} value={name}>
-              {name}
-            </option>
-          ))}
-        </select>
+        {/* 네이티브 <select> 를 쓰다가 교체했다. appearance:auto 면 브라우저가
+            화살표를 직접 그리면서 좌우 여백이 어긋나고, 열었을 때 팝업 위치도
+            OS 가 정해서 CSS 로 못 맞춘다. 옆의 검색 입력과 글꼴·배경도 달랐다. */}
+        <Select value={activeOwner} onValueChange={(value) => setOwner(String(value))}>
+          {/* SelectTrigger 의 기본 클래스에 data-[size=default]:h-8 이 들어 있어
+              h-9 만으로는 안 먹는다(선택자가 달라 tailwind-merge 가 못 합친다).
+              옆 검색 입력과 높이를 맞추려면 같은 선택자로 덮어야 한다. */}
+          <SelectTrigger className="shrink-0 rounded-[4px] data-[size=default]:h-9">
+            <SelectValue />
+          </SelectTrigger>
+          {/* alignItemWithTrigger 기본값(true)은 선택 항목을 트리거 위에 겹쳐
+              띄운다(macOS 네이티브 방식). 트리거를 가리고 옆 입력까지 넘어와서
+              아래로 펼치도록 끈다. */}
+          <SelectContent alignItemWithTrigger={false} align="start" sideOffset={6}>
+            {owners.map((name) => (
+              <SelectItem key={name} value={name}>
+                {name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
         <div className="relative flex-1">
           <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2" />

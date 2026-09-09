@@ -93,6 +93,10 @@
   /* Supabase 대시보드 실측: 카드·패널 8px, 버튼 6px.
      0.5rem 을 기준으로 두면 --radius-lg(=8px)가 카드, --radius-md(=6.4px)가
      버튼에 그대로 맞는다. shadcn 기본값은 0.625rem(10px)이었다. */
+  /* 다크 단일 앱이라고 브라우저에게도 알려준다. 이게 없으면 <select> 드롭다운·
+     스크롤바·기본 폼 컨트롤이 OS 기본(밝은) 모양으로 뜬다. */
+  color-scheme: dark;
+
   --radius: 0.5rem;
   --sidebar: #1a181d;
   --sidebar-foreground: #eeedf0;
