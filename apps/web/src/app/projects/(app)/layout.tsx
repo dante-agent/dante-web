@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { signOut } from "@/app/auth/actions";
 import { ProductQuote, SplitShell } from "@/components/layout/split-shell";
 import { Button } from "@/components/ui/button";
@@ -21,7 +22,14 @@ export default async function ProjectsLayout({ children }: LayoutProps<"/project
       aside={<ProductQuote />}
       footer={
         <div className="flex items-center justify-between gap-4">
-          <span className="text-muted-foreground font-mono text-xs">{displayName}</span>
+          {/* 계정 설정으로 들어가는 유일한 입구. 프로젝트 셸 헤더는 아직 비어
+              있어서, 로그인 이름이 붙어 있는 이 자리가 제일 자연스럽다. */}
+          <Link
+            href="/account/settings/general"
+            className="text-muted-foreground hover:text-foreground font-mono text-xs underline-offset-4 transition-colors duration-[180ms] ease-out hover:underline"
+          >
+            {displayName}
+          </Link>
           {/* 서버 액션이라 <form> 이 필요하다. Base UI Button 은 기본 type 이 button
               이라 submit 을 명시하지 않으면 폼이 제출되지 않는다. */}
           <form action={signOut}>
