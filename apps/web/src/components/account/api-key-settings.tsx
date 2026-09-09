@@ -2,49 +2,30 @@
 
 import { useActionState, useState } from "react";
 import { Check, Eye, EyeOff } from "lucide-react";
-import {
-  deleteApiKey,
-  updateApiKey,
-  type KeyState,
-} from "@/app/project/[projectRef]/settings/actions";
+import { deleteApiKey, updateApiKey, type KeyState } from "@/app/account/settings/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AI_PROVIDERS, type AiProvider, type AiProviderId } from "@/lib/projects/ai-providers";
 
-// 설정의 API 키 섹션. 온보딩과 달리 여기서는 세 줄을 늘 펼쳐 둔다 — 고르는
+// 계정 설정의 API 키 섹션. 온보딩과 달리 여기서는 세 줄을 늘 펼쳐 둔다 — 고르는
 // 화면이 아니라 상태를 보는 화면이고, "지금 무슨 키가 들어있나"가 한눈에
 // 보여야 하기 때문이다.
 
 export function ApiKeySettings({
-  projectRef,
   savedKeys,
 }: {
-  projectRef: string;
   savedKeys: Partial<Record<AiProviderId, string>>;
 }) {
   return (
-    <div className="border-border divide-border divide-y border">
+    <div className="border-border divide-border bg-card divide-y border">
       {AI_PROVIDERS.map((provider) => (
-        <ProviderRow
-          key={provider.id}
-          projectRef={projectRef}
-          provider={provider}
-          lastFour={savedKeys[provider.id]}
-        />
+        <ProviderRow key={provider.id} provider={provider} lastFour={savedKeys[provider.id]} />
       ))}
     </div>
   );
 }
 
-function ProviderRow({
-  projectRef,
-  provider,
-  lastFour,
-}: {
-  projectRef: string;
-  provider: AiProvider;
-  lastFour?: string;
-}) {
+function ProviderRow({ provider, lastFour }: { provider: AiProvider; lastFour?: string }) {
   const [editing, setEditing] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const [apiKey, setApiKey] = useState("");
@@ -97,7 +78,6 @@ function ProviderRow({
 
       {editing && (
         <form action={formAction} className="mt-4">
-          <input type="hidden" name="projectRef" value={projectRef} />
           <input type="hidden" name="provider" value={provider.id} />
 
           <div className="relative">
@@ -164,7 +144,6 @@ function ProviderRow({
       {/* 지우기는 별도 form. 위 form 안에 두면 제출이 엇갈린다. */}
       {lastFour && !editing && (
         <form action={deleteApiKey} className="mt-3">
-          <input type="hidden" name="projectRef" value={projectRef} />
           <input type="hidden" name="provider" value={provider.id} />
           <button
             type="submit"
