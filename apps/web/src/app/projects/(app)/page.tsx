@@ -93,7 +93,7 @@ function EmptyState() {
       {/* 이미 가입하고 들어온 사람에게 제품을 다시 설명하지 않는다.
           지금 상태를 말하고, 이 빈 목록이 무엇으로 채워지는지만 알려준다. */}
       <h1 className="font-heading text-[26px] leading-[1.2] font-medium tracking-[-0.02em]">
-        No repositories connected
+        Nothing connected yet
       </h1>
       <p className="text-muted-foreground mt-3 text-[15px] leading-relaxed">
         Repositories you connect appear here as projects
