@@ -19,7 +19,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/">) {
     // 좌우 분할 비율은 Supabase 기준 약 38.5 : 61.5 (5fr:8fr = 38.46%). 1:1 이 아니다.
     // lg 미만에서는 오른쪽 패널을 숨기고 왼쪽 컬럼이 화면을 다 쓴다
     // (1컬럼 grid 가 되므로 별도 처리가 필요 없다).
-    <div className="grid min-h-svh lg:grid-cols-[5fr_8fr]">
+    <div className="bg-background-warm grid min-h-svh lg:grid-cols-[5fr_8fr]">
       {/* 왼쪽: 로고 · 로그인 · 약관 */}
       <div className="relative flex flex-col px-6 py-8 lg:px-10">
         <Link href="/" className="flex w-fit items-center gap-2.5 text-lg font-semibold">
