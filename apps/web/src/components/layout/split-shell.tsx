@@ -9,6 +9,9 @@ import danteLogo from "@/assets/dante-logo.png";
 //   좌우 비율 5fr:8fr (38.46 : 61.54) — Supabase 기준, 1:1 이 아니다.
 //   lg 미만에서는 오른쪽 패널을 숨기고 왼쪽이 화면을 다 쓴다(1컬럼 grid).
 //
+// 왼쪽이 화면보다 길어지면 오른쪽 패널은 sticky 로 제자리에 선다. 자세한 건
+// 아래 오른쪽 칸의 주석 참고.
+//
 // 상단 헤더는 두지 않는다. 로고는 왼쪽 위, 계정/약관 같은 부수 정보는 왼쪽 아래.
 export function SplitShell({
   children,
@@ -55,7 +58,12 @@ export function SplitShell({
         {footer}
       </div>
 
-      <div className="border-border relative hidden border-l lg:flex lg:items-center lg:justify-center">
+      {/* 왼쪽 콘텐츠가 화면보다 길어져도 이 패널은 따라 올라가지 않는다.
+          기본 grid 아이템은 행 높이만큼 늘어나(align-self: stretch) 늘어난
+          그리드의 세로 중앙에 놓이기 때문에, 스크롤하면 같이 밀린다.
+          self-start 로 늘어나는 걸 끄고 높이를 뷰포트로 못박은 뒤 sticky 로
+          붙이면, 왼쪽만 흐르고 레일은 화면 중앙에 그대로 선다. */}
+      <div className="border-border relative hidden border-l lg:sticky lg:top-0 lg:flex lg:h-svh lg:items-center lg:justify-center lg:self-start">
         {aside}
       </div>
     </div>
