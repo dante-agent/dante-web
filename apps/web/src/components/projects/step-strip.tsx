@@ -54,8 +54,14 @@ function basisFor(isExpanded: boolean) {
   return `${((100 * ratio) / TOTAL_RATIO).toFixed(4)}%`;
 }
 
-// 실측값. Tailwind 임의값으로 매번 쓰기엔 길어서 묶어둔다.
-const EXPAND = "transition-[flex-basis] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)]";
+// 지속시간 420ms 는 CodeRabbit 실측값 그대로. 이징은 바꿨다.
+//
+// 실측 곡선 cubic-bezier(0.16,1,0.3,1) 은 expo-out 이라 42ms 에 49%,
+// 84ms 에 75% 까지 가버린다. CodeRabbit 스트립은 231→975px(744px)을 움직여
+// 꼬리가 보이지만, 우리는 98→393px(295px)이라 같은 곡선이 순간이동으로 보인다
+// (실제로 "애니메이션이 하나도 없다"는 피드백을 받았다).
+// cubic-bezier(0.2,0,0,1) 은 60ms 32% · 120ms 67% · 180ms 83% 로 고르게 퍼진다.
+const EXPAND = "transition-[flex-basis] duration-[420ms] ease-[cubic-bezier(0.2,0,0,1)]";
 const TINT = "transition-[color,border-color,opacity] duration-[180ms] ease-out";
 
 export function StepStrip({ current }: { current: number }) {
