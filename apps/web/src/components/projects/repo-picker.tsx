@@ -5,7 +5,7 @@ import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import { ko } from "date-fns/locale";
 import { Lock, Search } from "lucide-react";
-import { importRepo } from "@/app/projects/new/github/actions";
+import { importRepo } from "@/app/projects/(onboarding)/new/github/actions";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { InstallationRepo } from "@/lib/github/repos";

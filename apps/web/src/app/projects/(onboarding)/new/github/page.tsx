@@ -59,15 +59,14 @@ export default async function GitHubConnectPage({
         className={buttonVariants({
           variant: "ghost",
           size: "sm",
-          className: "text-muted-foreground mb-8 -ml-2.5",
+          className: "text-muted-foreground mb-6 -ml-2.5",
         })}
       >
         <ArrowLeft />
-        프로젝트 연결
+        제공자 다시 고르기
       </Link>
 
       <StepHeader
-        step={2}
         title="어떤 레포로 시작할까요"
         description="지금 하나만 골라도 됩니다. 나중에 프로젝트를 더 만들 수 있습니다."
       />
@@ -85,7 +84,7 @@ export default async function GitHubConnectPage({
         </Banner>
       )}
 
-      <div className="mt-12">
+      <div className="mt-8">
         {installations.length === 0 ? (
           <ConnectPrompt />
         ) : (
@@ -127,7 +126,7 @@ function Banner({ tone, children }: { tone: "error" | "notice"; children: React.
   return (
     <p
       role="alert"
-      className={`mt-8 border-l-2 py-1 pl-4 text-[15px] leading-relaxed ${
+      className={`mt-6 border-l-2 py-1 pl-4 text-[13px] leading-relaxed ${
         tone === "error"
           ? "border-destructive text-destructive"
           : "border-brand-cobalt text-brand-cobalt"
@@ -142,31 +141,31 @@ function Banner({ tone, children }: { tone: "error" | "notice"; children: React.
 // 고를 수 있고, 우리가 사용자 토큰을 저장하지 않아도 되기 때문이다.
 function ConnectPrompt() {
   return (
-    <div className="border-border bg-card border p-8">
-      <div className="flex items-start gap-5">
-        <GitHubIcon className="mt-0.5 size-7 shrink-0" />
-        <div className="min-w-0 flex-1">
-          <h2 className="font-heading text-2xl leading-tight font-medium tracking-[-0.01em]">
-            GitHub App 설치
-          </h2>
-          <p className="text-muted-foreground mt-2 text-base leading-relaxed">
-            GitHub 으로 넘어가 열어줄 레포를 고르면 여기로 돌아옵니다. 나중에 GitHub 설정에서 언제든
-            바꾸거나 해제할 수 있습니다.
-          </p>
-        </div>
-        {/* 서버 라우트가 state 쿠키를 심고 GitHub 설치 화면으로 보낸다. */}
-        <a
-          href="/api/github/install"
-          className={buttonVariants({ size: "lg", className: "group shrink-0 rounded-[4px]" })}
-        >
-          설치
-          <ArrowRight className="transition-transform duration-[180ms] ease-out group-hover:translate-x-0.5 motion-reduce:transition-none" />
-        </a>
+    <div className="border-border bg-card border p-6">
+      <div className="flex items-center gap-4">
+        <GitHubIcon className="size-6 shrink-0" />
+        <span className="font-heading flex-1 text-lg leading-tight font-medium">
+          GitHub App 설치
+        </span>
       </div>
+      <p className="text-muted-foreground mt-3 text-[13px] leading-relaxed">
+        GitHub 으로 넘어가 열어줄 레포를 고르면 여기로 돌아옵니다. 나중에 GitHub 설정에서 언제든
+        바꾸거나 해제할 수 있습니다.
+      </p>
 
-      <div className="border-border mt-6 border-t pt-4">
-        <p className="text-muted-foreground font-mono text-[11px] tracking-wide">
-          액세스 토큰은 저장하지 않습니다 · 필요할 때 1시간짜리로 발급합니다
+      {/* 서버 라우트가 state 쿠키를 심고 GitHub 설치 화면으로 보낸다. */}
+      <a
+        href="/api/github/install"
+        className={buttonVariants({ size: "lg", className: "group mt-5 w-full rounded-[4px]" })}
+      >
+        <GitHubIcon />
+        GitHub 연결
+        <ArrowRight className="transition-transform duration-[180ms] ease-out group-hover:translate-x-0.5 motion-reduce:transition-none" />
+      </a>
+
+      <div className="border-border mt-5 border-t pt-3">
+        <p className="text-muted-foreground font-mono text-[10px] tracking-wide">
+          액세스 토큰은 저장하지 않습니다 · 필요할 때 1시간짜리로 발급
         </p>
       </div>
     </div>

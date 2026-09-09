@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@dante/db";
-import { selectFramework } from "@/app/projects/setup/[projectRef]/actions";
+import { selectFramework } from "@/app/projects/(onboarding)/setup/[projectRef]/actions";
 import { StepHeader } from "@/components/projects/step-header";
 import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth/user";
@@ -29,20 +29,18 @@ export default async function FrameworkPage({
   return (
     <>
       <StepHeader
-        step={3}
-        projectRef={projectRef}
         title="테스트를 무엇으로 돌리나요"
         description="고른 러너에 맞춰 테스트 파일을 만듭니다. 파일 위치와 import 구문이 달라집니다."
       />
 
-      <p className="text-muted-foreground mt-6 font-mono text-[11px] tracking-wide">
+      <p className="text-muted-foreground mt-4 font-mono text-[11px] tracking-wide">
         {project.repoOwner}/{project.repoName}
       </p>
 
-      <form action={selectFramework} className="mt-8">
+      <form action={selectFramework} className="mt-6">
         <input type="hidden" name="projectRef" value={projectRef} />
 
-        <fieldset className="flex flex-col gap-4">
+        <fieldset className="flex flex-col gap-3">
           <legend className="sr-only">테스트 러너</legend>
 
           {TEST_FRAMEWORKS.map((framework) => (
@@ -50,7 +48,7 @@ export default async function FrameworkPage({
             // 로 CSS 가 처리하므로 이 화면에는 클라이언트 JS 가 필요 없다.
             <label
               key={framework.id}
-              className="border-border bg-card hover:border-input block cursor-pointer border p-8 transition-colors duration-[180ms] ease-out has-[:checked]:border-[#ff570a] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[#ff570a]/40"
+              className="border-border bg-card hover:border-input block cursor-pointer border p-6 transition-colors duration-[180ms] ease-out has-[:checked]:border-[#ff570a] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[#ff570a]/40"
             >
               <input
                 type="radio"
@@ -60,7 +58,7 @@ export default async function FrameworkPage({
                 className="sr-only"
               />
               <div className="flex items-baseline gap-3">
-                <span className="font-heading text-2xl leading-tight font-medium tracking-[-0.01em]">
+                <span className="font-heading text-lg leading-tight font-medium">
                   {framework.name}
                 </span>
                 {project.testFramework === framework.id && (
@@ -69,11 +67,11 @@ export default async function FrameworkPage({
                   </span>
                 )}
               </div>
-              <p className="text-muted-foreground mt-2 text-base leading-relaxed">
+              <p className="text-muted-foreground mt-2 text-[13px] leading-relaxed">
                 {framework.tagline}
               </p>
-              <div className="border-border mt-6 border-t pt-4">
-                <p className="text-muted-foreground font-mono text-[11px] tracking-wide">
+              <div className="border-border mt-5 border-t pt-3">
+                <p className="text-muted-foreground font-mono text-[10px] tracking-wide">
                   {framework.example}
                 </p>
               </div>
@@ -81,11 +79,9 @@ export default async function FrameworkPage({
           ))}
         </fieldset>
 
-        <div className="mt-8 flex justify-end">
-          <Button type="submit" size="lg" className="rounded-[4px]">
-            계속
-          </Button>
-        </div>
+        <Button type="submit" size="lg" className="mt-6 w-full rounded-[4px]">
+          계속
+        </Button>
       </form>
     </>
   );
