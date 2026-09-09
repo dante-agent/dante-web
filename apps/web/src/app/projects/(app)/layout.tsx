@@ -1,15 +1,11 @@
-import Image from "next/image";
-import Link from "next/link";
-import danteLogo from "@/assets/dante-logo.png";
 import { signOut } from "@/app/auth/actions";
+import { ProductQuote, SplitShell } from "@/components/layout/split-shell";
 import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth/user";
 
-// 계정 스코프 셸. /projects · /projects/new 가 공유한다.
-//
-// 치수는 Supabase 대시보드 실측값이다.
-//   상단바 48px · 콘텐츠 컬럼 max-w 768px + 좌우 40px (본문 폭 688px) · 상단 여백 48px
-//
+// 프로젝트 목록. 로그인 화면과 같은 분할 셸을 쓴다 — 로그인 → 목록 → 온보딩이
+// 껍데기 하나로 이어진다. 상단 헤더는 없앴고, 계정 정보와 로그아웃은 왼쪽 아래로
+// 내렸다 (로그인 화면이 약관을 두는 자리).
 export default async function ProjectsLayout({ children }: LayoutProps<"/projects">) {
   const user = await requireUser();
 
@@ -21,28 +17,22 @@ export default async function ProjectsLayout({ children }: LayoutProps<"/project
     "계정";
 
   return (
-    <div className="flex min-h-svh flex-col">
-      <header className="border-border sticky top-0 z-10 h-12 border-b backdrop-blur-sm">
-        <div className="flex h-full items-center justify-between px-5">
-          <Link href="/projects" className="flex items-center gap-2 text-[13px] font-semibold">
-            {/* 로그인 화면과 같은 이유로 alt 는 비운다 — 옆에 "Dante" 텍스트가 있다. */}
-            <Image src={danteLogo} alt="" priority draggable={false} className="h-5 w-[15px]" />
-            Dante
-          </Link>
-          <div className="flex items-center gap-2.5">
-            <span className="text-muted-foreground font-mono text-xs">{displayName}</span>
-            {/* 서버 액션이라 <form> 이 필요하다. Base UI Button 은 기본 type 이 button 이라
-                submit 을 명시하지 않으면 폼이 제출되지 않는다. */}
-            <form action={signOut}>
-              <Button type="submit" variant="ghost" size="sm" className="text-muted-foreground">
-                로그아웃
-              </Button>
-            </form>
-          </div>
+    <SplitShell
+      aside={<ProductQuote />}
+      footer={
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-muted-foreground font-mono text-xs">{displayName}</span>
+          {/* 서버 액션이라 <form> 이 필요하다. Base UI Button 은 기본 type 이 button
+              이라 submit 을 명시하지 않으면 폼이 제출되지 않는다. */}
+          <form action={signOut}>
+            <Button type="submit" variant="ghost" size="sm" className="text-muted-foreground">
+              로그아웃
+            </Button>
+          </form>
         </div>
-      </header>
-
-      <main className="mx-auto w-full max-w-3xl flex-1 px-10 pt-12 pb-16">{children}</main>
-    </div>
+      }
+    >
+      {children}
+    </SplitShell>
   );
 }
