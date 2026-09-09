@@ -3,7 +3,7 @@
 // 폴더 보기 본문. view = 소스|테스트 2-pane(구분선 드래그로 비율 조절), edit = 테스트 Before|After DiffEditor.
 // Monaco 는 SSR 에서 깨져 dynamic({ ssr:false }) (AGENTS.md). 데이터는 목업(content).
 
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -12,6 +12,7 @@ import { Copy, Download, Loader2, Maximize2, Minimize2, Save, Wand2, X } from "l
 import { iconForFile } from "@/components/file-icons";
 import { Button, buttonVariants } from "@/components/ui/button";
 import type { MockFileContent } from "@/lib/mock-data";
+import { pushRecent } from "@/lib/recent-files";
 import { cn } from "@/lib/utils";
 
 const Fallback = () => (
@@ -196,10 +197,12 @@ function DragDivider({
 export function FileView({
   file,
   mode,
+  projectRef,
   content,
 }: {
   file: string;
   mode: "view" | "edit";
+  projectRef: string;
   content: MockFileContent;
 }) {
   const pathname = usePathname();
@@ -207,6 +210,10 @@ export function FileView({
   const viewHref = `${pathname}?file=${encodeURIComponent(file)}`;
   const editHref = `${viewHref}&mode=edit`;
   const testName = testFileName(file);
+
+  useEffect(() => {
+    pushRecent(projectRef, file);
+  }, [projectRef, file]);
 
   const gridRef = useRef<HTMLDivElement>(null);
   const [leftPct, setLeftPct] = useState(50);
