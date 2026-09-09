@@ -18,7 +18,7 @@ export function SubSidebar({ nav, children }: { nav?: ReactNode; children: React
     <>
       <aside
         className={cn(
-          "fixed top-12 bottom-0 left-14 z-20 overflow-hidden transition-[width] duration-200",
+          "fixed top-[47px] bottom-0 left-14 z-20 overflow-hidden transition-[width] duration-200",
           collapsed ? "w-11" : "border-sidebar-border bg-sidebar w-60 border-r"
         )}
       >

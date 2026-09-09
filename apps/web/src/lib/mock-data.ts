@@ -114,8 +114,22 @@ export const mockRepos: MockRepo[] = [
   },
 ];
 
-/** 설치된 GitHub App 이 접근할 수 있는 계정 목록 (개인 + 조직). */
-export const mockOwners = ["acme", "seojigwon"];
+/** 연동된 GitHub 계정 — 개인 계정 + 소속·생성 팀. 최상단 헤더 owner 스위처용. */
+export type MockOwner = {
+  id: string;
+  name: string;
+  type: "personal" | "team";
+  plan: "free" | "pro";
+};
+export const mockOwners: MockOwner[] = [
+  { id: "seojigwon", name: "seojigwon", type: "personal", plan: "free" },
+  { id: "acme", name: "acme", type: "team", plan: "pro" },
+];
+
+/** repoFullName("acme/web-app")의 owner 로 프로젝트를 거른다. */
+export function projectsByOwner(owner: string): MockProject[] {
+  return mockProjects.filter((p) => p.repoFullName.startsWith(`${owner}/`));
+}
 
 // 폴더 보기 서브 사이드바용. 연결된 레포의 소스 파일 목록 = GitHub `git/trees?recursive=1`
 // 응답에서 확장자 필터를 통과한 blob 들. status 는 나중에 테스트 존재/신선도로 계산할 값.
