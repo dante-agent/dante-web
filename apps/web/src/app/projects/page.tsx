@@ -1,18 +1,29 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { GitBranch, Plus } from "lucide-react";
 import { GitHubIcon } from "@/components/brand-icons";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import { mockProjects } from "@/lib/mock-data";
+import { LOGIN_PATH } from "@/lib/auth/redirect";
+import { listProjectsForUser, type ProjectListItem } from "@/lib/projects";
+import { createClient } from "@/lib/supabase/server";
 
 // 로그인 후 착륙 지점. 프로젝트가 0개여도 /projects/new 로 자동 리다이렉트하지 않는다
 // — 뒤로가기를 누르면 다시 튕겨 나와 루프가 생긴다. 대신 빈 상태를 보여주고 CTA 를 둔다.
-//
-// TODO(다음 PR): mockProjects → 로그인 사용자가 속한 팀의 Project 조회로 교체.
-export default async function ProjectsPage({ searchParams }: PageProps<"/projects">) {
-  // ?state=empty — 목업 단계에서 빈 상태를 눈으로 확인하려는 임시 스위치. DB 붙으면 삭제.
-  const { state } = await searchParams;
-  const projects = state === "empty" ? [] : mockProjects;
+export default async function ProjectsPage() {
+  const supabase = await createClient();
+
+  // getUser() 는 Supabase 서버에 토큰을 검증받는다.
+  // getSession() 은 쿠키 내용을 그대로 믿으므로 권한 판단에 쓰면 안 된다.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // proxy 가 이미 걸러주지만, 페이지 자체로도 성립해야 한다.
+  // (proxy 는 최적화용 검사라 최종 방어선이 될 수 없다 — Next.js 문서 권고)
+  if (!user) redirect(LOGIN_PATH);
+
+  const projects = await listProjectsForUser(user.id);
 
   return (
     <>
@@ -30,7 +41,7 @@ export default async function ProjectsPage({ searchParams }: PageProps<"/project
   );
 }
 
-function ProjectGrid({ projects }: { projects: typeof mockProjects }) {
+function ProjectGrid({ projects }: { projects: ProjectListItem[] }) {
   return (
     <ul className="mt-8 grid gap-3 sm:grid-cols-2">
       {projects.map((project) => (
