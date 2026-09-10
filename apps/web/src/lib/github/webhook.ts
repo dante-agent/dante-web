@@ -1,5 +1,13 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { prisma } from "@dante/db";
+import {
+  fetchHeadCommitMessage,
+  fetchPullRequest,
+  installationClient,
+} from "@/lib/github/pull-request";
+import { deliverRunSummary, type PullRequestContext } from "@/lib/notifications/deliver";
+import { danteLinks } from "@/lib/notifications/links";
+import { queuedRun } from "@/lib/notifications/run-summary";
 
 // ⚠️ 서버 전용. 웹훅 시크릿을 읽는다.
 //
@@ -57,6 +65,27 @@ export function verifySignature(body: string, signature: string | null) {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+/** PR 이 열리거나 푸시가 왔을 때. 알림을 시작하는 이벤트다. */
+type PullRequestEvent = InstallationEvent & {
+  repository?: { id: number };
+  pull_request?: {
+    number: number;
+    draft?: boolean;
+    head: { sha: string };
+    base: { ref: string };
+    labels?: { name: string }[];
+  };
+};
+
+/** Check 상세 화면의 Re-run 버튼. */
+type CheckRunEvent = InstallationEvent & {
+  repository?: { id: number };
+  check_run?: {
+    head_sha: string;
+    pull_requests?: { number: number }[];
+  };
+};
+
 /**
  * 이벤트 하나를 DB 에 반영한다.
  *
@@ -73,6 +102,10 @@ export async function handleWebhookEvent(event: string, payload: unknown) {
       return handleInstallationRepositories(payload as InstallationRepositoriesEvent);
     case "repository":
       return handleRepository(payload as RepositoryEvent);
+    case "pull_request":
+      return handlePullRequest(payload as PullRequestEvent);
+    case "check_run":
+      return handleCheckRun(payload as CheckRunEvent);
     default:
       return null;
   }
@@ -167,6 +200,127 @@ async function handleRepository(payload: RepositoryEvent) {
       return `repo ${repo.id} private=${repo.private}`;
     default:
       return null;
+  }
+}
+
+/**
+ * PR 이 열림·푸시·다시 열림·리뷰 준비됨.
+ *
+ * 여기서 하는 일은 "코멘트 자리를 만드는 것"까지다. 스캔·생성·실행이 아직
+ * 없어서 상태는 Queued 에 머문다. 그래도 지금 만들어 두는 이유는 sticky
+ * 코멘트가 "하나를 계속 고쳐 쓰는" 물건이고, 그 하나가 생기는 자리가 여기라서다.
+ *
+ * 우리가 처리하지 않는 action(closed, labeled 등)은 그냥 지나간다. 나중에
+ * labeled/unlabeled 를 받아 `skip-dante` 라벨 변화에 반응할 수 있다.
+ */
+async function handlePullRequest(payload: PullRequestEvent) {
+  const id = installationId(payload);
+  const pr = payload.pull_request;
+  const repoId = payload.repository?.id;
+  if (id === null || !pr || typeof repoId !== "number") return null;
+
+  const actions = ["opened", "synchronize", "reopened", "ready_for_review"];
+  if (!actions.includes(payload.action)) return null;
+
+  const projects = await notifiableProjects(id, repoId);
+  if (projects.length === 0) return null;
+
+  for (const project of projects) {
+    const context: PullRequestContext = {
+      number: pr.number,
+      headSha: pr.head.sha,
+      baseRef: pr.base.ref,
+      draft: pr.draft ?? false,
+      labels: (pr.labels ?? []).map((label) => label.name),
+      headCommitMessage: await commitMessage(project, pr.head.sha),
+    };
+
+    await deliverRunSummary(project, context, queuedRun(danteLinks(project.ref, pr.number)));
+  }
+
+  return `pr #${pr.number} ${payload.action} → ${projects.length} project(s)`;
+}
+
+/**
+ * Check 상세 화면의 Re-run 버튼.
+ *
+ * 페이로드에는 PR 번호와 SHA 밖에 없어서 나머지(base 브랜치·드래프트·라벨)는
+ * API 로 다시 읽는다. 그 값들이 없으면 브랜치 필터를 적용할 수 없다.
+ */
+async function handleCheckRun(payload: CheckRunEvent) {
+  const id = installationId(payload);
+  const repoId = payload.repository?.id;
+  const prNumber = payload.check_run?.pull_requests?.[0]?.number;
+
+  if (payload.action !== "rerequested") return null;
+  if (id === null || typeof repoId !== "number" || typeof prNumber !== "number") return null;
+
+  const projects = await notifiableProjects(id, repoId);
+  if (projects.length === 0) return null;
+
+  for (const project of projects) {
+    const ref = { owner: project.repoOwner, repo: project.repoName };
+
+    let context: PullRequestContext;
+    try {
+      const octokit = await installationClient(project.installationId);
+      const pr = await fetchPullRequest(octokit, ref, prNumber);
+      context = {
+        ...pr,
+        headCommitMessage: await fetchHeadCommitMessage(octokit, ref, pr.headSha),
+      };
+    } catch (error) {
+      console.error(`[github-webhook] re-run lookup failed for #${prNumber}`, error);
+      continue;
+    }
+
+    await deliverRunSummary(project, context, queuedRun(danteLinks(project.ref, prNumber)));
+  }
+
+  return `check re-run #${prNumber} → ${projects.length} project(s)`;
+}
+
+/**
+ * 이 레포에 걸린, 아직 끊기지 않은 프로젝트들.
+ *
+ * 여러 건일 수 있다 — 같은 레포를 두 사용자가 각자 연결할 수 있기 때문이다
+ * (@@unique([userId, repoId])). 각자 설정이 다르므로 각자에게 보낸다. 코멘트가
+ * 서로 섞이지 않는 건 마커에 프로젝트 ref 가 들어가 있어서다.
+ */
+function notifiableProjects(installationIdValue: bigint, repoId: number) {
+  return prisma.project.findMany({
+    where: {
+      installationId: installationIdValue,
+      repoId: BigInt(repoId),
+      disconnectedAt: null,
+      // 온보딩을 끝내지 않은 프로젝트에는 아직 아무것도 쓰지 않는다.
+      setupCompletedAt: { not: null },
+    },
+    select: {
+      id: true,
+      ref: true,
+      repoOwner: true,
+      repoName: true,
+      defaultBranch: true,
+      installationId: true,
+    },
+  });
+}
+
+/** `[skip dante]` 를 보려고 head 커밋 메시지를 읽는다. 못 읽으면 null. */
+async function commitMessage(
+  project: { repoOwner: string; repoName: string; installationId: bigint },
+  sha: string
+) {
+  try {
+    const octokit = await installationClient(project.installationId);
+    return await fetchHeadCommitMessage(
+      octokit,
+      { owner: project.repoOwner, repo: project.repoName },
+      sha
+    );
+  } catch {
+    return null;
   }
 }
 
