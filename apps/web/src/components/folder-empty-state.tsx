@@ -9,7 +9,8 @@ export function FolderEmptyState({ projectRef }: { projectRef: string }) {
   const recent = useRecent(projectRef);
 
   return (
-    <div className="border-border flex h-[calc(100svh-7rem)] flex-col items-center justify-center gap-4 rounded-lg border">
+    <div className="border-border flex h-[calc(100svh-7rem)] flex-col items-center gap-4 overflow-y-auto rounded-lg border pt-[28%]">
+      {/* 아이콘·문구는 상단에서 고정 거리 — 아래 Recent 유무·개수가 이들을 밀지 않는다 */}
       <FolderOpen className="text-brand-orange size-8" />
       <p className="text-sm font-medium">Select a file</p>
 
