@@ -106,18 +106,26 @@ export function RepoPicker({
         )}
       </ul>
 
-      {/* 처음 설치할 때 레포를 일부만 연 사용자가 되돌아갈 길. 없으면 막힌다. */}
-      <p className="text-muted-foreground mt-4 font-mono text-[11px] tracking-wide">
-        Missing a repository?{" "}
-        <a
-          href={settingsUrl}
-          target="_blank"
-          rel="noreferrer noopener"
-          className="text-foreground underline underline-offset-4"
-        >
-          ADD ONE ON GITHUB ↗
-        </a>
-      </p>
+      {/* "안 보여요" 두 케이스: 이 설치에 레포 더 열기 / 다른 org·계정에 App 설치. */}
+      <div className="text-muted-foreground mt-4 space-y-1.5 font-mono text-[11px] tracking-wide">
+        <p>
+          Missing a repository?{" "}
+          <a
+            href={settingsUrl}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="text-foreground underline underline-offset-4"
+          >
+            ADD ONE ON GITHUB ↗
+          </a>
+        </p>
+        <p>
+          Missing an organization?{" "}
+          <a href="/api/github/install" className="text-foreground underline underline-offset-4">
+            Add another organization ↗
+          </a>
+        </p>
+      </div>
     </>
   );
 }

@@ -1,5 +1,6 @@
 // 프로젝트 조회 (서버 전용). 소유자(userId) 스코프. 팀 도입 시 여기가 teamId 로 바뀐다.
 
+import { cache } from "react";
 import { notFound } from "next/navigation";
 import { prisma } from "@dante/db";
 import { requireUser } from "@/lib/auth/user";
@@ -41,3 +42,19 @@ export async function requireProjectContext(ref: string) {
   if (!project) notFound();
   return { user, project, projects };
 }
+
+/** GitHub 호출에 필요한 필드. installationId(BigInt)가 있어 클라이언트로 넘기지 않는다. */
+export type ProjectRepo = {
+  repoOwner: string;
+  repoName: string;
+  defaultBranch: string;
+  installationId: bigint;
+};
+
+/** layout·page 가 같은 요청에서 각각 부르므로 cache 로 dedup. */
+export const getProjectRepo = cache((ref: string, userId: string): Promise<ProjectRepo | null> =>
+  prisma.project.findFirst({
+    where: { ref, userId },
+    select: { repoOwner: true, repoName: true, defaultBranch: true, installationId: true },
+  })
+);

@@ -53,9 +53,25 @@ export function installationUrl(state: string) {
   return `https://github.com/apps/${slug}/installations/new?state=${encodeURIComponent(state)}`;
 }
 
-/** 사용자가 레포를 더 열어주거나 연결을 끊는 화면. 설치 후에만 의미가 있다. */
-export function installationSettingsUrl(installationId: bigint | number) {
-  return `https://github.com/settings/installations/${installationId}`;
+/**
+ * 사용자가 레포를 더 열어주거나 연결을 끊는 화면. 설치 후에만 의미가 있다.
+ *
+ * 개인 계정과 조직의 경로가 다르다. 개인 설치의 URL 로 조직 설치를 열면 GitHub 이
+ * 404 를 낸다 — 권한 없는 리소스에 403 대신 404 를 주기 때문에, 사용자에게는
+ * "없는 페이지"로만 보이고 어디로 가야 하는지 알 길이 없다.
+ */
+export function installationSettingsUrl(installation: {
+  id: bigint | number;
+  accountLogin: string;
+  accountType: string;
+}) {
+  const tail = `settings/installations/${installation.id}`;
+
+  // accountType 은 GitHub 이 준 값 그대로다("User" | "Organization"). 값이 상하거나
+  // 새 종류가 생기면 개인 경로로 떨어진다 — 둘 중 계정 소유자에게는 맞는 쪽이다.
+  return installation.accountType === "Organization"
+    ? `https://github.com/organizations/${installation.accountLogin}/${tail}`
+    : `https://github.com/${tail}`;
 }
 
 /** App 자격(JWT)으로 설치 정보를 읽는다. 설치가 실재하는지, 누구 계정인지 확인용. */

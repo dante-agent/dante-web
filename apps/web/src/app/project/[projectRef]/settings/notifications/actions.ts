@@ -1,0 +1,185 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { prisma } from "@dante/db";
+import { requireUser } from "@/lib/auth/user";
+import {
+  fetchHeadCommitMessage,
+  fetchPullRequest,
+  installationClient,
+} from "@/lib/github/pull-request";
+import { deliverRunSummary } from "@/lib/notifications/deliver";
+import { danteLinks } from "@/lib/notifications/links";
+import { queuedRun } from "@/lib/notifications/run-summary";
+import {
+  clampFailedLimit,
+  COMMENT_FIELDS,
+  type CommentFields,
+  type NotificationSettings,
+} from "@/lib/notifications/settings";
+import { saveNotificationSettings } from "@/lib/notifications/store";
+
+// 알림 설정 화면이 부르는 서버 액션들.
+//
+// 폼 값은 전부 문자열로 온다. 여기서 한 번 좁히고 나면 아래(store → 렌더러)는
+// 타입 있는 값만 본다 — 체크박스가 "on" 인지 "true" 인지 같은 사정이 렌더러까지
+// 새어 들어가지 않게.
+
+export type SaveState = { error?: string; saved?: boolean } | null;
+
+/** 프로젝트 소유 검사. 설정은 프로젝트에 붙으므로 매번 확인해야 한다. */
+async function requireProject(projectRef: string) {
+  const user = await requireUser();
+
+  const project = await prisma.project.findFirst({
+    where: { ref: projectRef, userId: user.id },
+    select: {
+      id: true,
+      ref: true,
+      repoOwner: true,
+      repoName: true,
+      defaultBranch: true,
+      installationId: true,
+    },
+  });
+
+  if (!project) throw new Error("Project not found.");
+  return project;
+}
+
+const settingsPath = (ref: string) => `/project/${ref}/settings/notifications`;
+
+/** 체크박스는 켜졌을 때만 폼에 실린다. 없으면 꺼진 것이다. */
+const checked = (formData: FormData, name: string) => formData.get(name) !== null;
+
+/**
+ * GitHub 섹션 저장 (코멘트 + Check Run).
+ *
+ * 적용 범위(브랜치·드래프트·스누즈)는 다른 폼이다. 한 폼에 다 넣으면 스누즈를
+ * 켜려다 코멘트 토글까지 같이 저장되는데, 그 둘은 고치는 이유가 다르다.
+ */
+export async function saveGithubNotifications(
+  _prev: SaveState,
+  formData: FormData
+): Promise<SaveState> {
+  const projectRef = String(formData.get("projectRef") ?? "");
+
+  let project;
+  try {
+    project = await requireProject(projectRef);
+  } catch {
+    return { error: "Project not found." };
+  }
+
+  const fields = {} as CommentFields;
+  for (const field of COMMENT_FIELDS) fields[field.id] = checked(formData, `field.${field.id}`);
+
+  const patch: Partial<NotificationSettings> = {
+    prCommentEnabled: checked(formData, "prCommentEnabled"),
+    prCommentMode: formData.get("prCommentMode") === "append" ? "append" : "sticky",
+    prCommentSkipUnchanged: checked(formData, "prCommentSkipUnchanged"),
+    prCommentCollapseOnPass: checked(formData, "prCommentCollapseOnPass"),
+    prCommentFields: fields,
+    prCommentFailedLimit: clampFailedLimit(Number(formData.get("prCommentFailedLimit"))),
+    checkRunEnabled: checked(formData, "checkRunEnabled"),
+    checkRunBlocking: checked(formData, "checkRunBlocking"),
+  };
+
+  await saveNotificationSettings(project.id, patch);
+  revalidatePath(settingsPath(project.ref));
+  return { saved: true };
+}
+
+/** 적용 범위 저장 (브랜치 필터 + 드래프트 제외). */
+export async function saveNotificationScope(
+  _prev: SaveState,
+  formData: FormData
+): Promise<SaveState> {
+  const projectRef = String(formData.get("projectRef") ?? "");
+
+  let project;
+  try {
+    project = await requireProject(projectRef);
+  } catch {
+    return { error: "Project not found." };
+  }
+
+  // 줄 단위로 받는다. 쉼표로 받으면 브랜치 이름에 쉼표가 들어가는 경우를
+  // 설명해야 하는데, 줄바꿈은 그런 애매함이 없다.
+  const branchFilters = String(formData.get("branchFilters") ?? "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 20);
+
+  await saveNotificationSettings(project.id, {
+    branchFilters,
+    skipDraftPr: checked(formData, "skipDraftPr"),
+  });
+
+  revalidatePath(settingsPath(project.ref));
+  return { saved: true };
+}
+
+/** 길이가 고정된 선택지. "오늘"과 "해제할 때까지"는 아래에서 따로 계산한다. */
+const SNOOZE_DURATIONS: Record<string, number | undefined> = {
+  "1h": 60 * 60 * 1000,
+  "1w": 7 * 24 * 60 * 60 * 1000,
+};
+
+/**
+ * 스누즈를 켜거나 끈다.
+ *
+ * "해제할 때까지"는 아주 먼 시각을 넣는다. null 을 "무기한"으로 쓰면 "스누즈
+ * 아님"과 구분이 안 되고, 별도 boolean 을 두면 두 값이 어긋날 수 있다.
+ */
+export async function setSnooze(formData: FormData) {
+  const projectRef = String(formData.get("projectRef") ?? "");
+  const project = await requireProject(projectRef);
+
+  const duration = String(formData.get("duration") ?? "");
+
+  let snoozedUntil: Date | null = null;
+  if (duration === "off") {
+    snoozedUntil = null;
+  } else if (duration === "today") {
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+    snoozedUntil = end;
+  } else if (duration === "forever") {
+    snoozedUntil = new Date("2999-12-31T23:59:59.000Z");
+  } else {
+    const ms = SNOOZE_DURATIONS[duration];
+    if (!ms) return;
+    snoozedUntil = new Date(Date.now() + ms);
+  }
+
+  await saveNotificationSettings(project.id, { snoozedUntil });
+  revalidatePath(settingsPath(project.ref));
+}
+
+/**
+ * 전달 로그의 재시도 버튼.
+ *
+ * 그때의 결과를 다시 보내는 게 아니라 지금 상태로 다시 만든다 — 옛 결과를
+ * 되살리면 이미 고쳐진 실패가 PR 에 다시 올라간다.
+ */
+export async function retryDelivery(formData: FormData) {
+  const projectRef = String(formData.get("projectRef") ?? "");
+  const prNumber = Number(formData.get("prNumber"));
+  if (!Number.isSafeInteger(prNumber) || prNumber <= 0) return;
+
+  const project = await requireProject(projectRef);
+  const repo = { owner: project.repoOwner, repo: project.repoName };
+
+  const octokit = await installationClient(project.installationId);
+  const pr = await fetchPullRequest(octokit, repo, prNumber);
+
+  await deliverRunSummary(
+    project,
+    { ...pr, headCommitMessage: await fetchHeadCommitMessage(octokit, repo, pr.headSha) },
+    queuedRun(danteLinks(project.ref, prNumber))
+  );
+
+  revalidatePath(settingsPath(project.ref));
+}
