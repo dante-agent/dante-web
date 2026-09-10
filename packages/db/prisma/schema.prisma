@@ -26,6 +26,10 @@ model User {
   githubLogin String?  @map("github_login")
   /// = GitHub 사용자 숫자 ID (auth 의 provider_id)
   githubId    BigInt?  @map("github_id")
+  /// 프로바이더가 준 프로필 이미지 URL (GitHub avatar_url / Google picture).
+  /// 헤더는 로그인 세션의 값을 그대로 쓰지만, 세션 없이 사용자를 그려야 하는
+  /// 자리(다른 사람이 보는 화면 등)를 위해 로그인마다 여기에 복사해둔다.
+  avatarUrl   String?  @map("avatar_url")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 

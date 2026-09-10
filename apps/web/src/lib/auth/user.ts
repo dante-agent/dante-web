@@ -36,6 +36,27 @@ export function githubIdentity(user: SupabaseUser) {
 }
 
 /**
+ * 프로바이더가 준 프로필 이미지 URL. 없으면 null.
+ *
+ * GitHub 은 avatar_url 을 그대로 준다. Google 은 picture 로 주는데 Supabase 가
+ * avatar_url 로도 복사해준다 — 다만 프로바이더/시점에 따라 한쪽만 있는 경우가
+ * 있어 둘 다 본다.
+ */
+export function avatarUrl(user: SupabaseUser) {
+  const meta = user.user_metadata ?? {};
+  const url = meta.avatar_url ?? meta.picture;
+  return typeof url === "string" && url.length > 0 ? url : null;
+}
+
+/** 화면에 쓸 이름. GitHub 핸들 → 이름 → 이메일 앞부분 순으로 있는 걸 쓴다. */
+export function displayName(user: SupabaseUser) {
+  const meta = user.user_metadata ?? {};
+  const candidates = [meta.user_name, meta.full_name, meta.name, user.email?.split("@")[0]];
+  const name = candidates.find((v) => typeof v === "string" && v.length > 0);
+  return (name as string | undefined) ?? "User";
+}
+
+/**
  * auth.users → public.users 미러링.
  *
  * Prisma 로 FK 를 걸려면 public.users 에 행이 먼저 있어야 한다. auth 스키마는
@@ -48,6 +69,7 @@ export async function syncUser(user: SupabaseUser) {
     email: user.email ?? null,
     githubLogin: github.login,
     githubId: github.id,
+    avatarUrl: avatarUrl(user),
   };
 
   return prisma.user.upsert({

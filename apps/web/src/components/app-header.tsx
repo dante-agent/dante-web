@@ -12,7 +12,11 @@ import danteLogo from "@/assets/dante-logo.png";
 import { FileSearch } from "@/components/file-search";
 import { HeaderSwitcher, SwitcherRow } from "@/components/header-switcher";
 import { Button } from "@/components/ui/button";
+import { UserAvatar } from "@/components/user-avatar";
 import type { ProjectSummary } from "@/lib/projects/queries";
+
+/** 헤더가 쓰는 사용자 정보만. Supabase User 를 통째로 클라이언트에 넘기지 않는다. */
+export type HeaderUser = { name: string; avatarUrl: string | null };
 
 function Slash() {
   return <span className="text-muted-foreground/40 text-sm select-none">/</span>;
@@ -21,9 +25,11 @@ function Slash() {
 export function AppHeader({
   project,
   projects,
+  user,
 }: {
   project: ProjectSummary;
   projects: ProjectSummary[];
+  user: HeaderUser;
 }) {
   const router = useRouter();
   const owner = project.repoOwner;
@@ -84,9 +90,11 @@ export function AppHeader({
         </Button>
         <button
           type="button"
-          aria-label="프로필"
-          className="border-border bg-muted hover:bg-muted/70 size-7 rounded-full border transition-colors"
-        />
+          aria-label={`${user.name} 프로필`}
+          className="rounded-full opacity-100 transition-opacity hover:opacity-80"
+        >
+          <UserAvatar src={user.avatarUrl} name={user.name} />
+        </button>
       </div>
     </header>
   );
