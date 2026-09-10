@@ -3,6 +3,7 @@ import { prisma } from "@dante/db";
 import { LOGIN_PATH } from "@/lib/auth/redirect";
 import { githubIdentity, syncUser } from "@/lib/auth/user";
 import { fetchInstallation } from "@/lib/github/app";
+import { listInstallationRepos } from "@/lib/github/repos";
 import { INSTALL_STATE_COOKIE, matchesState } from "@/lib/github/state";
 import { createClient } from "@/lib/supabase/server";
 
@@ -96,5 +97,46 @@ export async function GET(request: Request) {
     update: fields,
   });
 
+  await relinkProjects(user.id, installationId);
+
   return back({ installation_id: String(installationId) });
+}
+
+/**
+ * 이 설치가 열어준 레포를 쓰는 기존 프로젝트를 이 설치로 옮긴다.
+ *
+ * 앱을 지웠다 다시 설치하면 GitHub 이 설치 ID 를 새로 발급한다. 위 upsert 는 새
+ * 행을 만들 뿐이라, 기존 프로젝트는 지워진 옛 설치를 가리킨 채 남는다. 그러면
+ * 설정 화면은 영원히 "The Dante App was removed" 를 띄우고 — 다시 설치해도
+ * 바뀌지 않는다 — 레포 고르기 화면에서는 이미 프로젝트라 Import 도 못 한다.
+ * 빠져나갈 길이 없어지므로 여기서 이어 붙인다.
+ *
+ * 레포를 추가·제거한 뒤에도 여기로 오므로(Redirect on update), 설치에서 뺐다가
+ * 다시 열어준 레포도 이 경로로 되살아난다.
+ *
+ * repoId 로만 찾고 userId 로 거른다. repoId 는 GitHub 것이라 남의 프로젝트와
+ * 겹칠 수 있다 — 같은 공개 레포를 둘이 각자 연결한 경우다.
+ */
+async function relinkProjects(userId: string, installationId: number) {
+  let repos;
+  try {
+    repos = await listInstallationRepos(installationId);
+  } catch {
+    // 설치 자체는 이미 저장했다. 목록 조회가 실패했다고 설치까지 실패로
+    // 돌려보내면 사용자는 방금 끝낸 설치를 처음부터 다시 하게 된다. 레포를
+    // 고치러 GitHub 을 한 번 더 다녀오면 여기로 다시 오므로, 조용히 넘어간다.
+    return;
+  }
+
+  const repoIds = repos.map((repo) => BigInt(repo.id));
+  if (repoIds.length === 0) return;
+
+  await prisma.project.updateMany({
+    where: { userId, repoId: { in: repoIds } },
+    data: {
+      installationId: BigInt(installationId),
+      disconnectedAt: null,
+      disconnectedReason: null,
+    },
+  });
 }
