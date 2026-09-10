@@ -21,18 +21,18 @@ export function StatusStrip({
         running ? "border-l-brand-mint" : "border-l-border"
       }`}
     >
-      <div className="flex items-center px-4 py-3">
+      <div className="flex items-center px-5 py-4">
         <Badge variant={running ? "success" : "outline"}>{running ? "실행 중" : "대기"}</Badge>
       </div>
-      <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 px-4 py-3">
+      <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 px-5 py-4">
         <p className="text-muted-foreground text-xs">AI 엔진 및 모델</p>
         <p className="truncate font-mono text-sm font-medium">{aiModel}</p>
       </div>
-      <div className="flex min-w-0 flex-[2] flex-col justify-center gap-1 px-4 py-3">
+      <div className="flex min-w-0 flex-[2] flex-col justify-center gap-1 px-5 py-4">
         <p className="text-muted-foreground text-xs">현재 작업</p>
         <p className="truncate text-sm">{currentTask}</p>
       </div>
-      <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 px-4 py-3">
+      <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 px-5 py-4">
         <p className="text-muted-foreground text-xs">토큰 사용량</p>
         <p className="font-mono text-sm font-medium">
           {tokensUsed.toLocaleString()} / {tokenLimit.toLocaleString()}

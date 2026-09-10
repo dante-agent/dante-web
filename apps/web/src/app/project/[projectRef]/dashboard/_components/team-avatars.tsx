@@ -9,7 +9,7 @@ export function TeamAvatars({ members }: { members: TeamMember[] }) {
           <div
             key={member.id}
             title={member.name}
-            className="border-background bg-secondary text-secondary-foreground flex size-8 items-center justify-center rounded-full border-2 font-mono text-xs font-bold"
+            className="border-background bg-secondary text-secondary-foreground flex size-7 items-center justify-center rounded-full border-2 font-mono text-xs font-bold"
           >
             {member.name.slice(0, 1)}
           </div>

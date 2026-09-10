@@ -11,17 +11,17 @@ export function FolderRatioCard({
   folders: FolderTestShare[];
 }) {
   return (
-    <Card>
+    <Card className="h-full">
       <CardHeader>
         <CardTitle>폴더별 테스트 코드 비율</CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="font-mono text-2xl font-bold">
+        <p className="font-mono text-xl font-bold">
           {totalFiles}
           <span className="text-muted-foreground ml-1.5 text-sm font-normal">개 테스트 파일</span>
         </p>
 
-        <div className="mt-3 flex h-2.5 overflow-hidden rounded-full">
+        <div className="mt-3 flex h-2 overflow-hidden rounded-full">
           {folders.map((folder, i) => (
             <div
               key={folder.name}
@@ -38,7 +38,7 @@ export function FolderRatioCard({
                 className={`size-2 shrink-0 rounded-full ${SHARE_COLOR[i % SHARE_COLOR.length]}`}
               />
               <span className="min-w-0 flex-1 truncate font-mono text-xs">{folder.name}</span>
-              <div className="bg-muted h-1.5 w-24 overflow-hidden rounded-full">
+              <div className="bg-muted h-1 w-24 overflow-hidden rounded-full">
                 <div
                   className={`h-full ${SHARE_COLOR[i % SHARE_COLOR.length]}`}
                   style={{ width: `${folder.pct}%` }}
