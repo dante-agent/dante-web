@@ -5,7 +5,7 @@
 // - 단일 자식 디렉터리 체인은 buildTree 에서 접힘
 // - 파일 클릭 → `?file=<path>` 로 라우팅 (선택 상태는 URL 이 들고 있음)
 // - 상단: 상태 필터(전체/없음/있음)
-// 데이터는 지금 목업(mockFileTree). Octokit 붙으면 entries 만 갈아끼운다.
+// entries 는 folder/layout 이 getRepoTree 로 넘겨준다.
 
 import { useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
