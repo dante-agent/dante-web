@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@dante/db";
+import { ConnectionBanner } from "@/components/settings/github/connection-banner";
 import { StatusBadge } from "@/components/settings/notifications/controls";
 import { DeliveryLog } from "@/components/settings/notifications/delivery-log";
 import { GithubNotificationsForm } from "@/components/settings/notifications/github-notifications-form";
@@ -7,6 +8,8 @@ import { NotificationScopeForm } from "@/components/settings/notifications/scope
 import { SnoozeBanner, SnoozeControl } from "@/components/settings/notifications/snooze";
 import { ComingSoon, SettingsHeader } from "@/components/settings/settings-section";
 import { requireUser } from "@/lib/auth/user";
+import { installationSettingsUrl } from "@/lib/github/app";
+import { connectionNotice, projectConnection } from "@/lib/github/connection";
 import { checkRequiredStatus, installationClient } from "@/lib/github/pull-request";
 import { danteLinks } from "@/lib/notifications/links";
 import { SAMPLE_RUNS } from "@/lib/notifications/run-summary";
@@ -37,13 +40,26 @@ export default async function ProjectNotificationsPage({
       installationId: true,
       disconnectedAt: true,
       disconnectedReason: true,
-      installation: { select: { suspendedAt: true, deletedAt: true } },
+      installation: {
+        select: { id: true, accountLogin: true, suspendedAt: true, deletedAt: true },
+      },
       notificationSetting: true,
     },
   });
   if (!project) notFound();
 
   const settings = toNotificationSettings(project.notificationSetting);
+
+  // 연결이 끊긴 상태의 배너는 settings/github 과 같은 것을 쓴다. 문구도 다음
+  // 행동도 lib/github/connection.ts 한 곳에만 있어야 한 번 고치면 두 화면이
+  // 같이 고쳐진다.
+  const notice = connectionNotice(projectConnection(project), {
+    accountLogin: project.installation.accountLogin,
+    repoOwner: project.repoOwner,
+    repoName: project.repoName,
+    installationSettingsUrl: installationSettingsUrl(project.installation.id),
+    projectRef: project.ref,
+  });
 
   const [badges, deliveries, requiredCheck] = await Promise.all([
     notificationBadges(project),
@@ -65,6 +81,8 @@ export default async function ProjectNotificationsPage({
         title="Notifications"
         description="Which events reach you, and where — a comment on the pull request, a check that can block the merge."
       />
+
+      {notice && <ConnectionBanner notice={notice} projectRef={project.ref} />}
 
       {settings.snoozedUntil && isSnoozed(settings) && (
         <SnoozeBanner projectRef={project.ref} until={settings.snoozedUntil} />

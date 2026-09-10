@@ -22,28 +22,18 @@ export type NotificationBadge = {
 
 type BadgeInput = ProjectConnection & {
   id: string;
-  ref: string;
   installationId: bigint;
 };
 
 export async function notificationBadges(project: BadgeInput): Promise<NotificationBadge[]> {
-  const connection = projectConnection(project);
-
-  // 연결이 끊긴 상태면 권한을 따질 것도 없다. 넓은 사유가 이긴다
-  // (lib/github/connection.ts 와 같은 규칙).
-  if (connection !== "ok") {
-    return [
-      {
-        tone: "error",
-        title:
-          connection === "app_removed" || connection === "suspended"
-            ? "GitHub is disconnected"
-            : "This repository left the installation",
-        description: "Nothing is written to pull requests until access comes back.",
-        action: { label: "Open GitHub settings", href: `/project/${project.ref}/settings/github` },
-      },
-    ];
-  }
+  // 연결이 끊긴 상태의 문구는 여기서 쓰지 않는다. `lib/github/connection.ts` 의
+  // connectionNotice 가 상태별 문구와 다음 행동(재설치·레포 다시 열기…)까지
+  // 들고 있고, 화면은 그걸 ConnectionBanner 로 그린다. 같은 상태에 문구가 두 벌
+  // 생기면 한쪽만 고쳐질 뿐이다.
+  //
+  // 넓은 사유가 이기므로 그때는 권한도 따지지 않는다 — 앱이 지워졌는데
+  // "코멘트 권한이 없습니다"를 같이 띄우면 할 일이 두 개로 보인다.
+  if (projectConnection(project) !== "ok") return [];
 
   const badges: NotificationBadge[] = [];
 
