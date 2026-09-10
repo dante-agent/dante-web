@@ -23,6 +23,9 @@ export type NotificationBadge = {
 type BadgeInput = ProjectConnection & {
   id: string;
   installationId: bigint;
+  // 설정 URL 은 개인 계정과 조직의 경로가 달라 계정 정보까지 필요하다
+  // (`installationSettingsUrl`).
+  installation: { id: bigint; accountLogin: string; accountType: string };
 };
 
 export async function notificationBadges(project: BadgeInput): Promise<NotificationBadge[]> {
@@ -48,7 +51,7 @@ export async function notificationBadges(project: BadgeInput): Promise<Notificat
         "Adding a permission to the App does not update installations that already exist — approve it on GitHub.",
       action: {
         label: "Approve on GitHub",
-        href: installationSettingsUrl(project.installationId),
+        href: installationSettingsUrl(project.installation),
       },
     });
   }
