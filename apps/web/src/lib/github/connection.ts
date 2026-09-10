@@ -48,3 +48,111 @@ export function projectConnection(project: ProjectConnection): ConnectionStatus 
 
   return "ok";
 }
+
+// ── 화면에 뭐라고 쓸까 ──────────────────────────────────────────────────────
+//
+// 판정(위)과 문구를 같은 파일에 둔다. 상태를 하나 늘릴 때 문구를 빠뜨리면
+// 배너가 조용히 비는데, 한 파일에 있으면 switch 가 빠진 가지를 컴파일 단계에서
+// 잡아준다.
+
+/** 배너의 톤. 되돌릴 수 있는 일과 끝난 일을 가른다. */
+export type ConnectionTone =
+  /** 사용자가 GitHub 에서 몇 번 눌러 되돌릴 수 있다 */
+  | "warning"
+  /** 되돌릴 방법이 없다 */
+  | "danger";
+
+export type ConnectionNotice = {
+  tone: ConnectionTone;
+  title: string;
+  /** 다음에 뭘 눌러야 하는지로 끝난다. 상태 이름만 옮겨 적지 않는다. */
+  body: string;
+  action: {
+    label: string;
+    href: string;
+    /**
+     * 링크를 어떻게 걸어야 하는지. 셋을 구분하는 이유가 각각 다르다.
+     *   github  GitHub 으로 나간다 → 새 탭 (고치고 돌아올 화면을 잃지 않게)
+     *   route   우리 라우트 핸들러(/api/...) → 같은 탭의 <a>. <Link> 는 페이지가
+     *           아닌 경로로 클라이언트 이동을 시도한다
+     *   page    앱 안의 페이지 → <Link>
+     */
+    kind: "github" | "route" | "page";
+  };
+};
+
+/** 문구에 박아 넣을 값들. 페이지가 이미 읽어둔 것만 받는다. */
+export type ConnectionContext = {
+  /** 설치가 붙은 GitHub 계정 (개인 또는 조직) */
+  accountLogin: string;
+  repoOwner: string;
+  repoName: string;
+  /**
+   * GitHub 설치 설정 URL.
+   *
+   * 만드는 함수(`installationSettingsUrl`)는 `lib/github/app.ts` 에 있지만 그
+   * 파일은 서버 전용(App private key 를 읽는다)이다. 여기서 import 하면 이
+   * 파일도 같이 서버 전용이 되므로, 호출부가 결과 문자열만 넣어준다.
+   */
+  installationSettingsUrl: string;
+  /** 설정 경로를 만드는 데 쓴다 (/project/<ref>/settings/...) */
+  projectRef: string;
+};
+
+/**
+ * 상태 하나를 배너 하나로 편다.
+ *
+ * `ok` 는 null 이다 — 정상인데 "정상입니다"를 띄우면 나머지 넷의 경고가 묻힌다.
+ */
+export function connectionNotice(
+  status: ConnectionStatus,
+  context: ConnectionContext
+): ConnectionNotice | null {
+  const { accountLogin, repoOwner, repoName, installationSettingsUrl, projectRef } = context;
+  const repo = `${repoOwner}/${repoName}`;
+
+  switch (status) {
+    case "ok":
+      return null;
+
+    case "suspended":
+      return {
+        tone: "warning",
+        title: "GitHub suspended this installation",
+        // 넷 중 유일하게 "여기서는 못 푼다"를 명시한다. 재설치를 시도하게 두면
+        // 헛수고고, GitHub 에서 풀리면 웹훅이 알아서 되돌린다.
+        body: "This usually comes from billing or an organization policy. Clearing it on GitHub brings the connection back on its own — there is nothing to reconnect here.",
+        action: { label: "Open on GitHub", href: installationSettingsUrl, kind: "github" },
+      };
+
+    case "app_removed":
+      return {
+        tone: "warning",
+        title: `The Dante App was removed from @${accountLogin}`,
+        body: "Install it again to read this repository.",
+        // GitHub 설치 화면으로 바로 보내지 않는다. 우리 라우트가 CSRF 용 state
+        // 쿠키를 심은 뒤 보내야 돌아왔을 때 대조할 값이 있다.
+        action: { label: "Reinstall", href: "/api/github/install", kind: "route" },
+      };
+
+    case "repo_removed":
+      return {
+        tone: "warning",
+        title: `${repo} is no longer shared with the App`,
+        body: "The App itself is still installed. Pick this repository again in the GitHub installation settings and the connection comes back.",
+        action: { label: "Fix on GitHub", href: installationSettingsUrl, kind: "github" },
+      };
+
+    case "repo_deleted":
+      return {
+        tone: "danger",
+        title: `${repo} no longer exists on GitHub`,
+        body: "There is no way back — this project has nothing left to read. Deleting it is all that is left to do.",
+        action: {
+          label: "Delete project",
+          href: `/project/${projectRef}/settings/general`,
+          kind: "page",
+        },
+      };
+  }
+}
