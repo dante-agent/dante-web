@@ -22,7 +22,7 @@ export function ProjectSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="group/rail bg-sidebar border-sidebar-border fixed top-12 bottom-0 left-0 z-30 flex w-14 flex-col gap-1 overflow-hidden border-r p-2 transition-[width] duration-200 hover:w-56 has-[:focus-visible]:w-56">
+    <aside className="group/rail bg-sidebar border-sidebar-border fixed top-[47px] bottom-0 left-0 z-30 flex w-14 flex-col gap-1 overflow-hidden border-r p-2 transition-[width] duration-200 hover:w-56 has-[:focus-visible]:w-56">
       {ITEMS.map(({ key, label, Icon }) => {
         const href = `/project/${projectRef}/${key}`;
         const active = pathname.startsWith(href);

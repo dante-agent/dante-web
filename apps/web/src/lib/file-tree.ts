@@ -24,7 +24,7 @@ export type DirNode = {
 
 export type TreeNode = DirNode | FileLeaf;
 
-export type FileEntry = { path: string; status: FileStatus };
+export type FileEntry = { path: string; status: FileStatus; testPath?: string };
 
 /** 디렉터리 먼저, 그 안에서 이름 오름차순. 재귀. */
 function sortNodes(nodes: TreeNode[]): TreeNode[] {
