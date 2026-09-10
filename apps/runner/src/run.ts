@@ -93,13 +93,20 @@ export async function runTest(req: RunRequest): Promise<RunResult> {
       resources: { vcpus: 2 },
     });
 
-    // 레포를 클론한 자리에 테스트 파일을 덮어쓴다. 아직 커밋되지 않은 버전을
-    // 돌리는 게 목적이라 항상 덮어쓴다.
-    await sandbox.writeFiles([{ path: req.testFile.path, content: req.testFile.content }]);
+    // 클론은 세션 기본 경로(/vercel) 바로 아래가 아니라 그 안의 레포 이름 폴더로
+    // 들어간다. 명령도 파일 쓰기도 기본 경로 기준이라, 여기를 잡아주지 않으면
+    // 레포 밖에서 install 하고 레포 밖에 테스트 파일을 쓴다.
+    const repoDir = `${sandbox.cwd}/${cloneDirName(req.repo.url)}`;
+
+    // 아직 커밋되지 않은 버전을 돌리는 게 목적이라 항상 덮어쓴다.
+    await sandbox.writeFiles([
+      { path: `${repoDir}/${req.testFile.path}`, content: req.testFile.content },
+    ]);
 
     const install = await sandbox.runCommand({
       cmd: "sh",
-      args: ["-lc", req.commands.install],
+      args: ["-c", req.commands.install],
+      cwd: repoDir,
       timeoutMs,
     });
     logs.push(await section(req.commands.install, install));
@@ -110,7 +117,8 @@ export async function runTest(req: RunRequest): Promise<RunResult> {
 
     const test = await sandbox.runCommand({
       cmd: "sh",
-      args: ["-lc", req.commands.test],
+      args: ["-c", req.commands.test],
+      cwd: repoDir,
       timeoutMs,
     });
     logs.push(await section(req.commands.test, test));
@@ -125,6 +133,15 @@ export async function runTest(req: RunRequest): Promise<RunResult> {
     // 여기서 실패해도 원래 결과를 덮지 않는다 — 샌드박스는 timeout 이 되면 어차피 사라진다.
     await sandbox?.stop().catch(() => {});
   }
+}
+
+/**
+ * git 이 클론할 때 만드는 디렉터리 이름. URL 마지막 조각에서 .git 을 뗀 것이다.
+ * 예: "https://github.com/acme/web.git" → "web"
+ */
+function cloneDirName(url: string) {
+  const last = url.replace(/\/+$/, "").split("/").pop() ?? "";
+  return last.replace(/\.git$/, "");
 }
 
 function gitSource(repo: RunRequest["repo"]) {

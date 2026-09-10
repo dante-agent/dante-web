@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import Fastify from "fastify";
 import { runTest, type RunRequest } from "./run.js";
 
@@ -5,6 +7,16 @@ import { runTest, type RunRequest } from "./run.js";
 //
 // DB 는 건드리지 않는다. 무엇을 돌릴지는 web 이 읽어서 요청에 담아 보내고,
 // TestRun 행을 쓰는 것도 web 이다. 이유는 run.ts 위쪽 주석에.
+
+// 로컬 개발용 OIDC 토큰. `vercel env pull` 이 리포 루트에 .env.local 을 만든다.
+//
+// Vercel 에 배포하면 VERCEL_OIDC_TOKEN 이 자동 주입되므로 이 블록은 그냥 지나간다.
+// dotenv 를 안 쓴 이유는 Node 22 에 loadEnvFile 이 들어있어서다 — 의존성 하나를
+// 아낀다. 토큰은 12시간쯤 지나면 만료하니 로컬에서 401 이 나면 다시 pull 하면 된다.
+if (!process.env.VERCEL_OIDC_TOKEN) {
+  const envFile = join(import.meta.dirname, "../../../.env.local");
+  if (existsSync(envFile)) process.loadEnvFile(envFile);
+}
 
 const PORT = Number(process.env.PORT ?? 4000);
 const RUNNER_SECRET = process.env.RUNNER_SECRET ?? "";
