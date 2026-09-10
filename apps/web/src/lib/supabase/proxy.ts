@@ -42,7 +42,13 @@ export async function updateSession(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
 
   // 비로그인 → 로그인 화면. 원래 가려던 곳을 ?next 로 넘겨 로그인 후 되돌려보낸다.
-  if (!user && !isPublic(pathname)) {
+  //
+  // GET(문서 요청)에만 건다. 서버 액션은 POST 로 오는데 여기서 307 을 돌려주면
+  // 브라우저가 따라가 HTML 을 받고, React 는 액션 응답을 기대했으므로
+  // "An unexpected response was received from the server" 로 터진다.
+  // 액션 쪽 인증은 각 액션이 부르는 requireUser() 가 맡는다 — 거기서 redirect()
+  // 하면 Next 가 클라이언트가 이해하는 형태로 내려준다.
+  if (request.method === "GET" && !user && !isPublic(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = LOGIN_PATH;
     url.search = "";

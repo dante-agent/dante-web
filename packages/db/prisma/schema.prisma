@@ -49,9 +49,15 @@ model GithubInstallation {
   accountId    BigInt    @map("account_id")
   /// "User" | "Organization"
   accountType  String    @map("account_type")
-  /// 사용자가 GitHub 에서 앱을 지우면 웹훅으로 여기에 표시한다. 행은 남겨서
-  /// 어떤 프로젝트가 왜 끊겼는지 화면에 설명할 수 있게 한다.
+  /// 아래 두 값은 웹훅(`/api/github/webhook`)이 채운다. 둘 다 행을 지우지 않고
+  /// 시각만 남기는데, 그래야 "어떤 프로젝트가 왜 끊겼는지"를 화면에서 설명할 수
+  /// 있다. 행까지 지우면 프로젝트가 참조를 잃고 통째로 사라진다(onDelete: Cascade).
+  ///
+  /// GitHub 이 결제 문제 등으로 설치를 잠시 정지시킨 시각. 풀리면 다시 null 이 된다.
   suspendedAt  DateTime? @map("suspended_at")
+  /// 사용자가 GitHub 에서 앱을 지운 시각. 같은 계정에 다시 설치하면 GitHub 이
+  /// 설치 ID 를 새로 발급하므로, 이 행이 다시 살아나는 일은 없다.
+  deletedAt    DateTime? @map("deleted_at")
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
@@ -89,6 +95,15 @@ model Project {
   /// 온보딩(레포 → 러너 → API 키)을 끝낸 시각. null 이면 /project/<ref>/setup 으로 되돌린다.
   /// 중간에 이탈해도 이어서 할 수 있게 만드는 값이다.
   setupCompletedAt DateTime? @map("setup_completed_at")
+
+  /// 이 레포 하나만 끊긴 시각. 설치 자체가 정지·삭제된 경우는 여기가 아니라
+  /// GithubInstallation 에 적힌다 — 그쪽은 설치에 딸린 모든 프로젝트에 해당하므로
+  /// 프로젝트마다 같은 값을 복사해 두면 재설치 때 전부 되돌려야 한다.
+  /// 두 곳을 하나의 상태로 접어 보려면 `lib/github/connection.ts` 를 쓴다.
+  disconnectedAt     DateTime? @map("disconnected_at")
+  /// 왜 끊겼는지. "repo_removed"(설치에서 레포를 뺌) | "repo_deleted"(레포 자체가 사라짐).
+  /// 문자열인 이유는 testFramework 와 같다 — 값이 늘 때마다 마이그레이션하지 않으려고.
+  disconnectedReason String?   @map("disconnected_reason")
 
   userId         String @map("user_id") @db.Uuid
   installationId BigInt @map("installation_id")
