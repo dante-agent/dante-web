@@ -68,6 +68,31 @@ export type RunSummary = {
 };
 
 /**
+ * PR 이 열리거나 푸시가 온 직후의 첫 상태.
+ *
+ * 스캔·생성·실행이 아직 없어서 지금은 이 상태에서 더 나아가지 않는다. 그래도
+ * 먼저 코멘트를 만들어 두는 데는 이유가 있다 — sticky 코멘트는 "하나를 계속
+ * 고쳐 쓰는" 것이고, 그 하나가 생기는 자리가 여기다. 파이프라인이 붙으면
+ * 같은 코멘트를 scanning → running → completed 로 덮어쓰게 된다.
+ */
+export function queuedRun(links: {
+  detailUrl: string | null;
+  rerunUrl: string | null;
+}): RunSummary {
+  return {
+    status: "queued",
+    totals: { total: 0, passed: 0, failed: 0 },
+    failures: [],
+    components: [],
+    coverage: null,
+    durationMs: null,
+    detailUrl: links.detailUrl,
+    rerunUrl: links.rerunUrl,
+    error: null,
+  };
+}
+
+/**
  * 미리보기용 표본 둘.
  *
  * 설정 화면은 이 프로젝트의 가장 최근 실제 실행을 먼저 쓰고, 없으면 이걸 쓴다.
