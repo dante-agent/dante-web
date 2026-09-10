@@ -30,10 +30,11 @@ export function AppHeader({
   const owners = [...new Set(projects.map((p) => p.repoOwner))];
   const ownerProjects = projects.filter((p) => p.repoOwner === owner);
 
-  const newProject = (
-    <SwitcherRow onClick={() => router.push("/projects/new")}>
+  // 새 org 연결 = 풀 플로우(/projects/new), 이미 연결된 org 에 레포 추가 = 레포 고르는 화면 바로
+  const newRow = (label: string, href: string) => (
+    <SwitcherRow onClick={() => router.push(href)}>
       <Plus className="size-4" />
-      New project
+      {label}
     </SwitcherRow>
   );
 
@@ -51,13 +52,13 @@ export function AppHeader({
         <HeaderSwitcher
           value={owner}
           items={owners.map((o) => ({ value: o, label: o }))}
-          findLabel="Find owner…"
+          findLabel="Find organization…"
           onSelect={() => router.push("/projects")}
           icon={<Blocks className="text-muted-foreground size-3.5 shrink-0" />}
           footer={
             <>
-              <SwitcherRow onClick={() => router.push("/projects")}>All projects</SwitcherRow>
-              {newProject}
+              <SwitcherRow onClick={() => router.push("/projects")}>All organizations</SwitcherRow>
+              {newRow("New organization", "/projects/new")}
             </>
           }
         />
@@ -69,7 +70,7 @@ export function AppHeader({
           findLabel="Find repository…"
           onSelect={(v) => router.push(`/project/${v}/dashboard`)}
           icon={<Box className="text-muted-foreground size-3.5 shrink-0" />}
-          footer={newProject}
+          footer={newRow("New repository", "/projects/new/github")}
         />
       </div>
 

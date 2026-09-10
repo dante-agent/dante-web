@@ -21,9 +21,10 @@ import {
 } from "lucide-react";
 import { iconForFile } from "@/components/file-icons";
 import { Button, buttonVariants } from "@/components/ui/button";
-import type { MockFileContent } from "@/lib/mock-data";
 import { pushRecent } from "@/lib/recent-files";
 import { cn } from "@/lib/utils";
+
+type FileContent = { source: string; test: string | null; testDraft: string | null };
 
 const Fallback = () => (
   <div className="flex h-full items-center justify-center bg-black">
@@ -80,8 +81,8 @@ function langOf(path: string): string {
   return "plaintext";
 }
 
-/** `src/lib/format.ts` → `format.test.ts` (목업 — 실제 테스트 경로는 나중에 데이터로 온다) */
-function testFileName(path: string): string {
+/** 테스트 파일이 아직 없을 때 표시용 이름. `src/lib/format.ts` → `format.test.ts` */
+function guessTestName(path: string): string {
   const base = path.split("/").pop() ?? path;
   const dot = base.lastIndexOf(".");
   return dot === -1 ? `${base}.test` : `${base.slice(0, dot)}.test${base.slice(dot)}`;
@@ -217,18 +218,20 @@ export function FileView({
   file,
   mode,
   projectRef,
+  testPath,
   content,
 }: {
   file: string;
   mode: "view" | "edit";
   projectRef: string;
-  content: MockFileContent;
+  testPath: string | null;
+  content: FileContent;
 }) {
   const pathname = usePathname();
   const lang = langOf(file);
   const viewHref = `${pathname}?file=${encodeURIComponent(file)}`;
   const editHref = `${viewHref}&mode=edit`;
-  const testName = testFileName(file);
+  const testName = testPath?.split("/").pop() ?? guessTestName(file);
 
   useEffect(() => {
     pushRecent(projectRef, file);
