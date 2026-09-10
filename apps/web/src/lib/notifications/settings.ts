@@ -77,17 +77,14 @@ export const COMMENT_PRESETS: Record<"compact" | "detailed", CommentFields> = {
     link: true,
     rerun: false,
   },
-  /** 전부. 커버리지는 수집된 실행에서만 실제로 그려진다. */
-  detailed: {
-    counts: true,
-    failedList: true,
-    failedReason: true,
-    components: true,
-    coverage: true,
-    duration: true,
-    link: true,
-    rerun: true,
-  },
+  /**
+   * 기본값과 같다. 한 번도 건드리지 않은 프로젝트가 "Custom" 으로 보이면 안 되기
+   * 때문이다 — 손댄 적 없는데 손댄 것처럼 읽힌다.
+   *
+   * 그래서 커버리지는 여기에도 빠져 있고, 켜려면 Customize 로 들어가야 한다.
+   * 커버리지를 수집하는 프로젝트가 아직 소수라 프리셋에 넣을 자리가 아니다.
+   */
+  detailed: DEFAULT_COMMENT_FIELDS,
 };
 
 export type CommentPreset = keyof typeof COMMENT_PRESETS | "custom";
