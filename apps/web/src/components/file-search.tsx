@@ -1,0 +1,125 @@
+"use client";
+
+// 최상단 헤더의 파일 검색. 포커스 시 Recent(최근 연 파일) → 타이핑하면 매칭 목록.
+// ↑↓ 이동 · Enter 열기 · Esc 닫기. 선택 시 폴더 뷰로 이동.
+
+import { useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Search } from "lucide-react";
+import { iconForFile } from "@/components/file-icons";
+import { Input } from "@/components/ui/input";
+import { useRecent } from "@/lib/recent-files";
+import { cn } from "@/lib/utils";
+
+// ponytail: substring 매칭. 조각/이니셜 검색 필요하면 fuzzy(subsequence + 점수)로 교체 — 이 함수만.
+function matchFiles(files: string[], q: string): string[] {
+  const needle = q.toLowerCase();
+  return files
+    .map((path) => {
+      const p = path.toLowerCase();
+      const name = p.slice(p.lastIndexOf("/") + 1);
+      const at = p.indexOf(needle);
+      if (at === -1) return null;
+      const score = (name.includes(needle) ? 0 : 1000) + at + path.length / 100;
+      return { path, score };
+    })
+    .filter((x): x is { path: string; score: number } => x !== null)
+    .sort((a, b) => a.score - b.score)
+    .slice(0, 8)
+    .map((x) => x.path);
+}
+
+export function FileSearch({ projectRef, files }: { projectRef: string; files: string[] }) {
+  const router = useRouter();
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(0);
+  const recent = useRecent(projectRef);
+
+  const showRecent = query.trim() === "";
+  const results = useMemo(
+    () => (showRecent ? recent : matchFiles(files, query.trim())),
+    [showRecent, recent, files, query]
+  );
+
+  const go = (path: string) => {
+    router.push(`/project/${projectRef}/folder?file=${encodeURIComponent(path)}`);
+    setOpen(false);
+    setQuery("");
+    inputRef.current?.blur();
+  };
+
+  const inputRef = useRef<HTMLInputElement>(null);
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (!open || results.length === 0) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActive((i) => Math.min(i + 1, results.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActive((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      go(results[active]);
+    } else if (e.key === "Escape") {
+      setOpen(false);
+      inputRef.current?.blur();
+    }
+  };
+
+  return (
+    <div className="relative w-full">
+      <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
+      <Input
+        ref={inputRef}
+        value={query}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setActive(0);
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onKeyDown={onKeyDown}
+        placeholder="Search files…"
+        className="h-7 pl-8 text-xs focus-visible:ring-0 md:text-xs"
+      />
+
+      {open && results.length > 0 && (
+        // mousedown 기본동작 막아 input blur 전에 클릭이 먹도록
+        <div
+          onMouseDown={(e) => e.preventDefault()}
+          className="border-border bg-popover absolute top-full left-0 z-50 mt-1 w-full overflow-hidden rounded-md border shadow-md"
+        >
+          {showRecent && (
+            <div className="text-muted-foreground border-border border-b px-3 py-1.5 text-[11px] font-medium">
+              Recent
+            </div>
+          )}
+          <ul>
+            {results.map((path, i) => {
+              const name = path.split("/").pop() ?? path;
+              const dir = path.split("/").slice(0, -1).join("/");
+              return (
+                <li key={path}>
+                  <button
+                    type="button"
+                    onMouseEnter={() => setActive(i)}
+                    onClick={() => go(path)}
+                    className={cn(
+                      "flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs",
+                      i === active && "bg-muted"
+                    )}
+                  >
+                    {iconForFile(name, { className: "size-3.5 shrink-0" })}
+                    <span className="font-medium">{name}</span>
+                    <span className="text-muted-foreground truncate">{dir}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
