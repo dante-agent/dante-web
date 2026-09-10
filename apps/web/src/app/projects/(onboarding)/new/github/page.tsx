@@ -22,8 +22,11 @@ export default async function GitHubConnectPage({
   const error = first(params.error);
   const notice = first(params.notice);
 
+  // 지워진 설치(deletedAt)는 뺀다. 행은 남겨두지만 — 프로젝트가 참조를 잃으면
+  // 통째로 사라진다(onDelete: Cascade) — GitHub 에 물어보면 404 라서, 남겨두면
+  // 재설치하고 돌아온 사용자에게 "일부 설치의 레포를 못 읽었다" 빨간 배너가 뜬다.
   const installations = await prisma.githubInstallation.findMany({
-    where: { userId: user.id, suspendedAt: null },
+    where: { userId: user.id, suspendedAt: null, deletedAt: null },
     orderBy: { createdAt: "asc" },
   });
 
