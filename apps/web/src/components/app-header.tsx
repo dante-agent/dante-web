@@ -3,63 +3,31 @@
 // 최상단 헤더 (project 스코프). 로고 / owner / repo 브레드크럼 · 검색 · Feedback · 프로필.
 // 데이터는 목업. Feedback·프로필은 버튼만 (모달/드롭다운 미구현).
 
-import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Select as SelectPrimitive } from "@base-ui/react/select";
-import { Blocks, Box, ChevronsUpDown } from "lucide-react";
+import { Blocks, Box, Plus } from "lucide-react";
 import danteLogo from "@/assets/dante-logo.png";
 import { FileSearch } from "@/components/file-search";
+import { HeaderSwitcher, SwitcherRow } from "@/components/header-switcher";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem } from "@/components/ui/select";
 import { mockFileTree, mockOwners, mockProjects, projectsByOwner } from "@/lib/mock-data";
 
 function Slash() {
   return <span className="text-muted-foreground/40 text-sm select-none">/</span>;
 }
 
-function Switcher({
-  value,
-  onValueChange,
-  items,
-  icon,
-}: {
-  value: string;
-  onValueChange: (v: string) => void;
-  items: { value: string; label: string }[];
-  icon: ReactNode;
-}) {
-  return (
-    <Select
-      value={value}
-      onValueChange={(v) => onValueChange(String(v))}
-      items={Object.fromEntries(items.map((i) => [i.value, i.label]))}
-    >
-      <SelectPrimitive.Trigger className="hover:bg-muted flex items-center gap-2.5 rounded-md px-2 py-1 text-sm leading-none outline-none">
-        {icon}
-        <SelectPrimitive.Value className="font-medium" />
-        <SelectPrimitive.Icon
-          render={
-            <ChevronsUpDown className="text-muted-foreground size-3.5 shrink-0 translate-y-[0.5px]" />
-          }
-        />
-      </SelectPrimitive.Trigger>
-      <SelectContent alignItemWithTrigger={false} align="start" sideOffset={6}>
-        {items.map((i) => (
-          <SelectItem key={i.value} value={i.value}>
-            {i.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
-
 export function AppHeader({ projectRef }: { projectRef: string }) {
   const router = useRouter();
   const project = mockProjects.find((p) => p.ref === projectRef) ?? mockProjects[0];
   const owner = project.repoFullName.split("/")[0];
+
+  const newProject = (
+    <SwitcherRow onClick={() => router.push("/projects/new")}>
+      <Plus className="size-4" />
+      New project
+    </SwitcherRow>
+  );
 
   return (
     <header className="bg-sidebar border-sidebar-border fixed inset-x-0 top-0 z-40 flex h-[47px] items-center border-b pr-3">
@@ -72,19 +40,28 @@ export function AppHeader({ projectRef }: { projectRef: string }) {
 
       <div className="flex shrink-0 items-center gap-4">
         <Slash />
-        <Switcher
+        <HeaderSwitcher
           value={owner}
-          onValueChange={() => router.push("/projects")}
           items={mockOwners.map((o) => ({ value: o.id, label: o.name }))}
+          findLabel="Find owner…"
+          onSelect={() => router.push("/projects")}
           icon={<Blocks className="text-muted-foreground size-3.5 shrink-0" />}
+          footer={
+            <>
+              <SwitcherRow onClick={() => router.push("/projects")}>All projects</SwitcherRow>
+              {newProject}
+            </>
+          }
         />
 
         <Slash />
-        <Switcher
+        <HeaderSwitcher
           value={project.ref}
-          onValueChange={(v) => router.push(`/project/${v}/dashboard`)}
           items={projectsByOwner(owner).map((p) => ({ value: p.ref, label: p.name }))}
+          findLabel="Find repository…"
+          onSelect={(v) => router.push(`/project/${v}/dashboard`)}
           icon={<Box className="text-muted-foreground size-3.5 shrink-0" />}
+          footer={newProject}
         />
       </div>
 
