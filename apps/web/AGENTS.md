@@ -8,7 +8,7 @@ pnpm workspace. Turborepo/Nx 없음.
 
 ```
 apps/web      Next.js 16 (App Router, Turbopack) — BFF 포함  ← 이 디렉터리
-apps/runner   Fastify 5 — 테스트 실행 서버 (현재 껍데기, ADR-0001 확정 후 구현)
+apps/runner   Fastify 5 — 테스트 실행 서버 (현재 껍데기, 실행 환경은 ADR-0001)
 packages/db   Prisma 6 — 스키마/클라이언트, web·runner 공유 (@dante/db)
 ```
 

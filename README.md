@@ -4,7 +4,7 @@
 
 ```
 apps/web      Next.js — BFF 포함
-apps/runner   Fastify — 테스트 실행 서버 (껍데기, ADR-0001 확정 후)
+apps/runner   Fastify — 테스트 실행 서버 (껍데기, 실행 환경은 ADR-0001)
 packages/db   Prisma 스키마/클라이언트 (web·runner 공유)
 ```
 
@@ -87,8 +87,8 @@ packages/db   Prisma 스키마/클라이언트 (web·runner 공유)
 
 ### 인프라
 
-|                    |                            |
-| ------------------ | -------------------------- |
-| Supabase           | Auth + Postgres + Realtime |
-| Vercel             | web 배포                   |
-| 자체 서버 + Docker | runner (ADR-0001)          |
+|                |                            |
+| -------------- | -------------------------- |
+| Supabase       | Auth + Postgres + Realtime |
+| Vercel         | web 배포                   |
+| Vercel Sandbox | 테스트 실행 (ADR-0001)     |

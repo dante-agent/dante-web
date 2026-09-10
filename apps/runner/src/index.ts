@@ -1,6 +1,6 @@
 import Fastify from "fastify";
 
-// ponytail: 껍데기만. 테스트 실행/도커 오케스트레이션 로직은 ADR-0001 확정 후 채운다.
+// ponytail: 껍데기만. 실행 환경은 Vercel Sandbox 로 정해졌다 (docs/adr/0001-test-runtime.md).
 
 const PORT = Number(process.env.PORT ?? 4000);
 const RUNNER_SECRET = process.env.RUNNER_SECRET ?? "";
@@ -18,7 +18,7 @@ app.addHook("onRequest", async (req, reply) => {
 app.get("/health", async () => ({ ok: true }));
 
 app.post("/runs", async (req, reply) => {
-  // TODO: { testFileVersionId } 받아서 도커 컨테이너에서 vitest/jest 실행 → 결과/로그 반환
+  // TODO: { testFileVersionId } 받아서 샌드박스에서 vitest/jest 실행 → 결과/로그 반환
   return reply.code(501).send({ error: "not_implemented" });
 });
 
