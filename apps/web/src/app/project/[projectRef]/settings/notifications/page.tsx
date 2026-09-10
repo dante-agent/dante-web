@@ -41,7 +41,13 @@ export default async function ProjectNotificationsPage({
       disconnectedAt: true,
       disconnectedReason: true,
       installation: {
-        select: { id: true, accountLogin: true, suspendedAt: true, deletedAt: true },
+        select: {
+          id: true,
+          accountLogin: true,
+          accountType: true,
+          suspendedAt: true,
+          deletedAt: true,
+        },
       },
       notificationSetting: true,
     },
@@ -57,7 +63,7 @@ export default async function ProjectNotificationsPage({
     accountLogin: project.installation.accountLogin,
     repoOwner: project.repoOwner,
     repoName: project.repoName,
-    installationSettingsUrl: installationSettingsUrl(project.installation.id),
+    installationSettingsUrl: installationSettingsUrl(project.installation),
     projectRef: project.ref,
   });
 

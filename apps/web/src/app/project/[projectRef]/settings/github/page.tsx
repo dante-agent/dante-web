@@ -54,7 +54,7 @@ export default async function ProjectGithubPage({
     accountLogin: installation.accountLogin,
     repoOwner: project.repoOwner,
     repoName: project.repoName,
-    installationSettingsUrl: installationSettingsUrl(installation.id),
+    installationSettingsUrl: installationSettingsUrl(installation),
     projectRef,
   });
 
@@ -96,7 +96,7 @@ export default async function ProjectGithubPage({
 
           <div className="border-border border-t px-5 py-3">
             <a
-              href={installationSettingsUrl(installation.id)}
+              href={installationSettingsUrl(installation)}
               target="_blank"
               rel="noreferrer noopener"
               className="text-muted-foreground hover:text-foreground font-mono text-[11px] tracking-wide transition-colors duration-[180ms] ease-out"

@@ -89,7 +89,7 @@ export default async function GitHubConnectPage({
             installationIdByRepoId={Object.fromEntries(
               [...installationIdByRepoId].map(([repoId, id]) => [repoId, id.toString()])
             )}
-            settingsUrl={installationSettingsUrl(installations[0].id)}
+            settingsUrl={installationSettingsUrl(installations[0])}
           />
         )}
       </div>
