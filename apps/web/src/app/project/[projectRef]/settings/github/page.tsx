@@ -2,8 +2,7 @@ import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { prisma } from "@dante/db";
-import { ConnectionBanner } from "@/components/settings/github/connection-banner";
-import { RecheckButton } from "@/components/settings/github/recheck-button";
+import { ConnectionPanel } from "@/components/settings/github/connection-panel";
 import { SettingsHeader } from "@/components/settings/settings-section";
 import { Badge } from "@/components/ui/badge";
 import { requireUser } from "@/lib/auth/user";
@@ -71,13 +70,10 @@ export default async function ProjectGithubPage({
         description="The repository this project reads, and the App installation that grants access to it."
       />
 
-      {notice && <ConnectionBanner notice={notice} />}
+      <ConnectionPanel notice={notice} projectRef={projectRef} />
 
       <div className="mt-8 max-w-2xl">
-        <div className="flex items-end justify-between gap-4">
-          <SectionLabel>Installation</SectionLabel>
-          <RecheckButton projectRef={projectRef} />
-        </div>
+        <SectionLabel>Installation</SectionLabel>
 
         <Card className={dim}>
           <dl className="divide-border divide-y">

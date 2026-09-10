@@ -67,6 +67,15 @@ export type ConnectionNotice = {
   title: string;
   /** 다음에 뭘 눌러야 하는지로 끝난다. 상태 이름만 옮겨 적지 않는다. */
   body: string;
+  /**
+   * 이 상태에서 Recheck(다시 물어보기)가 의미가 있나.
+   *
+   * 웹훅이 놓쳤을 수 있는 상태에만 true 다. 앱이 지워졌거나 레포가 사라진 뒤에는
+   * 몇 번을 물어봐도 답이 같다 — 재설치하면 GitHub 이 설치 ID 를 새로 발급하므로
+   * (api/github/setup 이 새 행을 만든다) 이 설치 ID 로는 영영 성공할 수 없다.
+   * 눌러도 늘 같은 실패만 돌려주는 버튼은 안 보여주는 게 낫다.
+   */
+  recheckable: boolean;
   action: {
     label: string;
     href: string;
@@ -122,6 +131,9 @@ export function connectionNotice(
         // 넷 중 유일하게 "여기서는 못 푼다"를 명시한다. 재설치를 시도하게 두면
         // 헛수고고, GitHub 에서 풀리면 웹훅이 알아서 되돌린다.
         body: "This usually comes from billing or an organization policy. Clearing it on GitHub brings the connection back on its own — there is nothing to reconnect here.",
+        // 정지된 설치에는 GitHub 이 토큰을 내주지 않는다. 풀렸는데 unsuspend 웹훅을
+        // 놓친 경우가 있어 다시 물어볼 값어치가 있다.
+        recheckable: true,
         action: { label: "Open on GitHub", href: installationSettingsUrl, kind: "github" },
       };
 
@@ -130,6 +142,7 @@ export function connectionNotice(
         tone: "warning",
         title: `The Dante App was removed from @${accountLogin}`,
         body: "Install it again to read this repository.",
+        recheckable: false,
         // GitHub 설치 화면으로 바로 보내지 않는다. 우리 라우트가 CSRF 용 state
         // 쿠키를 심은 뒤 보내야 돌아왔을 때 대조할 값이 있다.
         action: { label: "Reinstall", href: "/api/github/install", kind: "route" },
@@ -140,6 +153,8 @@ export function connectionNotice(
         tone: "warning",
         title: `${repo} is no longer shared with the App`,
         body: "The App itself is still installed. Pick this repository again in the GitHub installation settings and the connection comes back.",
+        // Recheck 가 가장 자주 쓰이는 자리. 방금 레포를 다시 열어주고 돌아온 사용자다.
+        recheckable: true,
         action: { label: "Fix on GitHub", href: installationSettingsUrl, kind: "github" },
       };
 
@@ -148,6 +163,7 @@ export function connectionNotice(
         tone: "danger",
         title: `${repo} no longer exists on GitHub`,
         body: "There is no way back — this project has nothing left to read. Deleting it is all that is left to do.",
+        recheckable: false,
         action: {
           label: "Delete project",
           href: `/project/${projectRef}/settings/general`,

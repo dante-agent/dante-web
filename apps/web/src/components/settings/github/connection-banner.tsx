@@ -1,13 +1,19 @@
 import Link from "next/link";
 import { OctagonAlert, TriangleAlert } from "lucide-react";
+import { RecheckButton } from "@/components/settings/github/recheck-button";
 import { buttonVariants } from "@/components/ui/button";
 import type { ConnectionNotice } from "@/lib/github/connection";
 
 // 연결이 끊겼을 때만 뜨는 배너. 페이지 최상단, 헤더 바로 아래.
+// 들고 나는 건 connection-panel.tsx 가 맡는다.
 //
 // 톤이 둘인 이유(lib/github/connection.ts 의 tone): 넷 중 셋은 사용자가 GitHub 에서
 // 클릭 몇 번으로 되돌릴 수 있고 하나(repo_deleted)만 되돌릴 수 없다. 넷을 같은
 // 빨강으로 칠하면 "복구 가능"과 "끝났음"이 구분되지 않는다.
+//
+// Recheck 도 여기 산다. 정상일 때는 다시 물어볼 이유가 없어서 배너 밖에 두면
+// 늘 떠 있는 버튼이 되고, 배너가 접힐 때 같이 접혀야 "풀렸다"는 것도 한 동작으로
+// 읽힌다.
 //
 // 각진 테두리·카드 배경은 설정 화면의 다른 상자(General 의 <dl>)와 같은 모양이다.
 const TONE = {
@@ -25,7 +31,13 @@ const TONE = {
   },
 };
 
-export function ConnectionBanner({ notice }: { notice: ConnectionNotice }) {
+export function ConnectionBanner({
+  notice,
+  projectRef,
+}: {
+  notice: ConnectionNotice;
+  projectRef: string;
+}) {
   const tone = TONE[notice.tone];
   const { Icon } = tone;
 
@@ -40,8 +52,12 @@ export function ConnectionBanner({ notice }: { notice: ConnectionNotice }) {
           <h2 className="text-[15px] leading-snug font-medium">{notice.title}</h2>
           <p className="text-muted-foreground mt-1.5 text-[13px] leading-relaxed">{notice.body}</p>
 
-          <div className="mt-4">
+          {/* 높이를 h-8 로 고정한다. Recheck 결과 문구는 있다 없다 하는데,
+              줄이 생겼다 없어지면 이 배너가 커졌다 작아지면서 아래 카드가 또
+              밀린다. 자리를 미리 잡아두면 문구가 들어와도 아무것도 안 움직인다. */}
+          <div className="mt-4 flex h-8 items-center gap-3">
             <Action action={notice.action} variant={tone.button} />
+            {notice.recheckable && <RecheckButton projectRef={projectRef} />}
           </div>
         </div>
       </div>
