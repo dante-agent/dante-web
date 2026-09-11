@@ -1,24 +1,41 @@
+import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import danteLogo from "@/assets/dante-logo.png";
+import { AccountSidebar } from "@/components/account/account-sidebar";
+import { FeedbackDialog } from "@/components/feedback-dialog";
+import { UserMenu } from "@/components/user-menu";
+import { avatarUrl, displayName, requireUser } from "@/lib/auth/user";
 
-// 계정 스코프 셸. /account/... 는 프로젝트 밖이라 프로젝트 아이콘 레일이 없다.
-//
-// 레일을 지운 대신 헤더에 나가는 문을 둔다. 프로젝트 셸의 헤더는 아직 비어
-// 있는데, 거기는 왼쪽 레일이 항상 길을 알려주지만 여기는 그게 없기 때문이다.
-export default function AccountLayout({ children }: LayoutProps<"/account">) {
+// 계정 스코프 셸. /account/... 는 프로젝트 밖이라 브레드크럼·검색은 없지만,
+// 헤더 높이·레일 폭·본문 여백은 프로젝트 셸(project/[projectRef]/layout.tsx)과
+// 똑같이 맞춘다. 안 그러면 프로젝트 → 계정 설정으로 넘어올 때 본문이 튄다.
+export default async function AccountLayout({ children }: LayoutProps<"/account">) {
+  const user = await requireUser();
+  const headerUser = { name: displayName(user), avatarUrl: avatarUrl(user) };
+
   return (
-    <div className="min-h-svh pt-12">
-      <header className="bg-sidebar border-sidebar-border fixed inset-x-0 top-0 z-40 flex h-12 items-center border-b px-4">
-        <Link
-          href="/projects"
-          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 text-[13px] transition-colors duration-[180ms] ease-out"
-        >
-          <ArrowLeft className="size-3.5" />
-          Projects
-        </Link>
+    <div className="min-h-svh pt-[47px]">
+      <header className="bg-sidebar border-sidebar-border fixed inset-x-0 top-0 z-40 flex h-[47px] items-center border-b pr-3">
+        {/* 로고 = 레일(w-14)과 같은 열. app-header 와 같은 자리 */}
+        <div className="flex h-full w-14 shrink-0 items-center pl-[18px]">
+          <Link href="/projects" aria-label="Dante">
+            <Image src={danteLogo} alt="" draggable={false} className="h-5 w-[15px] select-none" />
+          </Link>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-4">
+          <span className="text-muted-foreground/40 text-sm select-none">/</span>
+          <span className="px-2 text-sm font-medium">Account</span>
+        </div>
+
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          <FeedbackDialog />
+          <UserMenu user={headerUser} />
+        </div>
       </header>
 
-      <main className="p-8">{children}</main>
+      <AccountSidebar />
+      <main className="ml-14 p-8">{children}</main>
     </div>
   );
 }
