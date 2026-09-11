@@ -5,8 +5,8 @@ import { requireUser } from "@/lib/auth/user";
 
 // 프로젝트 일반. 지금은 읽기 전용 요약뿐이다.
 //
-// 이름 변경은 스키마가 이미 약속해 둔 기능이고(Project.name — "설정에서 바꿀 수
-// 있다"), 삭제는 GitHub 설치·키와 얽혀 있어 각각 따로 온다.
+// 이름은 여기서 바꾸지 않는다 — 레포 이름을 그대로 따라간다(rename 되면 웹훅이
+// 같이 고친다, lib/github/webhook.ts). 삭제는 GitHub 설치·키와 얽혀 있어 따로 온다.
 export default async function ProjectGeneralPage({
   params,
 }: PageProps<"/project/[projectRef]/settings/general">) {
@@ -32,7 +32,7 @@ export default async function ProjectGeneralPage({
     <>
       <SettingsHeader
         title="General"
-        description="What this project points at. One project is one GitHub repository."
+        description="What this project points at. One project is one GitHub repository, and it takes the repository's name — rename the repository on GitHub to rename the project."
       />
 
       <dl className="border-border divide-border bg-card mt-8 max-w-2xl divide-y border">
@@ -44,8 +44,8 @@ export default async function ProjectGeneralPage({
       </dl>
 
       <ComingSoon>
-        Renaming the project and deleting it. Deleting has to decide what happens to the GitHub
-        installation when it is the last project using it, so it comes with the GitHub page.
+        Deleting the project. It has to decide what happens to the GitHub installation when it is
+        the last project using it, so it comes with the GitHub page.
       </ComingSoon>
     </>
   );

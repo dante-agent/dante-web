@@ -84,7 +84,8 @@ model Project {
   /// 같은 이름 레포가 있으면 충돌한다.
   ref String @unique
 
-  /// 표시용 이름. 기본값은 레포 이름이고 설정에서 바꿀 수 있다.
+  /// 표시용 이름. 레포 이름을 그대로 따라간다 — 따로 바꾸는 기능은 없고,
+  /// 레포가 rename 되면 웹훅이 같이 고친다 (apps/web/src/lib/github/webhook.ts).
   name String
 
   /// GitHub 레포 숫자 ID. rename·이관돼도 이걸로 추적한다.
