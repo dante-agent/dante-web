@@ -24,11 +24,8 @@ import { cn } from "@/lib/utils";
 /** 본문과 같은 높이. file-view / folder-empty-state 와 같은 값이다. */
 const PANE_HEIGHT = "h-[calc(100svh-7rem)]";
 
-const SUGGESTIONS = [
-  "이 파일은 무슨 일을 하나요?",
-  "어떤 테스트가 필요할까요?",
-  "놓치기 쉬운 엣지 케이스는?",
-];
+/** 헤더에 쓸 짧은 경로 — 상위 폴더 한 단계까지. 전체 경로는 왼쪽 본문에 있다. */
+const shortPath = (path: string) => path.split("/").slice(-2).join("/");
 
 export function AiChatDock({ projectRef, children }: { projectRef: string; children: ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -203,7 +200,7 @@ function ChatPanel({
         <span className="font-semibold">AI 채팅</span>
         {file && !showHistory && (
           <span className="text-muted-foreground ml-1 truncate font-mono text-xs">
-            {file.split("/").pop()}
+            {shortPath(file)}
           </span>
         )}
         <div className="ml-auto flex items-center gap-0.5">
@@ -254,39 +251,10 @@ function ChatPanel({
       ) : (
         <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto p-3">
           {messages.length === 0 ? (
-            // 빈 화면은 folder-empty-state 와 같은 모양으로 — 가운데 정렬 + 둥근
-            // 칩을 늘어놓는 흔한 챗봇 빈 화면 대신, 이 앱의 목록 카드를 쓴다.
-            <div className="flex flex-col gap-3">
-              <p className="text-muted-foreground text-sm">
-                {file ? (
-                  <>
-                    <span className="text-foreground font-mono">{file.split("/").pop()}</span> 에
-                    대해 물어보세요.
-                  </>
-                ) : (
-                  "왼쪽에서 파일을 열면 그 파일을 같이 봅니다."
-                )}
-              </p>
-
-              <div className="border-border overflow-hidden rounded-md border">
-                <div className="text-muted-foreground border-border border-b px-3 py-1.5 text-[11px] font-medium">
-                  자주 묻는 것
-                </div>
-                <ul>
-                  {SUGGESTIONS.map((s) => (
-                    <li key={s}>
-                      <button
-                        type="button"
-                        onClick={() => void send(s)}
-                        className="hover:bg-muted w-full px-3 py-2 text-left text-sm"
-                      >
-                        {s}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
+            // 안내 문구 한 줄이 전부다. 뭘 물어볼지는 사용자가 안다.
+            <p className="text-muted-foreground flex h-full items-center justify-center px-6 text-center text-sm">
+              {file ? "이 파일에 대해 물어보세요." : "왼쪽에서 파일을 열면 그 파일을 같이 봅니다."}
+            </p>
           ) : (
             messages.map((m, i) => (
               <div
