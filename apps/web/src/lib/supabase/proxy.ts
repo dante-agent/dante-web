@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { DEFAULT_NEXT, LOGIN_PATH } from "@/lib/auth/redirect";
+import { LOGIN_PATH, safeNext } from "@/lib/auth/redirect";
 
 // 로그인 없이 볼 수 있는 경로(하위 경로 포함).
 // /auth/* 는 OAuth 콜백이라 반드시 열어둬야 한다 — 막으면 로그인 자체가 불가능하다.
@@ -56,11 +56,19 @@ export async function updateSession(request: NextRequest) {
     return redirectPreservingCookies(url, response);
   }
 
-  // 이미 로그인했는데 로그인 화면으로 오면 대시보드로 보낸다.
+  // 이미 로그인했는데 로그인 화면으로 오면 ?next 가 있으면 그쪽, 없으면 대시보드로 보낸다.
+  // next 를 버리면 안 된다 — 익스텐션이 연 /auth/extension?state=… 링크가 비로그인이라
+  // /?next=… 로 밀려났다가, 다른 탭에서 로그인한 뒤 돌아오면 /projects 로 튕겨 익스텐션 로그인이 끊긴다.
+  // safeNext 가 외부 URL 을 걸러주고, next 에 붙은 쿼리는 URL 로 풀어 pathname·search 를 따로 옮긴다.
   if (user && pathname === LOGIN_PATH) {
+    const next = new URL(
+      safeNext(request.nextUrl.searchParams.get("next")),
+      request.nextUrl.origin
+    );
     const url = request.nextUrl.clone();
-    url.pathname = DEFAULT_NEXT;
-    url.search = "";
+    url.pathname = next.pathname;
+    url.search = ""; // 원래 붙어 있던 ?next=… 는 떼고
+    url.search = next.search; // next 안에 들어 있던 쿼리(state, code_challenge…)만 싣는다
     return redirectPreservingCookies(url, response);
   }
 
