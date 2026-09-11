@@ -148,7 +148,7 @@ function ChatPanel({
       if (!response.ok || !response.body) {
         const body: unknown = await response.json().catch(() => null);
         const message = (body as { error?: string } | null)?.error;
-        throw new Error(message ?? "응답을 받지 못했습니다.");
+        throw new Error(message ?? "응답을 받지 못했습니다.\n잠시 후 다시 시도해주세요.");
       }
 
       const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
@@ -163,7 +163,9 @@ function ChatPanel({
     } catch (e) {
       // 사용자가 중단한 것이면 여기까지 받은 답을 그대로 남긴다.
       if (!(e instanceof Error && e.name === "AbortError")) {
-        setError(e instanceof Error ? e.message : "요청에 실패했습니다.");
+        setError(
+          e instanceof Error ? e.message : "요청에 실패했습니다.\n잠시 후 다시 시도해주세요."
+        );
         // 한 글자도 못 받은 말풍선은 지운다.
         setMessages((prev) => prev.filter((m, i) => i !== prev.length - 1 || m.content !== ""));
       }
@@ -263,18 +265,14 @@ function ChatPanel({
               <div key={i} className={cn("flex", m.role === "user" && "justify-end")}>
                 <div
                   className={cn(
-                    "animate-in fade-in slide-in-from-bottom-1 text-sm leading-relaxed wrap-break-word whitespace-pre-wrap duration-200",
+                    "animate-in fade-in slide-in-from-bottom-1 text-sm wrap-break-word whitespace-pre-wrap duration-200",
                     m.role === "user"
-                      ? // 내 말풍선은 85% 에서 멈춘다 — 반대쪽에 여백이 남아야 누가 한 말인지 보인다.
-                        // 꼬리는 같은 색 정사각형을 45° 돌려 오른쪽 아래에 반쯤 묻은 것 —
-                        // 삐져나온 삼각형만 보인다. 삼각형을 border 로 그리는 방법보다
-                        // 모서리를 둥글릴 수 있어서 rounded-lg 본체와 붙였을 때 자연스럽다.
-                        cn(
-                          "bg-primary text-primary-foreground max-w-[85%] rounded-lg px-2.5 py-1.5",
-                          "relative after:absolute after:-right-1 after:bottom-2 after:size-2.5",
-                          "after:bg-primary after:rotate-45 after:rounded-[2px]"
-                        )
-                      : "text-foreground max-w-full"
+                      ? // 말풍선 모양은 Figma(찾아줘 v2.0, node 14407:155707) 기준:
+                        // radius 24, 보내는 쪽 모서리만 각지게(= 꼬리), 패딩 16/12,
+                        // 14px medium, line-height 1.4. 색은 우리 토큰 그대로.
+                        // 85% 상한은 유지 — 반대쪽에 여백이 남아야 누가 한 말인지 보인다.
+                        "bg-primary text-primary-foreground max-w-[85%] rounded-3xl rounded-br-none px-4 py-3 leading-[1.4] font-medium"
+                      : "text-foreground max-w-full leading-relaxed"
                   )}
                 >
                   {m.content ||
@@ -284,7 +282,12 @@ function ChatPanel({
             ))
           )}
 
-          {error && <p className="text-destructive text-sm">{error}</p>}
+          {/* 오류 문구는 서버가 준 줄바꿈(\n)을 그대로 살린다 — 한 줄로 이어 붙으면 읽기 힘들다. */}
+          {error && (
+            <p className="text-destructive text-sm leading-relaxed wrap-break-word whitespace-pre-line">
+              {error}
+            </p>
+          )}
         </div>
       )}
 

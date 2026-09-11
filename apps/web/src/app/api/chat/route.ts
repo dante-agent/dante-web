@@ -48,13 +48,18 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as Body;
   const messages = parseMessages(body.messages);
   if (!messages) {
-    return NextResponse.json({ error: "요청 형식이 올바르지 않습니다." }, { status: 400 });
+    return NextResponse.json(
+      { error: "요청 형식이 올바르지 않습니다.\n새 대화로 다시 시도해주세요." },
+      { status: 400 }
+    );
   }
 
   const model = await userChatModel(user.id);
   if (!model) {
     return NextResponse.json(
-      { error: "등록된 AI API 키가 없습니다. 계정 설정 → AI 에서 키를 넣어주세요." },
+      // 오류 문구의 \n 은 화면에서 그대로 줄바꿈된다(whitespace-pre-line).
+      // "무엇이 잘못됐는지 / 무엇을 하면 되는지" 를 줄로 나눈다.
+      { error: "등록된 AI API 키가 없습니다.\n계정 설정 → AI 에서 키를 넣어주세요." },
       { status: 400 }
     );
   }
