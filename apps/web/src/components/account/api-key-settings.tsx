@@ -2,7 +2,8 @@
 
 import { useActionState, useState } from "react";
 import { Check, Eye, EyeOff } from "lucide-react";
-import { deleteApiKey, updateApiKey, type KeyState } from "@/app/account/settings/actions";
+import { updateApiKey, type KeyState } from "@/app/account/settings/actions";
+import { RemoveApiKeyDialog } from "@/components/account/remove-api-key-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AI_PROVIDERS, type AiProvider, type AiProviderId } from "@/lib/projects/ai-providers";
@@ -141,17 +142,12 @@ function ProviderRow({ provider, lastFour }: { provider: AiProvider; lastFour?: 
         </form>
       )}
 
-      {/* 지우기는 별도 form. 위 form 안에 두면 제출이 엇갈린다. */}
+      {/* 지우기는 확인 모달로. 계정 키라 지우면 연결된 프로젝트가 전부 끊기니
+          그 사실을 먼저 알린다. 삭제 form 은 모달 안에 있어 위 form 과 엇갈리지 않는다. */}
       {lastFour && !editing && (
-        <form action={deleteApiKey} className="mt-3">
-          <input type="hidden" name="provider" value={provider.id} />
-          <button
-            type="submit"
-            className="text-muted-foreground hover:text-destructive text-[13px] underline underline-offset-4 transition-colors duration-[180ms] ease-out"
-          >
-            Remove key
-          </button>
-        </form>
+        <div className="mt-3">
+          <RemoveApiKeyDialog provider={provider} lastFour={lastFour} />
+        </div>
       )}
     </div>
   );
