@@ -103,6 +103,7 @@ export default async function ProjectNotificationsPage({
         initial={settings}
         samples={samples}
         requiredCheck={requiredCheck}
+        repoRulesUrl={`https://github.com/${project.repoOwner}/${project.repoName}/settings/rules`}
       />
 
       <NotificationScopeForm
