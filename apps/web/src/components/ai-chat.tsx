@@ -266,7 +266,14 @@ function ChatPanel({
                     "animate-in fade-in slide-in-from-bottom-1 text-sm leading-relaxed wrap-break-word whitespace-pre-wrap duration-200",
                     m.role === "user"
                       ? // 내 말풍선은 85% 에서 멈춘다 — 반대쪽에 여백이 남아야 누가 한 말인지 보인다.
-                        "bg-primary text-primary-foreground max-w-[85%] rounded-lg px-2.5 py-1.5"
+                        // 꼬리는 같은 색 정사각형을 45° 돌려 오른쪽 아래에 반쯤 묻은 것 —
+                        // 삐져나온 삼각형만 보인다. 삼각형을 border 로 그리는 방법보다
+                        // 모서리를 둥글릴 수 있어서 rounded-lg 본체와 붙였을 때 자연스럽다.
+                        cn(
+                          "bg-primary text-primary-foreground max-w-[85%] rounded-lg px-2.5 py-1.5",
+                          "relative after:absolute after:-right-1 after:bottom-2 after:size-2.5",
+                          "after:bg-primary after:rotate-45 after:rounded-[2px]"
+                        )
                       : "text-foreground max-w-full"
                   )}
                 >
