@@ -26,7 +26,7 @@ export function UserMenu({ user }: { user: HeaderUser }) {
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger
         aria-label={`${user.name} 프로필`}
-        className="focus-visible:ring-ring/50 rounded-full opacity-100 transition-opacity outline-none hover:opacity-80 focus-visible:ring-2"
+        className="focus-visible:ring-ring/50 cursor-pointer rounded-full opacity-100 transition-opacity outline-none hover:opacity-80 focus-visible:ring-2"
       >
         <UserAvatar src={user.avatarUrl} name={user.name} />
       </Popover.Trigger>
