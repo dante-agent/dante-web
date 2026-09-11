@@ -5,7 +5,8 @@ import { StatusBadge } from "@/components/settings/notifications/controls";
 import { DeliveryLog } from "@/components/settings/notifications/delivery-log";
 import { GithubNotificationsForm } from "@/components/settings/notifications/github-notifications-form";
 import { NotificationScopeForm } from "@/components/settings/notifications/scope-form";
-import { SnoozeBanner, SnoozeControl } from "@/components/settings/notifications/snooze";
+import { SnoozeBanner } from "@/components/settings/notifications/snooze";
+import { SnoozeControl } from "@/components/settings/notifications/snooze-control";
 import { ComingSoon, SettingsHeader } from "@/components/settings/settings-section";
 import { requireUser } from "@/lib/auth/user";
 import { installationSettingsUrl } from "@/lib/github/app";
@@ -103,6 +104,7 @@ export default async function ProjectNotificationsPage({
         initial={settings}
         samples={samples}
         requiredCheck={requiredCheck}
+        repoRulesUrl={`https://github.com/${project.repoOwner}/${project.repoName}/settings/rules`}
       />
 
       <NotificationScopeForm

@@ -4,11 +4,12 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@dante/db";
 import { requireUser } from "@/lib/auth/user";
 import {
+  errorDetail,
   fetchHeadCommitMessage,
   fetchPullRequest,
   installationClient,
 } from "@/lib/github/pull-request";
-import { deliverRunSummary } from "@/lib/notifications/deliver";
+import { deliverRunSummary, type PullRequestContext } from "@/lib/notifications/deliver";
 import { danteLinks } from "@/lib/notifications/links";
 import { queuedRun } from "@/lib/notifications/run-summary";
 import {
@@ -17,7 +18,7 @@ import {
   type CommentFields,
   type NotificationSettings,
 } from "@/lib/notifications/settings";
-import { saveNotificationSettings } from "@/lib/notifications/store";
+import { recordDelivery, saveNotificationSettings } from "@/lib/notifications/store";
 
 // 알림 설정 화면이 부르는 서버 액션들.
 //
@@ -128,10 +129,29 @@ const SNOOZE_DURATIONS: Record<string, number | undefined> = {
 };
 
 /**
+ * 브라우저가 실어 보낸 `getTimezoneOffset()` (분, UTC − 현지 — 한국은 -540).
+ * 없거나 범위 밖이면 0(UTC)으로 둔다.
+ */
+function tzOffset(formData: FormData) {
+  const value = Number(formData.get("tzOffset"));
+  return Number.isInteger(value) && Math.abs(value) <= 14 * 60 ? value : 0;
+}
+
+/** 사용자 시계로 "오늘"이 끝나는 순간. 사용자 시계로 옮겨 그날의 끝을 잡고 UTC 로 되돌린다. */
+function endOfLocalDay(now: Date, offsetMinutes: number) {
+  const local = new Date(now.getTime() - offsetMinutes * 60_000);
+  local.setUTCHours(23, 59, 59, 999);
+  return new Date(local.getTime() + offsetMinutes * 60_000);
+}
+
+/**
  * 스누즈를 켜거나 끈다.
  *
  * "해제할 때까지"는 아주 먼 시각을 넣는다. null 을 "무기한"으로 쓰면 "스누즈
  * 아님"과 구분이 안 되고, 별도 boolean 을 두면 두 값이 어긋날 수 있다.
+ *
+ * "오늘"은 서버 시계로 자정을 잡으면 안 된다. 서버는 UTC 라 한국에서는 오전
+ * 9시에 풀린다 — 그래서 폼이 브라우저의 시간대 차이를 같이 보낸다.
  */
 export async function setSnooze(formData: FormData) {
   const projectRef = String(formData.get("projectRef") ?? "");
@@ -143,9 +163,7 @@ export async function setSnooze(formData: FormData) {
   if (duration === "off") {
     snoozedUntil = null;
   } else if (duration === "today") {
-    const end = new Date();
-    end.setHours(23, 59, 59, 999);
-    snoozedUntil = end;
+    snoozedUntil = endOfLocalDay(new Date(), tzOffset(formData));
   } else if (duration === "forever") {
     snoozedUntil = new Date("2999-12-31T23:59:59.000Z");
   } else {
@@ -163,6 +181,10 @@ export async function setSnooze(formData: FormData) {
  *
  * 그때의 결과를 다시 보내는 게 아니라 지금 상태로 다시 만든다 — 옛 결과를
  * 되살리면 이미 고쳐진 실패가 PR 에 다시 올라간다.
+ *
+ * 재시도하는 PR 은 대개 이미 한 번 실패한 것이라, 그사이 PR 이 지워졌거나 설치가
+ * 끊겼을 수 있다. 서버 액션에서 던지면 화면 전체가 에러 페이지로 바뀌므로
+ * deliverRunSummary 와 같은 규칙을 따른다 — 던지지 않고 전달 로그에 적는다.
  */
 export async function retryDelivery(formData: FormData) {
   const projectRef = String(formData.get("projectRef") ?? "");
@@ -172,14 +194,27 @@ export async function retryDelivery(formData: FormData) {
   const project = await requireProject(projectRef);
   const repo = { owner: project.repoOwner, repo: project.repoName };
 
-  const octokit = await installationClient(project.installationId);
-  const pr = await fetchPullRequest(octokit, repo, prNumber);
+  let pr: PullRequestContext;
+  try {
+    const octokit = await installationClient(project.installationId);
+    const fetched = await fetchPullRequest(octokit, repo, prNumber);
+    pr = {
+      ...fetched,
+      headCommitMessage: await fetchHeadCommitMessage(octokit, repo, fetched.headSha),
+    };
+  } catch (error) {
+    await recordDelivery({
+      projectId: project.id,
+      surface: "github_comment",
+      prNumber,
+      status: "failed",
+      detail: errorDetail(error),
+    });
+    revalidatePath(settingsPath(project.ref));
+    return;
+  }
 
-  await deliverRunSummary(
-    project,
-    { ...pr, headCommitMessage: await fetchHeadCommitMessage(octokit, repo, pr.headSha) },
-    queuedRun(danteLinks(project.ref, prNumber))
-  );
+  await deliverRunSummary(project, pr, queuedRun(danteLinks(project.ref, prNumber)));
 
   revalidatePath(settingsPath(project.ref));
 }

@@ -32,6 +32,7 @@ export function GithubNotificationsForm({
   initial,
   samples,
   requiredCheck,
+  repoRulesUrl,
 }: {
   projectRef: string;
   initial: NotificationSettings;
@@ -39,6 +40,8 @@ export function GithubNotificationsForm({
   samples: { failing: RunSummary; passing: RunSummary };
   /** 레포에서 `dante` 가 required check 로 걸려 있는지 */
   requiredCheck: "required" | "not_required" | "unknown";
+  /** 레포의 룰셋 설정 화면. required check 를 거는 곳 */
+  repoRulesUrl: string;
 }) {
   const [state, formAction, pending] = useActionState<SaveState, FormData>(
     saveGithubNotifications,
@@ -188,7 +191,7 @@ export function GithubNotificationsForm({
               disabled={!settings.checkRunEnabled}
               onChange={(value) => patch({ checkRunBlocking: value })}
             />
-            <RequiredCheckNote status={requiredCheck} />
+            <RequiredCheckNote status={requiredCheck} rulesUrl={repoRulesUrl} />
           </Section>
 
           <div className="mt-6 flex max-w-2xl items-center gap-3">
@@ -225,8 +228,15 @@ export function GithubNotificationsForm({
  *
  * 이게 없으면 "켰는데 왜 안 막지?" 문의가 온다. 실제 차단은 레포의 branch
  * protection / ruleset 에서 `dante` 를 required check 로 걸어야 동작한다.
+ * 그래서 확인이 안 되면 그 설정 화면으로 가는 링크를 같이 둔다.
  */
-function RequiredCheckNote({ status }: { status: "required" | "not_required" | "unknown" }) {
+function RequiredCheckNote({
+  status,
+  rulesUrl,
+}: {
+  status: "required" | "not_required" | "unknown";
+  rulesUrl: string;
+}) {
   const text =
     status === "required"
       ? "“dante” is a required check on this repository, so a failure blocks the merge."
@@ -238,6 +248,14 @@ function RequiredCheckNote({ status }: { status: "required" | "not_required" | "
       {status !== "required" && (
         <>
           {" "}
+          <a
+            href={rulesUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="text-foreground underline underline-offset-4"
+          >
+            Add it as a required check on GitHub
+          </a>{" "}
           <span className="text-muted-foreground/70">
             We cannot read classic branch protection with the permissions this App has, so we do not
             claim it is missing — only that we could not confirm it.
