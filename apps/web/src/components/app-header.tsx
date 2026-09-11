@@ -2,16 +2,16 @@
 
 // 최상단 헤더 (project 스코프). 로고 / owner / repo 브레드크럼 · 검색 · Feedback · 프로필.
 // 데이터는 project layout 이 넘겨준다. 파일 검색 목록은 PR B(레포 트리)에서 연결.
-// Feedback·프로필은 버튼만 (모달/드롭다운 미구현).
+// 프로필은 버튼만 (드롭다운 미구현). Feedback 은 문의 모달(feedback-dialog).
 
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Blocks, Box, Plus } from "lucide-react";
 import danteLogo from "@/assets/dante-logo.png";
+import { FeedbackDialog } from "@/components/feedback-dialog";
 import { FileSearch } from "@/components/file-search";
 import { HeaderSwitcher, SwitcherRow } from "@/components/header-switcher";
-import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
 import type { ProjectSummary } from "@/lib/projects/queries";
 
@@ -97,9 +97,7 @@ export function AppHeader({
       </div>
 
       <div className="ml-auto flex shrink-0 items-center gap-2">
-        <Button variant="ghost" size="sm">
-          Feedback
-        </Button>
+        <FeedbackDialog />
         <button
           type="button"
           aria-label={`${user.name} 프로필`}
