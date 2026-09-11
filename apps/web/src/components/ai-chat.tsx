@@ -256,18 +256,23 @@ function ChatPanel({
               {file ? "이 파일에 대해 물어보세요." : "왼쪽에서 파일을 열면 그 파일을 같이 봅니다."}
             </p>
           ) : (
+            // 말풍선은 글자 수만큼만 넓어진다(flex 안에서 shrink-to-fit). 길어지면
+            // max-w 에서 멈추고 줄바꿈으로 아래로 늘어난다. wrap-break-word 는
+            // 공백 없는 긴 토큰(URL·식별자)이 패널 밖으로 삐져나가지 않게.
             messages.map((m, i) => (
-              <div
-                key={i}
-                className={cn(
-                  "animate-in fade-in slide-in-from-bottom-1 text-sm leading-relaxed whitespace-pre-wrap duration-200",
-                  m.role === "user"
-                    ? "bg-primary text-primary-foreground ml-6 rounded-lg px-2.5 py-1.5"
-                    : "text-foreground"
-                )}
-              >
-                {m.content ||
-                  (pending && <Loader2 className="text-muted-foreground size-4 animate-spin" />)}
+              <div key={i} className={cn("flex", m.role === "user" && "justify-end")}>
+                <div
+                  className={cn(
+                    "animate-in fade-in slide-in-from-bottom-1 text-sm leading-relaxed wrap-break-word whitespace-pre-wrap duration-200",
+                    m.role === "user"
+                      ? // 내 말풍선은 85% 에서 멈춘다 — 반대쪽에 여백이 남아야 누가 한 말인지 보인다.
+                        "bg-primary text-primary-foreground max-w-[85%] rounded-lg px-2.5 py-1.5"
+                      : "text-foreground max-w-full"
+                  )}
+                >
+                  {m.content ||
+                    (pending && <Loader2 className="text-muted-foreground size-4 animate-spin" />)}
+                </div>
               </div>
             ))
           )}
