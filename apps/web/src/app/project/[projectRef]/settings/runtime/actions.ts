@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@dante/db";
 import { requireUser } from "@/lib/auth/user";
-import { DEFAULT_TIMEOUT_MS, defaultCommands, validateRuntimeInput } from "@/lib/projects/runtime";
+import { detectRuntimeCommands } from "@/lib/projects/detect-runtime";
+import { DEFAULT_TIMEOUT_MS, validateRuntimeInput } from "@/lib/projects/runtime";
 
 // 실행 환경 설정 화면이 부르는 서버 액션.
 //
@@ -20,7 +21,15 @@ async function requireProject(projectRef: string) {
 
   const project = await prisma.project.findFirst({
     where: { ref: projectRef, userId: user.id },
-    select: { id: true, ref: true, testFramework: true },
+    select: {
+      id: true,
+      ref: true,
+      testFramework: true,
+      repoOwner: true,
+      repoName: true,
+      defaultBranch: true,
+      installationId: true,
+    },
   });
 
   if (!project) throw new Error("Project not found.");
@@ -46,7 +55,10 @@ export async function saveRuntimeSettings(
 
   // 빈 칸은 "기본값으로 되돌린다" 는 뜻이다. 화면의 placeholder 가 그 기본값을
   // 이미 보여주고 있으므로, 지우고 저장하면 본 대로 돌아간다.
-  const defaults = defaultCommands(project.testFramework);
+  //
+  // 화면이 쓴 것과 같은 기본값이어야 한다 — 그래서 여기서도 레포를 다시 본다.
+  // (같은 요청 안이라면 react cache 가 GitHub 왕복을 한 번으로 줄인다.)
+  const defaults = await detectRuntimeCommands(project, project.testFramework);
   const resolved = {
     installCommand: installCommand || defaults.install,
     testCommand: testCommand || defaults.test,

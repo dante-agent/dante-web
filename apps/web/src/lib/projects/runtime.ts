@@ -25,42 +25,66 @@ export const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 export const MIN_TIMEOUT_MS = 30 * 1000;
 export const MAX_TIMEOUT_MS = 15 * 60 * 1000;
 
+export interface RuntimeCommands {
+  install: string;
+  test: string;
+  /**
+   * "repo" = 레포의 lockfile·package.json 을 보고 정했다.
+   * "fallback" = 레포를 못 읽어서 아무 프로젝트에나 맞는 값으로 떨어졌다.
+   *
+   * 화면이 이 둘을 구분해 말해줘야 한다. 레포를 못 읽었는데 자신 있게 기본값을
+   * 보여주면, 사용자는 그게 자기 레포에 맞춘 값인 줄 알고 그대로 저장한다.
+   */
+  source: "repo" | "fallback";
+}
+
 /**
- * 러너별 기본 커맨드.
+ * 러너별 테스트 커맨드. 레포에 `scripts.test` 가 없을 때만 쓴다.
  *
- * 패키지 매니저를 pnpm 으로 박지 않고 npm 으로 두는 이유: 사용자 레포가 무엇을
- * 쓰는지 우리는 모른다. npm 은 Node 이미지에 항상 있고 lockfile 이 없어도 돈다.
- * pnpm 을 쓰는 레포라면 이 칸을 고치면 된다 — 그러라고 있는 화면이다.
+ * 패키지 매니저는 여기서 정하지 않는다 — 레포의 lockfile 을 보고 정한다
+ * (`detect-runtime.ts`). `npx` 는 어느 매니저를 쓰든 도는 호출이라, 러너만
+ * 아는 이 자리에서 고를 수 있는 가장 안전한 형태다.
  */
-const DEFAULT_COMMANDS: Record<TestFrameworkId, { install: string; test: string }> = {
-  vitest: { install: "npm install", test: "npx vitest run" },
-  jest: { install: "npm install", test: "npx jest --ci" },
+const FRAMEWORK_TEST_COMMANDS: Record<TestFrameworkId, string> = {
+  vitest: "npx vitest run",
+  jest: "npx jest --ci",
 };
 
-/** 러너를 아직 안 골랐을 때. 온보딩을 끝냈으면 testFramework 는 채워져 있다. */
-const FALLBACK_COMMANDS = { install: "npm install", test: "npm test" };
+/**
+ * 레포를 못 읽었을 때의 최후 기본값.
+ *
+ * `npm install` 인 이유: `npm ci` 는 lockfile 이 없으면 실패하는데, 여기까지
+ * 왔다는 건 레포에 무엇이 있는지 모른다는 뜻이다. 실패하는 기본값보다
+ * 헐거운 기본값이 낫다.
+ */
+export const FALLBACK_COMMANDS: RuntimeCommands = {
+  install: "npm install",
+  test: "npm test",
+  source: "fallback",
+};
+
+export function frameworkTestCommand(testFramework: string | null): string {
+  if (testFramework && testFramework in FRAMEWORK_TEST_COMMANDS) {
+    return FRAMEWORK_TEST_COMMANDS[testFramework as TestFrameworkId];
+  }
+  return FALLBACK_COMMANDS.test;
+}
 
 /** DB 행(일부 null)을 화면·runner 가 쓸 완전한 값으로 접는다. */
-export function resolveRuntimeSettings(project: {
-  testFramework: string | null;
-  installCommand: string | null;
-  testCommand: string | null;
-  testTimeoutMs: number | null;
-}): RuntimeSettings {
-  const defaults = defaultCommands(project.testFramework);
+export function resolveRuntimeSettings(
+  project: {
+    installCommand: string | null;
+    testCommand: string | null;
+    testTimeoutMs: number | null;
+  },
+  /** 레포에서 알아낸 기본값 (`detectRuntimeCommands`). */
+  defaults: RuntimeCommands
+): RuntimeSettings {
   return {
     installCommand: project.installCommand ?? defaults.install,
     testCommand: project.testCommand ?? defaults.test,
     timeoutMs: project.testTimeoutMs ?? DEFAULT_TIMEOUT_MS,
   };
-}
-
-/** 화면이 placeholder 로 쓴다 — 비워두면 무엇이 돌게 되는지 보여주려고. */
-export function defaultCommands(testFramework: string | null) {
-  if (testFramework && testFramework in DEFAULT_COMMANDS) {
-    return DEFAULT_COMMANDS[testFramework as TestFrameworkId];
-  }
-  return FALLBACK_COMMANDS;
 }
 
 /** 화면에 "5 min" 처럼 띄운다. 밀리초를 그대로 보여주면 아무도 못 읽는다. */

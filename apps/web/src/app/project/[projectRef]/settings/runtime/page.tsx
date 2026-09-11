@@ -3,7 +3,8 @@ import { prisma } from "@dante/db";
 import { RuntimeForm } from "@/components/settings/runtime/runtime-form";
 import { ComingSoon, SettingsHeader } from "@/components/settings/settings-section";
 import { requireUser } from "@/lib/auth/user";
-import { defaultCommands, resolveRuntimeSettings } from "@/lib/projects/runtime";
+import { detectRuntimeCommands } from "@/lib/projects/detect-runtime";
+import { resolveRuntimeSettings } from "@/lib/projects/runtime";
 
 // 실행 환경 — 테스트를 어디서 어떻게 돌리나.
 //
@@ -24,9 +25,17 @@ export default async function ProjectRuntimePage({
       installCommand: true,
       testCommand: true,
       testTimeoutMs: true,
+      repoOwner: true,
+      repoName: true,
+      defaultBranch: true,
+      installationId: true,
     },
   });
   if (!project) notFound();
+
+  // 기본값은 레포를 보고 정한다 — lockfile 로 패키지 매니저를, package.json 의
+  // scripts.test 로 테스트 커맨드를. 못 읽으면 일반 기본값으로 떨어진다.
+  const defaults = await detectRuntimeCommands(project, project.testFramework);
 
   return (
     <>
@@ -37,8 +46,8 @@ export default async function ProjectRuntimePage({
 
       <RuntimeForm
         projectRef={projectRef}
-        initial={resolveRuntimeSettings(project)}
-        placeholders={defaultCommands(project.testFramework)}
+        initial={resolveRuntimeSettings(project, defaults)}
+        placeholders={defaults}
       />
 
       <ComingSoon>

@@ -8,7 +8,7 @@ import {
   type SaveState,
 } from "@/app/project/[projectRef]/settings/runtime/actions";
 import { Button } from "@/components/ui/button";
-import { TIMEOUT_CHOICES } from "@/lib/projects/runtime";
+import { TIMEOUT_CHOICES, type RuntimeCommands } from "@/lib/projects/runtime";
 
 // 실행 환경 폼. 샌드박스가 레포를 클론한 뒤 순서대로 돌릴 명령이다.
 //
@@ -23,8 +23,8 @@ export function RuntimeForm({
 }: {
   projectRef: string;
   initial: { installCommand: string; testCommand: string; timeoutMs: number };
-  /** 비워두면 무엇이 돌게 되는지 보여준다 — 러너에 따라 다르다. */
-  placeholders: { install: string; test: string };
+  /** 비워두면 무엇이 돌게 되는지 보여준다. 레포에서 알아낸 값일 수도, 아닐 수도 있다. */
+  placeholders: RuntimeCommands;
 }) {
   const [state, formAction, pending] = useActionState<SaveState, FormData>(
     saveRuntimeSettings,
@@ -37,7 +37,11 @@ export function RuntimeForm({
 
       <Section
         title="Commands"
-        description="Run in the cloned repository, in this order. Leave a field empty to fall back to the default shown."
+        description={
+          placeholders.source === "repo"
+            ? "Run in the cloned repository, in this order. The defaults come from your lockfile and package.json — leave a field empty to go back to them."
+            : "Run in the cloned repository, in this order. We could not read your repository, so these defaults are generic ones — check they match how your project actually installs and tests."
+        }
       >
         <CommandField
           name="installCommand"
