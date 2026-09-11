@@ -59,8 +59,9 @@
   --brand-orange: #ff570a;
   --brand-mint: #25e2a8;
   --brand-cobalt: #687ff5;
-  /* mono = Hack (DESIGN.md §3). sans(--font-sans)는 next/font Geist가 <html>에서 주입 */
-  --font-mono: "Hack", ui-monospace, "SF Mono", Menlo, monospace;
+  /* mono = Hack (DESIGN.md §3). --font-sans(Geist)·--font-hack(Hack) 둘 다 next/font 가 <html>에서 주입.
+     next/font 는 패밀리 이름을 해시로 바꾸므로 "Hack" 리터럴 대신 변수로 참조한다. */
+  --font-mono: var(--font-hack), ui-monospace, "SF Mono", Menlo, monospace;
 
   --background: #121014; /* Mauve 1 */
   /* 오렌지로 틴트한 근접 블랙 (실제 sRGB #121110). Supabase 대시보드 배경
