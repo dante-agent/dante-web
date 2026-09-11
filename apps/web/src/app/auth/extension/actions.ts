@@ -1,7 +1,7 @@
 "use server";
 
 import { requireUser, syncUser } from "@/lib/auth/user";
-import { issueAuthCode, parseAuthorizeParams } from "@/lib/extension/auth";
+import { buildDenyUrl, issueAuthCode, parseAuthorizeParams } from "@/lib/extension/auth";
 
 /**
  * 동의 화면의 "연결" 버튼. 1회용 code 를 만들고 에디터로 돌아갈 URL 을 돌려준다.
@@ -21,4 +21,21 @@ export async function approveExtension(params: Record<string, string>) {
   await syncUser(user);
   const url = await issueAuthCode(user.id, request);
   return { ok: true as const, url };
+}
+
+/**
+ * 동의 화면의 "취소" 버튼. `error=access_denied` 를 붙여 에디터로 돌아갈 URL 을 돌려준다.
+ * 에디터가 이걸 받아야 대기 중인 로그인(state·verifier)을 버린다.
+ *
+ * DB 에는 아무것도 쓰지 않으므로 syncUser 는 부르지 않는다.
+ */
+export async function denyExtension(params: Record<string, string>) {
+  await requireUser();
+
+  // 취소라도 redirect 재검증은 뺄 수 없다. 클라이언트가 되돌려준 값은 다시 믿지 않는다 —
+  // 검사 없이 붙이면 이 액션이 아무 스킴으로나 브라우저를 보내는 오픈 리다이렉트가 된다.
+  const request = parseAuthorizeParams(params);
+  if (!request) return { ok: false as const };
+
+  return { ok: true as const, url: buildDenyUrl(request) };
 }
