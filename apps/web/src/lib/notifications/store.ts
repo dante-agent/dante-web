@@ -1,7 +1,6 @@
 import { prisma, type Prisma } from "@dante/db";
 import {
   DEFAULT_COMMENT_FIELDS,
-  DEFAULT_NOTIFICATION_SETTINGS,
   toNotificationSettings,
   type NotificationSettings,
 } from "@/lib/notifications/settings";
@@ -64,11 +63,22 @@ export type DeliverySurface = "github_comment" | "github_check";
 
 export type DeliveryStatus = "ok" | "skipped" | "failed";
 
+/** 보존 기간. 화면(§7)에도 이 숫자를 그대로 적는다. */
+export const DELIVERY_RETENTION_DAYS = 30;
+
+const retentionCutoff = (now = new Date()) =>
+  new Date(now.getTime() - DELIVERY_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+
 /**
  * 전달 로그를 남긴다.
  *
  * 로그 쓰기가 실패해도 알림 자체를 실패로 만들지 않는다 — 기록하려다 본 일을
  * 망치는 건 순서가 뒤바뀐 것이다.
+ *
+ * 보존 기간이 지난 행은 여기서 같이 지운다. 크론을 따로 두면 스케줄러와 시크릿이
+ * 하나씩 늘어나는데, 이 프로젝트의 행만 보는 삭제라 (projectId, createdAt)
+ * 인덱스로 끝난다. 새 전달이 없는 프로젝트에는 옛 행이 남지만, 화면이
+ * 기간 밖을 거르므로(recentDeliveries) 보이지 않는다.
  */
 export async function recordDelivery(entry: {
   projectId: string;
@@ -88,15 +98,18 @@ export async function recordDelivery(entry: {
         detail: entry.detail?.slice(0, 500) ?? null,
       },
     });
+    await prisma.notificationDelivery.deleteMany({
+      where: { projectId: entry.projectId, createdAt: { lt: retentionCutoff() } },
+    });
   } catch (error) {
     console.error("[notifications] delivery log failed", error);
   }
 }
 
-/** 화면 §7 이 보여주는 최근 목록. */
+/** 화면 §7 이 보여주는 최근 목록. 보존 기간 안의 것만. */
 export function recentDeliveries(projectId: string, take = 20) {
   return prisma.notificationDelivery.findMany({
-    where: { projectId },
+    where: { projectId, createdAt: { gte: retentionCutoff() } },
     orderBy: { createdAt: "desc" },
     take,
   });
@@ -117,18 +130,4 @@ export async function deliveriesFailing(projectId: string) {
   });
 
   return recent.length === 3 && recent.every((row) => row.status === "failed");
-}
-
-/** 보존 기간. 지난 것은 배치가 지운다. */
-export const DELIVERY_RETENTION_DAYS = 30;
-
-export function purgeOldDeliveries(now = new Date()) {
-  const cutoff = new Date(now.getTime() - DELIVERY_RETENTION_DAYS * 24 * 60 * 60 * 1000);
-  return prisma.notificationDelivery.deleteMany({ where: { createdAt: { lt: cutoff } } });
-}
-
-/** 기본값을 화면에서 되돌릴 때 쓴다 (설정 행을 지우면 기본값으로 돌아간다). */
-export async function resetNotificationSettings(projectId: string) {
-  await prisma.projectNotificationSetting.deleteMany({ where: { projectId } });
-  return DEFAULT_NOTIFICATION_SETTINGS;
 }
