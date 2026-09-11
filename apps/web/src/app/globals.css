@@ -81,7 +81,7 @@
   --secondary: #2b282f; /* Mauve 4 */
   --secondary-foreground: #eeedf0;
   --muted: #232127; /* Mauve 3 */
-  --muted-foreground: #7d7982; /* Mauve 10 */
+  --muted-foreground: #85818a; /* Mauve 10(#7d7982) 명도만 올림 — background·card 대비 4.6:1 이상 (WCAG AA) */
   --accent: #232127; /* Mauve 3 */
   --accent-foreground: #eeedf0;
   --destructive: oklch(0.704 0.191 22.216); /* 브랜드 팔레트에 없음 — shadcn 기본 red 유지 */
