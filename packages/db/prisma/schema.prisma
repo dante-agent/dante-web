@@ -37,9 +37,11 @@ model User {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  installations GithubInstallation[]
-  projects      Project[]
-  apiKeys       UserApiKey[]
+  installations      GithubInstallation[]
+  projects           Project[]
+  apiKeys            UserApiKey[]
+  extensionAuthCodes ExtensionAuthCode[]
+  extensionTokens    ExtensionToken[]
 
   @@map("users")
 }
@@ -158,6 +160,52 @@ model UserApiKey {
   /// 프로바이더당 키 하나. 바꾸면 덮어쓴다.
   @@unique([userId, provider])
   @@map("user_api_keys")
+}
+
+/// 익스텐션 로그인 중간 단계의 1회용 code (dante-extension 결정 D-6).
+///
+/// 동의 화면에서 "연결"을 누르면 만들어지고, 익스텐션이 POST /api/v1/auth/token
+/// 으로 토큰과 바꾸는 순간 지워진다. 토큰을 URL 에 바로 싣지 않으려고 둔 단계다.
+model ExtensionAuthCode {
+  /// code 원문의 SHA-256. 원문은 에디터로 가는 URL 에 한 번 실리고 저장하지 않는다.
+  codeHash      String   @id @map("code_hash")
+  userId        String   @map("user_id") @db.Uuid
+  /// PKCE code_challenge (S256). 교환할 때 익스텐션이 보낸 verifier 로 맞춰본다.
+  codeChallenge String   @map("code_challenge")
+  /// "VS Code" | "Cursor" … redirect 스킴으로 정한다. 토큰으로 그대로 옮긴다.
+  editor        String
+  expiresAt     DateTime @map("expires_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("extension_auth_codes")
+}
+
+/// 익스텐션이 /api/v1 을 부를 때 쓰는 토큰 (dante-extension 결정 D-6).
+///
+/// Supabase 세션을 넘기지 않는 이유: 1시간마다 갱신해야 하고, 익스텐션이
+/// Supabase 에 직접 붙지 않기로 했다(결정 D-3). 대신 우리가 만든 랜덤 문자열을
+/// 90일짜리로 발급하고, DB 에는 해시만 둔다 — DB 가 새도 토큰으로 못 쓴다.
+///
+/// 폐기는 행을 지운다. 지운 토큰으로 오는 요청은 조회에 실패해 401 이 된다.
+model ExtensionToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  /// 토큰 원문의 SHA-256. 원문은 발급 응답으로 한 번 나가고 저장하지 않는다.
+  tokenHash  String    @unique @map("token_hash")
+  /// "VS Code" | "Cursor" … 설정 화면의 "연결된 에디터" 목록에 보여준다.
+  editor     String
+  /// 마지막으로 API 를 부른 시각. 요청마다 쓰지 않고 1분 간격으로만 갱신한다.
+  lastUsedAt DateTime? @map("last_used_at")
+  expiresAt  DateTime  @map("expires_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("extension_tokens")
 }
 
 /// 레포에서 뽑아낸 컴포넌트 하나. ts-morph 가 채운다.
