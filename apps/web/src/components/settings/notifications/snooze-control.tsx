@@ -2,6 +2,13 @@
 
 import { setSnooze } from "@/app/project/[projectRef]/settings/notifications/actions";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 // 스누즈를 켜는 자리 (§6.3). 적용 범위 섹션 아래에 둔다.
 //
@@ -26,17 +33,26 @@ export function SnoozeControl({ projectRef }: { projectRef: string }) {
     <form action={submit} className="mt-4 flex max-w-2xl flex-wrap items-center gap-3">
       <input type="hidden" name="projectRef" value={projectRef} />
       <span className="text-[13px]">Pause writing to GitHub for</span>
-      <select
-        name="duration"
-        defaultValue="1h"
-        className="border-border bg-background border px-2 py-1 text-[13px]"
-      >
-        {OPTIONS.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+
+      {/* 네이티브 <select> 대신 온보딩 레포 선택기(repo-picker.tsx)와 같은 것을
+          쓴다. 네이티브는 OS 가 화살표를 그려서 좌우 여백이 어긋난다.
+          name 을 주면 Base UI 가 숨은 input 을 만들어 폼에 값이 실린다.
+          items 는 SelectValue 가 "1h" 대신 "1 hour" 를 그리게 한다.
+          폭을 고정하는 이유는 "Until I turn it off" 를 고르면 옆 버튼이 밀려서다.
+          pr-2.5 는 기본값(pl-2.5 / pr-2)의 좌우 여백을 같게 맞춘다. */}
+      <Select name="duration" defaultValue="1h" items={OPTIONS}>
+        <SelectTrigger size="sm" className="w-40 pr-2.5 text-[13px] data-[size=sm]:rounded-[4px]">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent alignItemWithTrigger={false} align="start" sideOffset={6}>
+          {OPTIONS.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
       <Button type="submit" size="sm" variant="outline" className="rounded-[4px]">
         Snooze
       </Button>
