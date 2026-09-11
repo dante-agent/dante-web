@@ -15,7 +15,7 @@ export function UserAvatar({ src, name }: { src: string | null; name: string }) 
 
   return (
     <span
-      className="border-primary bg-muted relative block size-7 overflow-hidden rounded-full border"
+      className="border-primary bg-muted relative block size-7 overflow-hidden rounded-full border-2"
       aria-hidden={showImage ? undefined : true}
     >
       {showImage ? (
