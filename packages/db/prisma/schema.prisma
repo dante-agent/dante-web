@@ -1,5 +1,9 @@
-// 데이터 모델. 지금은 "GitHub 레포 연결"에 필요한 것만 있다.
-// Component/TestFile/TestFileVersion/TestRun 은 테스트 생성 PR 에서 추가한다.
+// 데이터 모델. "GitHub 레포 연결" + "테스트 생성·실행" 두 갈래다.
+//
+// 뒤쪽(Component → TestFile → TestFileVersion → TestRun)은 아직 생성 기능이
+// 없는 상태에서 runner 를 붙이려고 먼저 넣은 것이다. 실제 생성 로직이 들어오면
+// 필드가 늘 수 있다. 지금은 runner 가 "무엇을 어디서 돌릴지" 알아내는 데
+// 필요한 최소한만 있다.
 
 generator client {
   provider = "prisma-client-js"
@@ -117,6 +121,7 @@ model Project {
 
   user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   installation GithubInstallation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  components   Component[]
 
   notificationSetting ProjectNotificationSetting?
   pullRequestSurfaces PullRequestSurface[]
@@ -152,6 +157,118 @@ model UserApiKey {
   /// 프로바이더당 키 하나. 바꾸면 덮어쓴다.
   @@unique([userId, provider])
   @@map("user_api_keys")
+}
+
+/// 레포에서 뽑아낸 컴포넌트 하나. ts-morph 가 채운다.
+model Component {
+  id        String @id @default(uuid()) @db.Uuid
+  projectId String @map("project_id") @db.Uuid
+
+  /// 레포 루트 기준 경로. 예: "src/components/Button.tsx"
+  /// 레포를 클론한 뒤 이 경로로 파일을 찾으므로 runner 도 그대로 쓴다.
+  filePath String @map("file_path")
+
+  /// export 이름. default export 는 "default".
+  /// 한 파일에 컴포넌트가 여러 개일 수 있어 경로만으로는 식별되지 않는다.
+  exportName String @map("export_name")
+
+  /// 화면에 보여줄 이름. 보통 exportName 과 같지만 default export 는 다르다.
+  name String
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  testFiles TestFile[]
+
+  @@unique([projectId, filePath, exportName])
+  @@map("components")
+}
+
+/// 컴포넌트 하나에 대응하는 테스트 파일.
+///
+/// 내용은 여기 없고 TestFileVersion 에 있다. 이 행은 "무엇에 대한 테스트이고
+/// 레포 어디에 놓이는가"만 들고, 내용은 고칠 때마다 새 행으로 쌓인다.
+model TestFile {
+  id          String @id @default(uuid()) @db.Uuid
+  componentId String @map("component_id") @db.Uuid
+
+  /// 레포 루트 기준 경로. 예: "src/components/Button.test.tsx"
+  path String
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  component Component         @relation(fields: [componentId], references: [id], onDelete: Cascade)
+  versions  TestFileVersion[]
+
+  /// 컴포넌트당 테스트 파일 하나. 여러 개가 필요해지면 이 제약을 푼다.
+  @@unique([componentId])
+  @@map("test_files")
+}
+
+/// 테스트 파일의 한 버전. AI 가 만들거나 사용자가 고칠 때마다 쌓인다.
+///
+/// 덮어쓰지 않고 쌓는 이유: 화면에서 이력을 보여주고(date-fns 날짜 그룹핑),
+/// Monaco diff 로 버전 간 차이를 보여주기 때문이다. 실행 결과(TestRun)도
+/// "어느 버전을 돌린 결과인지"에 붙어야 의미가 있다.
+model TestFileVersion {
+  id         String @id @default(uuid()) @db.Uuid
+  testFileId String @map("test_file_id") @db.Uuid
+
+  /// 파일 전체 내용. diff 는 저장하지 않고 화면에서 계산한다.
+  /// runner 는 이 값을 그대로 샌드박스에 써 넣는다.
+  content String
+
+  /// 1 부터 증가. 화면에 "v3" 처럼 보여준다.
+  version Int
+
+  /// "ai" | "user" — 누가 만든 버전인지.
+  /// 문자열인 이유는 Project.testFramework 와 같다(값이 늘 때 마이그레이션 회피).
+  source String
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  testFile TestFile  @relation(fields: [testFileId], references: [id], onDelete: Cascade)
+  runs     TestRun[]
+
+  @@unique([testFileId, version])
+  @@map("test_file_versions")
+}
+
+/// 테스트 실행 1건. runner 가 만들고 갱신한다 (실행 환경은 ADR-0001).
+model TestRun {
+  id                String @id @default(uuid()) @db.Uuid
+  testFileVersionId String @map("test_file_version_id") @db.Uuid
+
+  /// "queued" | "running" | "passed" | "failed" | "error"
+  ///
+  /// failed 와 error 를 나누는 이유: failed 는 테스트가 정상적으로 돌고 떨어진
+  /// 것(사용자가 고칠 거리)이고, error 는 설치 실패·타임아웃처럼 실행 자체가
+  /// 안 된 것(우리가 볼 거리)이다. 화면에서 다르게 보여줘야 한다.
+  status String @default("queued")
+
+  /// 테스트 프로세스의 종료 코드. 실행조차 못 했으면 null.
+  exitCode Int? @map("exit_code")
+
+  /// stdout + stderr 합본. 사람이 읽을 로그라 구조화하지 않는다.
+  logs String?
+
+  /// status 가 "error" 일 때 화면에 한 줄로 띄울 사유.
+  errorMessage String? @map("error_message")
+
+  /// 샌드박스가 실제로 뜬 시각 ~ 끝난 시각. queued 로 머물러 있으면 둘 다 null.
+  startedAt  DateTime? @map("started_at")
+  finishedAt DateTime? @map("finished_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  testFileVersion TestFileVersion @relation(fields: [testFileVersionId], references: [id], onDelete: Cascade)
+
+  /// "이 버전의 최근 실행" 을 자주 뽑는다.
+  @@index([testFileVersionId, createdAt])
+  @@map("test_runs")
 }
 
 /// 프로젝트당 1행. 알림을 "언제, 어디로, 어떻게" 보낼지의 설정값.
