@@ -191,7 +191,9 @@ async function handleRepository(payload: RepositoryEvent) {
     case "transferred":
       await prisma.project.updateMany({
         where,
-        data: { repoOwner: repo.owner.login, repoName: repo.name },
+        // 프로젝트 이름도 레포 이름을 따라간다. 이름을 따로 바꾸는 기능이 없어서,
+        // 여기서 안 고치면 화면에 옛 레포 이름이 영영 남는다.
+        data: { repoOwner: repo.owner.login, repoName: repo.name, name: repo.name },
       });
       return `repo ${repo.id} now ${repo.owner.login}/${repo.name}`;
     case "privatized":
