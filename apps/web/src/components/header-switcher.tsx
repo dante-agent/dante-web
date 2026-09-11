@@ -47,7 +47,7 @@ export function HeaderSwitcher({
     >
       <Popover.Trigger className="hover:bg-muted flex items-center gap-2.5 rounded-md px-2 py-1 text-sm leading-none outline-none">
         {icon}
-        <span className="font-medium">{current?.label ?? value}</span>
+        <span className="max-w-[9rem] truncate font-medium">{current?.label ?? value}</span>
         {/* 팝업은 이 아이콘에 붙는다 (Supabase 처럼) */}
         <span ref={anchorRef} className="flex">
           <ChevronsUpDown className="text-muted-foreground size-3.5 shrink-0 translate-y-[0.5px]" />
