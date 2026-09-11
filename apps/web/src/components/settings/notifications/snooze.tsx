@@ -1,3 +1,4 @@
+import { formatDistanceToNow } from "date-fns";
 import { setSnooze } from "@/app/project/[projectRef]/settings/notifications/actions";
 import { Button } from "@/components/ui/button";
 
@@ -5,13 +6,8 @@ import { Button } from "@/components/ui/button";
 //
 // 분석은 계속 돌린다 — 분석까지 멈추면 스누즈를 푼 뒤 이력이 비어 있게 되고,
 // 그 기간에 무슨 일이 있었는지 되짚을 방법이 없다.
-
-const OPTIONS = [
-  { value: "1h", label: "1 hour" },
-  { value: "today", label: "Today" },
-  { value: "1w", label: "1 week" },
-  { value: "forever", label: "Until I turn it off" },
-];
+//
+// 켜는 쪽은 snooze-control.tsx (클라이언트 컴포넌트).
 
 /** 스누즈 중일 때 화면 맨 위에 붙는 해제 배너. */
 export function SnoozeBanner({ projectRef, until }: { projectRef: string; until: Date }) {
@@ -19,12 +15,16 @@ export function SnoozeBanner({ projectRef, until }: { projectRef: string; until:
   // 사용자가 그걸 진짜 만료일로 읽는다.
   const forever = until.getUTCFullYear() > 2100;
 
+  // 절대 시각 대신 "3시간 후"로 적는다. 서버에서 그리는 화면이라 toLocaleString
+  // 은 서버(UTC) 시계로 찍히는데, 남은 시간은 시간대와 무관하다.
+  const message = forever
+    ? "Dante is not writing to GitHub until you resume it."
+    : `Dante resumes writing to GitHub ${formatDistanceToNow(until, { addSuffix: true })}.`;
+
   return (
     <div className="border-border bg-card mt-6 flex max-w-2xl flex-wrap items-center gap-3 border p-4">
       <p className="min-w-0 flex-1 text-[13px] leading-relaxed">
-        Dante is not writing to GitHub
-        {forever ? "" : ` until ${until.toLocaleString()}`}. Analysis keeps running, so the
-        dashboard stays up to date.
+        {message} Analysis keeps running, so the dashboard stays up to date.
       </p>
 
       <form action={setSnooze}>
@@ -35,29 +35,5 @@ export function SnoozeBanner({ projectRef, until }: { projectRef: string; until:
         </Button>
       </form>
     </div>
-  );
-}
-
-/** 스누즈를 켜는 자리. 적용 범위 섹션 아래에 둔다. */
-export function SnoozeControl({ projectRef }: { projectRef: string }) {
-  return (
-    <form action={setSnooze} className="mt-4 flex max-w-2xl flex-wrap items-center gap-3">
-      <input type="hidden" name="projectRef" value={projectRef} />
-      <span className="text-[13px]">Pause writing to GitHub for</span>
-      <select
-        name="duration"
-        defaultValue="1h"
-        className="border-border bg-background border px-2 py-1 text-[13px]"
-      >
-        {OPTIONS.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-      <Button type="submit" size="sm" variant="outline" className="rounded-[4px]">
-        Snooze
-      </Button>
-    </form>
   );
 }
