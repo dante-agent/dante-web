@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { Loader2 } from "lucide-react";
+import { AiChatDock } from "@/components/ai-chat";
 import { SubSidebar } from "@/components/sub-sidebar";
 import { FileTree } from "@/components/file-tree";
 import { requireUser } from "@/lib/auth/user";
@@ -28,7 +29,8 @@ export default async function FolderLayout({
         </Suspense>
       }
     >
-      {children}
+      {/* 본문 오른쪽에 AI 채팅이 붙는다. layout 에 두어야 파일을 옮겨도 대화가 남는다. */}
+      <AiChatDock projectRef={projectRef}>{children}</AiChatDock>
     </SubSidebar>
   );
 }
