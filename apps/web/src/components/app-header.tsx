@@ -2,7 +2,7 @@
 
 // 최상단 헤더 (project 스코프). 로고 / owner / repo 브레드크럼 · 검색 · Feedback · 프로필.
 // 데이터는 project layout 이 넘겨준다. 파일 검색 목록은 PR B(레포 트리)에서 연결.
-// 프로필은 버튼만 (드롭다운 미구현). Feedback 은 문의 모달(feedback-dialog).
+// 프로필은 드롭다운(user-menu). Feedback 은 문의 모달(feedback-dialog).
 
 import Image from "next/image";
 import Link from "next/link";
@@ -12,11 +12,8 @@ import danteLogo from "@/assets/dante-logo.png";
 import { FeedbackDialog } from "@/components/feedback-dialog";
 import { FileSearch } from "@/components/file-search";
 import { HeaderSwitcher, SwitcherRow } from "@/components/header-switcher";
-import { UserAvatar } from "@/components/user-avatar";
+import { UserMenu, type HeaderUser } from "@/components/user-menu";
 import type { ProjectSummary } from "@/lib/projects/queries";
-
-/** 헤더가 쓰는 사용자 정보만. Supabase User 를 통째로 클라이언트에 넘기지 않는다. */
-export type HeaderUser = { name: string; avatarUrl: string | null };
 
 function Slash() {
   return <span className="text-muted-foreground/40 text-sm select-none">/</span>;
@@ -98,13 +95,7 @@ export function AppHeader({
 
       <div className="ml-auto flex shrink-0 items-center gap-2">
         <FeedbackDialog />
-        <button
-          type="button"
-          aria-label={`${user.name} 프로필`}
-          className="rounded-full opacity-100 transition-opacity hover:opacity-80"
-        >
-          <UserAvatar src={user.avatarUrl} name={user.name} />
-        </button>
+        <UserMenu user={user} />
       </div>
     </header>
   );
