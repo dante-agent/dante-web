@@ -1,11 +1,14 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { approveExtension } from "@/app/auth/extension/actions";
+import { approveExtension, denyExtension } from "@/app/auth/extension/actions";
 import { Button, buttonVariants } from "@/components/ui/button";
 
 type Status =
-  { kind: "asking" } | { kind: "failed" } | { kind: "cancelled" } | { kind: "opened"; url: string };
+  | { kind: "asking" }
+  | { kind: "failed" }
+  | { kind: "cancelled"; url?: string }
+  | { kind: "opened"; url: string };
 
 // 익스텐션 로그인 동의. 링크를 여는 것만으로 토큰이 나가지 않게, 사람이 한 번 누르게 한다.
 export function ExtensionConsent({
@@ -29,6 +32,20 @@ export function ExtensionConsent({
       }
       setStatus({ kind: "opened", url: result.url });
       // 커스텀 스킴이라 페이지는 그대로 있고, 브라우저가 "에디터 열기" 확인창을 띄운다.
+      window.location.href = result.url;
+    });
+  }
+
+  function cancel() {
+    startTransition(async () => {
+      // 에디터에 error=access_denied 를 알려 대기 중인 로그인을 버리게 한다.
+      // 실패해도 사용자에게 알릴 일은 아니다 — 취소는 어차피 취소다.
+      const result = await denyExtension(params);
+      if (!result.ok) {
+        setStatus({ kind: "cancelled" });
+        return;
+      }
+      setStatus({ kind: "cancelled", url: result.url });
       window.location.href = result.url;
     });
   }
@@ -61,6 +78,18 @@ export function ExtensionConsent({
         <p className="text-muted-foreground mt-2 text-sm">
           {editor} was not connected. You can close this tab.
         </p>
+        {status.url && (
+          <a
+            href={status.url}
+            className={buttonVariants({
+              variant: "outline",
+              size: "lg",
+              className: "mt-8 h-10 w-full",
+            })}
+          >
+            Open {editor} again
+          </a>
+        )}
       </>
     );
   }
@@ -92,7 +121,7 @@ export function ExtensionConsent({
           variant="ghost"
           size="lg"
           className="h-10 w-full"
-          onClick={() => setStatus({ kind: "cancelled" })}
+          onClick={cancel}
           disabled={pending}
         >
           Cancel

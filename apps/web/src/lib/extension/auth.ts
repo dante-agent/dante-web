@@ -121,6 +121,20 @@ export async function issueAuthCode(userId: string, request: AuthorizeRequest) {
 }
 
 /**
+ * 동의 화면의 "취소" 로 에디터에 돌려보낼 URL (RFC 6749 §4.1.2.1 `error=access_denied`).
+ *
+ * 취소는 DB 에 흔적을 남기지 않는다 — code 도 만들지 않는다. 발급된 것이 없으니
+ * 만료·폐기할 것도 없고, 익스텐션은 이 URL 의 state 만 보고 대기 중인 로그인을 버린다.
+ * 로그인 시작 전에 아무나 여는 페이지라 취소 한 번마다 행이 생기면 그것만으로 테이블이 찬다.
+ */
+export function buildDenyUrl(request: AuthorizeRequest) {
+  const target = new URL(request.redirect);
+  target.searchParams.set("error", "access_denied");
+  target.searchParams.set("state", request.state);
+  return target.toString();
+}
+
+/**
  * code + code_verifier → 새 토큰. 실패하면 null.
  *
  * 없는 code, 만료, 이미 쓴 code, verifier 불일치를 구분하지 않는다 — 어느 쪽이
