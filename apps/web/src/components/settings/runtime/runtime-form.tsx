@@ -8,7 +8,20 @@ import {
   type SaveState,
 } from "@/app/project/[projectRef]/settings/runtime/actions";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { TIMEOUT_CHOICES, type RuntimeCommands } from "@/lib/projects/runtime";
+
+// Select 는 값을 문자열로 주고받는다. 폼에 실릴 때도 문자열이라 서버에서 Number() 로 되돌린다.
+const TIMEOUT_OPTIONS = TIMEOUT_CHOICES.map((choice) => ({
+  value: String(choice.value),
+  label: choice.label,
+}));
 
 // 실행 환경 폼. 샌드박스가 레포를 클론한 뒤 순서대로 돌릴 명령이다.
 //
@@ -64,23 +77,32 @@ export function RuntimeForm({
         title="Timeout"
         description="How long a single run may take before the sandbox is torn down. Each command gets this budget."
       >
-        <label className="block p-4">
+        <div className="p-4">
           <span className="block text-[13px] leading-tight">Maximum run time</span>
           <span className="text-muted-foreground mt-1 block text-[12px] leading-relaxed">
             Longer runs cost more — you are billed for the time the sandbox is up.
           </span>
-          <select
-            name="timeoutMs"
-            defaultValue={String(initial.timeoutMs)}
-            className="border-border bg-background mt-3 border p-2 text-[13px]"
-          >
-            {TIMEOUT_CHOICES.map((choice) => (
-              <option key={choice.value} value={choice.value}>
-                {choice.label}
-              </option>
-            ))}
-          </select>
-        </label>
+          {/* 네이티브 <select> 를 쓰다가 교체했다. OS 가 화살표를 그려 좌우 여백이
+              어긋나고, 열리는 메뉴도 브라우저 기본이라 화면과 따로 논다. 알림 설정의
+              스누즈 선택기(snooze-control.tsx)와 같은 것을 쓴다. name 을 주면 Base UI 가
+              숨은 input 을 만들어 폼에 값이 실린다. pr-2.5 는 기본값(pl-2.5 / pr-2)의
+              좌우 여백을 같게 맞춘다. */}
+          <Select name="timeoutMs" defaultValue={String(initial.timeoutMs)} items={TIMEOUT_OPTIONS}>
+            <SelectTrigger
+              size="sm"
+              className="mt-3 w-28 pr-2.5 text-[13px] data-[size=sm]:rounded-[4px]"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent alignItemWithTrigger={false} align="start" sideOffset={6}>
+              {TIMEOUT_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </Section>
 
       <div className="mt-4 flex max-w-2xl items-center gap-3">
