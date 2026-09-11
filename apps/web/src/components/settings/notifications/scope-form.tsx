@@ -46,7 +46,7 @@ export function NotificationScopeForm({
             rows={3}
             spellCheck={false}
             placeholder={defaultBranch}
-            className="border-border bg-background mt-3 w-full border p-2 font-mono text-[12px]"
+            className="border-border bg-background mt-3 w-full resize-none border p-2 font-mono text-[12px]"
           />
         </label>
 
