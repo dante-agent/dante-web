@@ -3,15 +3,23 @@
 // 폴더 보기 오른쪽에 붙는 AI 채팅. 토글 버튼(닫힘: 우하단 떠 있는 버튼)으로 열고 닫는다.
 //
 // layout 에서 children 을 감싸므로 파일을 옮겨 다녀도 이 컴포넌트는 살아 있다
-// — 대화가 파일 클릭마다 날아가지 않는다. 대신 새로고침하면 사라진다(서버에 안 저장).
+// — 대화가 파일 클릭마다 날아가지 않는다. 대화 기록은 lib/chat-history.ts (localStorage).
 
 import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
-import { Loader2, Send, Sparkles, Square, X } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { ko } from "date-fns/locale";
+import { History, Loader2, Send, Sparkles, Square, SquarePen, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  chatTitle,
+  removeChat,
+  saveChat,
+  useChats,
+  type Chat,
+  type ChatMessage as Msg,
+} from "@/lib/chat-history";
 import { cn } from "@/lib/utils";
-
-type Msg = { role: "user" | "assistant"; content: string };
 
 /** 본문과 같은 높이. file-view / folder-empty-state 와 같은 값이다. */
 const PANE_HEIGHT = "h-[calc(100svh-7rem)]";
@@ -77,6 +85,11 @@ function ChatPanel({
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
+  // 지금 쓰고 있는 대화 + 저장된 목록. 목록 보기로 전환하면 이 패널이 목록을 덮는다.
+  const [chatId, setChatId] = useState(() => crypto.randomUUID());
+  const [showHistory, setShowHistory] = useState(false);
+  const chats = useChats(projectRef);
+
   const listRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = listRef.current;
@@ -88,6 +101,27 @@ function ChatPanel({
     if (!open) abortRef.current?.abort();
   }, [open]);
   useEffect(() => () => abortRef.current?.abort(), []);
+
+  function resetChat() {
+    abortRef.current?.abort();
+    setChatId(crypto.randomUUID());
+    setMessages([]);
+    setInput("");
+    setError(null);
+  }
+
+  function newChat() {
+    resetChat();
+    setShowHistory(false);
+  }
+
+  function openChat(chat: Chat) {
+    abortRef.current?.abort();
+    setChatId(chat.id);
+    setMessages(chat.messages);
+    setError(null);
+    setShowHistory(false);
+  }
 
   async function send(text: string) {
     const content = text.trim();
@@ -102,6 +136,9 @@ function ChatPanel({
 
     const controller = new AbortController();
     abortRef.current = controller;
+
+    // 받은 답을 따로 모아둔다 — 저장할 때 state 가 반영되길 기다리지 않으려고.
+    let answer = "";
 
     try {
       const response = await fetch("/api/chat", {
@@ -121,19 +158,33 @@ function ChatPanel({
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
+        answer += value;
         setMessages((prev) =>
           prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: m.content + value } : m))
         );
       }
     } catch (e) {
       // 사용자가 중단한 것이면 여기까지 받은 답을 그대로 남긴다.
-      if (e instanceof Error && e.name === "AbortError") return;
-      setError(e instanceof Error ? e.message : "요청에 실패했습니다.");
-      // 한 글자도 못 받은 말풍선은 지운다.
-      setMessages((prev) => prev.filter((m, i) => i !== prev.length - 1 || m.content !== ""));
+      if (!(e instanceof Error && e.name === "AbortError")) {
+        setError(e instanceof Error ? e.message : "요청에 실패했습니다.");
+        // 한 글자도 못 받은 말풍선은 지운다.
+        setMessages((prev) => prev.filter((m, i) => i !== prev.length - 1 || m.content !== ""));
+      }
     } finally {
       setPending(false);
       abortRef.current = null;
+
+      // 답이 한 글자라도 왔을 때만 기록에 남긴다(중단해도 남는다). 조각마다 쓰면
+      // 토큰 수만큼 localStorage 쓰기가 일어나므로 끝난 뒤 한 번만.
+      if (answer) {
+        const saved: Msg[] = [...sent, { role: "assistant", content: answer }];
+        saveChat(projectRef, {
+          id: chatId,
+          title: chatTitle(saved),
+          updatedAt: Date.now(),
+          messages: saved,
+        });
+      }
     }
   }
 
@@ -147,90 +198,127 @@ function ChatPanel({
         PANE_HEIGHT
       )}
     >
-      <header className="border-border flex h-9 shrink-0 items-center gap-1.5 border-b px-2.5 text-xs">
-        <Sparkles className="text-brand-orange size-3.5" />
+      <header className="border-border flex h-10 shrink-0 items-center gap-1.5 border-b px-2.5 text-sm">
+        <Sparkles className="text-brand-orange size-4" />
         <span className="font-semibold">AI 채팅</span>
-        {file && (
-          <span className="text-muted-foreground ml-1 truncate font-mono text-[10px]">
+        {file && !showHistory && (
+          <span className="text-muted-foreground ml-1 truncate font-mono text-xs">
             {file.split("/").pop()}
           </span>
         )}
-        <Button
-          size="icon-sm"
-          variant="ghost"
-          onClick={onClose}
-          title="닫기"
-          aria-label="AI 채팅 닫기"
-          className="ml-auto"
-        >
-          <X />
-        </Button>
+        <div className="ml-auto flex items-center gap-0.5">
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            onClick={() => setShowHistory((v) => !v)}
+            aria-pressed={showHistory}
+            title="대화 기록"
+            aria-label="대화 기록"
+            className={cn(showHistory && "bg-muted text-foreground")}
+          >
+            <History />
+          </Button>
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            onClick={newChat}
+            disabled={messages.length === 0 && !showHistory}
+            title="새 대화"
+            aria-label="새 대화"
+          >
+            <SquarePen />
+          </Button>
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            onClick={onClose}
+            title="닫기"
+            aria-label="AI 채팅 닫기"
+          >
+            <X />
+          </Button>
+        </div>
       </header>
 
-      <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto p-3">
-        {messages.length === 0 ? (
-          <div className="text-muted-foreground flex flex-col gap-2 pt-6 text-center text-xs">
-            <p>
-              {file ? "이 파일에 대해 물어보세요." : "왼쪽에서 파일을 열면 그 파일을 같이 봅니다."}
-            </p>
-            <div className="mt-2 flex flex-col gap-1.5">
-              {SUGGESTIONS.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => void send(s)}
-                  className="border-border hover:bg-muted hover:text-foreground rounded-md border px-2.5 py-1.5 text-left"
-                >
-                  {s}
-                </button>
-              ))}
+      {showHistory ? (
+        <HistoryList
+          chats={chats}
+          currentId={chatId}
+          onOpen={openChat}
+          onRemove={(id) => {
+            removeChat(projectRef, id);
+            // 지금 보고 있는 대화를 지웠으면 새 대화로 비운다(목록에는 그대로 머문다).
+            if (id === chatId) resetChat();
+          }}
+        />
+      ) : (
+        <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto p-3">
+          {messages.length === 0 ? (
+            <div className="text-muted-foreground flex flex-col gap-2 pt-6 text-center text-sm">
+              <p>
+                {file
+                  ? "이 파일에 대해 물어보세요."
+                  : "왼쪽에서 파일을 열면 그 파일을 같이 봅니다."}
+              </p>
+              <div className="mt-2 flex flex-col gap-1.5">
+                {SUGGESTIONS.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => void send(s)}
+                    className="border-border hover:bg-muted hover:text-foreground rounded-md border px-2.5 py-2 text-left"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        ) : (
-          messages.map((m, i) => (
-            <div
-              key={i}
-              className={cn(
-                "animate-in fade-in slide-in-from-bottom-1 text-xs leading-relaxed whitespace-pre-wrap duration-200",
-                m.role === "user"
-                  ? "bg-primary text-primary-foreground ml-6 rounded-lg px-2.5 py-1.5"
-                  : "text-foreground"
-              )}
-            >
-              {m.content ||
-                (pending && <Loader2 className="text-muted-foreground size-3.5 animate-spin" />)}
-            </div>
-          ))
-        )}
+          ) : (
+            messages.map((m, i) => (
+              <div
+                key={i}
+                className={cn(
+                  "animate-in fade-in slide-in-from-bottom-1 text-sm leading-relaxed whitespace-pre-wrap duration-200",
+                  m.role === "user"
+                    ? "bg-primary text-primary-foreground ml-6 rounded-lg px-2.5 py-1.5"
+                    : "text-foreground"
+                )}
+              >
+                {m.content ||
+                  (pending && <Loader2 className="text-muted-foreground size-4 animate-spin" />)}
+              </div>
+            ))
+          )}
 
-        {error && <p className="text-destructive text-xs">{error}</p>}
-      </div>
+          {error && <p className="text-destructive text-sm">{error}</p>}
+        </div>
+      )}
 
-      {/* 입력창: 텍스트 줄과 버튼 줄을 위아래로 나눈다. 한 줄에 나란히 두면
-          textarea 가 2줄이라 아이콘 세로 위치가 어디에도 안 맞는다. */}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          void send(input);
-        }}
-        className="border-border shrink-0 border-t p-2"
-      >
-        <div className="border-border bg-background focus-within:border-ring rounded-lg border p-1.5 transition-colors">
-          <textarea
-            rows={2}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              // Enter 전송 / Shift+Enter 줄바꿈. 조합 중(한글)에는 가로채지 않는다.
-              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                void send(input);
-              }
-            }}
-            placeholder="Ask anything — Enter to send"
-            className="text-foreground placeholder:text-muted-foreground block max-h-32 w-full resize-none bg-transparent px-1 text-xs leading-5 outline-none"
-          />
-          <div className="flex justify-end pt-1">
+      {/* 입력창: 한 줄짜리 textarea 와 버튼을 가운데 정렬로 나란히 둔다.
+          박스 패딩(p-2)만으로 아이콘 위아래 여백이 같아진다. */}
+      {!showHistory && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void send(input);
+          }}
+          className="border-border shrink-0 border-t p-2"
+        >
+          <div className="border-border bg-background focus-within:border-ring flex items-center gap-1.5 rounded-lg border p-2 transition-colors">
+            <textarea
+              rows={1}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                // Enter 전송 / Shift+Enter 줄바꿈. 조합 중(한글)에는 가로채지 않는다.
+                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  void send(input);
+                }
+              }}
+              placeholder="Ask anything — Enter to send"
+              className="text-foreground placeholder:text-muted-foreground block max-h-28 min-w-0 flex-1 resize-none bg-transparent px-0.5 text-sm leading-7 outline-none"
+            />
             {pending ? (
               <Button
                 type="button"
@@ -254,8 +342,66 @@ function ChatPanel({
               </Button>
             )}
           </div>
-        </div>
-      </form>
+        </form>
+      )}
     </div>
+  );
+}
+
+/** 저장된 대화 목록. 줄을 누르면 그 대화를 불러온다. */
+function HistoryList({
+  chats,
+  currentId,
+  onOpen,
+  onRemove,
+}: {
+  chats: Chat[];
+  currentId: string;
+  onOpen: (chat: Chat) => void;
+  onRemove: (id: string) => void;
+}) {
+  if (chats.length === 0) {
+    return (
+      <p className="text-muted-foreground flex-1 pt-10 text-center text-sm">
+        저장된 대화가 없습니다.
+      </p>
+    );
+  }
+
+  return (
+    <ul className="flex-1 overflow-y-auto p-2">
+      {chats.map((chat) => (
+        <li key={chat.id}>
+          <div
+            className={cn(
+              "group hover:bg-muted flex items-center gap-2 rounded-md px-2",
+              chat.id === currentId && "bg-muted"
+            )}
+          >
+            <button
+              type="button"
+              onClick={() => onOpen(chat)}
+              className="min-w-0 flex-1 py-2 text-left"
+            >
+              <span className="block truncate text-sm">{chat.title}</span>
+              <span className="text-muted-foreground text-xs">
+                {formatDistanceToNow(chat.updatedAt, { addSuffix: true, locale: ko })} ·{" "}
+                {chat.messages.length}개 메시지
+              </span>
+            </button>
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              onClick={() => onRemove(chat.id)}
+              title="삭제"
+              aria-label={`${chat.title} 삭제`}
+              className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
+            >
+              <Trash2 />
+            </Button>
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
