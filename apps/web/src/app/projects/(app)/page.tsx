@@ -2,8 +2,10 @@ import Link from "next/link";
 import { ArrowRight, GitBranch, Plus } from "lucide-react";
 import { prisma } from "@dante/db";
 import { GitHubIcon } from "@/components/brand-icons";
+import { DeletedNotice } from "@/components/projects/deleted-notice";
 import { buttonVariants } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth/user";
+import { installationSettingsUrl } from "@/lib/github/app";
 
 // 로그인 후 착륙 지점.
 //
@@ -11,8 +13,9 @@ import { requireUser } from "@/lib/auth/user";
 // 누르면 다시 튕겨 나와 루프가 생긴다. 대신 빈 상태를 보여주고 CTA 를 둔다.
 //
 // 분할 셸의 왼쪽 컬럼(~450px)에 들어가므로 카드가 아니라 세로 목록이다.
-export default async function ProjectsPage() {
+export default async function ProjectsPage({ searchParams }: PageProps<"/projects">) {
   const user = await requireUser();
+  const { deleted } = await searchParams;
 
   const projects = await prisma.project.findMany({
     where: { userId: user.id },
@@ -27,10 +30,23 @@ export default async function ProjectsPage() {
     },
   });
 
-  if (projects.length === 0) return <EmptyState />;
+  const notice = await deletedNotice(deleted, user.id);
+
+  // 마지막 프로젝트를 지웠으면 빈 상태 위에 뜬다. 그때가 "앱은 아직 설치돼 있다"를
+  // 가장 알려야 할 때다.
+  if (projects.length === 0) {
+    return (
+      <>
+        {notice}
+        <EmptyState />
+      </>
+    );
+  }
 
   return (
     <>
+      {notice}
+
       <div className="flex items-baseline justify-between gap-4">
         <h1 className="font-heading text-[26px] leading-[1.2] font-medium tracking-[-0.02em]">
           Projects
@@ -82,6 +98,37 @@ export default async function ProjectsPage() {
         ))}
       </ul>
     </>
+  );
+}
+
+/**
+ * 프로젝트를 지우고 넘어왔을 때의 안내 (settings/general/actions.ts).
+ *
+ * ?deleted= 에는 설치 ID 만 온다. 그 값을 그대로 믿지 않고 이 사용자의 설치인지
+ * DB 로 확인한 뒤, 계정 이름·GitHub URL 은 DB 값으로 만든다. 남의 ID 나 아무 값을
+ * 붙인 링크로는 안내가 뜨지 않는다.
+ */
+async function deletedNotice(deleted: string | string[] | undefined, userId: string) {
+  if (typeof deleted !== "string" || !/^\d+$/.test(deleted)) return null;
+
+  const installation = await prisma.githubInstallation.findFirst({
+    where: { id: BigInt(deleted), userId },
+    select: { id: true, accountLogin: true, accountType: true, deletedAt: true },
+  });
+  if (!installation) return null;
+
+  // GitHub 에서 이미 앱을 지웠으면 "아직 설치돼 있다"는 틀린 말이다.
+  return (
+    <DeletedNotice
+      installation={
+        installation.deletedAt
+          ? null
+          : {
+              accountLogin: installation.accountLogin,
+              settingsUrl: installationSettingsUrl(installation),
+            }
+      }
+    />
   );
 }
 
