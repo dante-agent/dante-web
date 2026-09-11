@@ -4,11 +4,12 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@dante/db";
 import { requireUser } from "@/lib/auth/user";
 import {
+  errorDetail,
   fetchHeadCommitMessage,
   fetchPullRequest,
   installationClient,
 } from "@/lib/github/pull-request";
-import { deliverRunSummary } from "@/lib/notifications/deliver";
+import { deliverRunSummary, type PullRequestContext } from "@/lib/notifications/deliver";
 import { danteLinks } from "@/lib/notifications/links";
 import { queuedRun } from "@/lib/notifications/run-summary";
 import {
@@ -17,7 +18,7 @@ import {
   type CommentFields,
   type NotificationSettings,
 } from "@/lib/notifications/settings";
-import { saveNotificationSettings } from "@/lib/notifications/store";
+import { recordDelivery, saveNotificationSettings } from "@/lib/notifications/store";
 
 // 알림 설정 화면이 부르는 서버 액션들.
 //
@@ -163,6 +164,10 @@ export async function setSnooze(formData: FormData) {
  *
  * 그때의 결과를 다시 보내는 게 아니라 지금 상태로 다시 만든다 — 옛 결과를
  * 되살리면 이미 고쳐진 실패가 PR 에 다시 올라간다.
+ *
+ * 재시도하는 PR 은 대개 이미 한 번 실패한 것이라, 그사이 PR 이 지워졌거나 설치가
+ * 끊겼을 수 있다. 서버 액션에서 던지면 화면 전체가 에러 페이지로 바뀌므로
+ * deliverRunSummary 와 같은 규칙을 따른다 — 던지지 않고 전달 로그에 적는다.
  */
 export async function retryDelivery(formData: FormData) {
   const projectRef = String(formData.get("projectRef") ?? "");
@@ -172,14 +177,27 @@ export async function retryDelivery(formData: FormData) {
   const project = await requireProject(projectRef);
   const repo = { owner: project.repoOwner, repo: project.repoName };
 
-  const octokit = await installationClient(project.installationId);
-  const pr = await fetchPullRequest(octokit, repo, prNumber);
+  let pr: PullRequestContext;
+  try {
+    const octokit = await installationClient(project.installationId);
+    const fetched = await fetchPullRequest(octokit, repo, prNumber);
+    pr = {
+      ...fetched,
+      headCommitMessage: await fetchHeadCommitMessage(octokit, repo, fetched.headSha),
+    };
+  } catch (error) {
+    await recordDelivery({
+      projectId: project.id,
+      surface: "github_comment",
+      prNumber,
+      status: "failed",
+      detail: errorDetail(error),
+    });
+    revalidatePath(settingsPath(project.ref));
+    return;
+  }
 
-  await deliverRunSummary(
-    project,
-    { ...pr, headCommitMessage: await fetchHeadCommitMessage(octokit, repo, pr.headSha) },
-    queuedRun(danteLinks(project.ref, prNumber))
-  );
+  await deliverRunSummary(project, pr, queuedRun(danteLinks(project.ref, prNumber)));
 
   revalidatePath(settingsPath(project.ref));
 }
