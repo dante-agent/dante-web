@@ -254,23 +254,37 @@ function ChatPanel({
       ) : (
         <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto p-3">
           {messages.length === 0 ? (
-            <div className="text-muted-foreground flex flex-col gap-2 pt-6 text-center text-sm">
-              <p>
-                {file
-                  ? "이 파일에 대해 물어보세요."
-                  : "왼쪽에서 파일을 열면 그 파일을 같이 봅니다."}
+            // 빈 화면은 folder-empty-state 와 같은 모양으로 — 가운데 정렬 + 둥근
+            // 칩을 늘어놓는 흔한 챗봇 빈 화면 대신, 이 앱의 목록 카드를 쓴다.
+            <div className="flex flex-col gap-3">
+              <p className="text-muted-foreground text-sm">
+                {file ? (
+                  <>
+                    <span className="text-foreground font-mono">{file.split("/").pop()}</span> 에
+                    대해 물어보세요.
+                  </>
+                ) : (
+                  "왼쪽에서 파일을 열면 그 파일을 같이 봅니다."
+                )}
               </p>
-              <div className="mt-2 flex flex-col gap-1.5">
-                {SUGGESTIONS.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => void send(s)}
-                    className="border-border hover:bg-muted hover:text-foreground rounded-md border px-2.5 py-2 text-left"
-                  >
-                    {s}
-                  </button>
-                ))}
+
+              <div className="border-border overflow-hidden rounded-md border">
+                <div className="text-muted-foreground border-border border-b px-3 py-1.5 text-[11px] font-medium">
+                  자주 묻는 것
+                </div>
+                <ul>
+                  {SUGGESTIONS.map((s) => (
+                    <li key={s}>
+                      <button
+                        type="button"
+                        onClick={() => void send(s)}
+                        className="hover:bg-muted w-full px-3 py-2 text-left text-sm"
+                      >
+                        {s}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               </div>
             </div>
           ) : (
@@ -369,12 +383,13 @@ function HistoryList({
   }
 
   return (
-    <ul className="flex-1 overflow-y-auto p-2">
+    <ul className="flex-1 space-y-0.5 overflow-y-auto p-2">
       {chats.map((chat) => (
         <li key={chat.id}>
           <div
             className={cn(
-              "group hover:bg-muted flex items-center gap-2 rounded-md px-2",
+              // pl-4: 목록 p-2 와 합쳐 24px — 대화 화면 본문(p-3 + 말풍선)과 같은 들여쓰기.
+              "group hover:bg-muted flex items-center gap-2 rounded-md pr-1 pl-4",
               chat.id === currentId && "bg-muted"
             )}
           >
