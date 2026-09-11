@@ -12,6 +12,7 @@ out/
 .env
 .env.local
 .env*.local
+!.env.example
 
 # secrets — GitHub App private key 를 리포 안에 떨어뜨려도 커밋되지 않게
 *.pem
@@ -24,6 +25,9 @@ packages/db/generated/
 *.log
 coverage/
 *.tsbuildinfo
+
+# vercel
+.vercel
 
 # local claude instructions
 CLAUDE.local.md
