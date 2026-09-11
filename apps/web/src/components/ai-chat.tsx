@@ -26,19 +26,31 @@ export function AiChatDock({ projectRef, children }: { projectRef: string; child
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="flex gap-4">
+    <div className="flex">
       <div className="min-w-0 flex-1">{children}</div>
 
-      {open ? (
-        // useSearchParams 를 쓰므로 경계를 둔다(정적 렌더 이탈 방지).
+      {/* 패널은 계속 붙어 있고 폭만 0 ↔ 22rem 으로 움직인다. 그래야 본문이 같이
+          부드럽게 줄고(늘고), 닫았다 열어도 대화가 남는다. 여백(ml-4)은 안쪽에
+          둬서 닫혔을 때 같이 접힌다. */}
+      <aside
+        // 닫혀 있을 때 폭 0 짜리 안쪽 버튼·입력창으로 탭 이동이 들어가지 않게.
+        inert={!open}
+        className={cn(
+          "shrink-0 overflow-hidden transition-[width] duration-300 ease-out",
+          open ? "w-[22rem] xl:w-[26rem]" : "w-0"
+        )}
+      >
+        {/* useSearchParams 를 쓰므로 경계를 둔다(정적 렌더 이탈 방지). */}
         <Suspense fallback={null}>
-          <ChatPanel projectRef={projectRef} onClose={() => setOpen(false)} />
+          <ChatPanel projectRef={projectRef} open={open} onClose={() => setOpen(false)} />
         </Suspense>
-      ) : (
+      </aside>
+
+      {!open && (
         <Button
           onClick={() => setOpen(true)}
           title="AI 채팅 열기"
-          className="fixed right-8 bottom-8 z-30 h-11 gap-2 rounded-full px-4 shadow-lg"
+          className="animate-in fade-in zoom-in-95 fixed right-8 bottom-8 z-30 h-11 gap-2 rounded-full px-4 shadow-lg duration-200"
         >
           <Sparkles />
           AI 채팅
@@ -48,7 +60,15 @@ export function AiChatDock({ projectRef, children }: { projectRef: string; child
   );
 }
 
-function ChatPanel({ projectRef, onClose }: { projectRef: string; onClose: () => void }) {
+function ChatPanel({
+  projectRef,
+  open,
+  onClose,
+}: {
+  projectRef: string;
+  open: boolean;
+  onClose: () => void;
+}) {
   const file = useSearchParams().get("file");
 
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -63,7 +83,10 @@ function ChatPanel({ projectRef, onClose }: { projectRef: string; onClose: () =>
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
-  // 화면을 닫으면 진행 중인 요청도 끊는다.
+  // 패널을 닫거나(폭 0) 화면을 떠나면 진행 중인 요청도 끊는다.
+  useEffect(() => {
+    if (!open) abortRef.current?.abort();
+  }, [open]);
   useEffect(() => () => abortRef.current?.abort(), []);
 
   async function send(text: string) {
@@ -115,9 +138,12 @@ function ChatPanel({ projectRef, onClose }: { projectRef: string; onClose: () =>
   }
 
   return (
-    <aside
+    <div
       className={cn(
-        "border-border bg-sidebar flex w-[21rem] shrink-0 flex-col overflow-hidden rounded-lg border xl:w-[25rem]",
+        // 폭은 고정 — 바깥 aside 가 접히는 동안 내용이 찌그러지지 않게. 내용은
+        // 폭이 어느 정도 열린 뒤에 따라 들어온다(delay).
+        "border-border bg-sidebar ml-4 flex w-[21rem] flex-col overflow-hidden rounded-lg border transition-opacity duration-200 xl:w-[25rem]",
+        open ? "opacity-100 delay-150" : "opacity-0",
         PANE_HEIGHT
       )}
     >
@@ -165,7 +191,7 @@ function ChatPanel({ projectRef, onClose }: { projectRef: string; onClose: () =>
             <div
               key={i}
               className={cn(
-                "text-xs leading-relaxed whitespace-pre-wrap",
+                "animate-in fade-in slide-in-from-bottom-1 text-xs leading-relaxed whitespace-pre-wrap duration-200",
                 m.role === "user"
                   ? "bg-primary text-primary-foreground ml-6 rounded-lg px-2.5 py-1.5"
                   : "text-foreground"
@@ -180,44 +206,56 @@ function ChatPanel({ projectRef, onClose }: { projectRef: string; onClose: () =>
         {error && <p className="text-destructive text-xs">{error}</p>}
       </div>
 
+      {/* 입력창: 텍스트 줄과 버튼 줄을 위아래로 나눈다. 한 줄에 나란히 두면
+          textarea 가 2줄이라 아이콘 세로 위치가 어디에도 안 맞는다. */}
       <form
         onSubmit={(e) => {
           e.preventDefault();
           void send(input);
         }}
-        className="border-border flex items-end gap-1.5 border-t p-2"
+        className="border-border shrink-0 border-t p-2"
       >
-        <textarea
-          rows={2}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            // Enter 전송 / Shift+Enter 줄바꿈. 조합 중(한글)에는 가로채지 않는다.
-            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-              e.preventDefault();
-              void send(input);
-            }
-          }}
-          placeholder="무엇이든 물어보세요 (Enter 전송)"
-          className="text-foreground placeholder:text-muted-foreground max-h-32 flex-1 resize-none bg-transparent px-1.5 py-1 text-xs outline-none"
-        />
-        {pending ? (
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="ghost"
-            onClick={() => abortRef.current?.abort()}
-            title="중단"
-            aria-label="중단"
-          >
-            <Square />
-          </Button>
-        ) : (
-          <Button type="submit" size="icon-sm" disabled={!input.trim()} title="보내기">
-            <Send />
-          </Button>
-        )}
+        <div className="border-border bg-background focus-within:border-ring rounded-lg border p-1.5 transition-colors">
+          <textarea
+            rows={2}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              // Enter 전송 / Shift+Enter 줄바꿈. 조합 중(한글)에는 가로채지 않는다.
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                void send(input);
+              }
+            }}
+            placeholder="Ask anything — Enter to send"
+            className="text-foreground placeholder:text-muted-foreground block max-h-32 w-full resize-none bg-transparent px-1 text-xs leading-5 outline-none"
+          />
+          <div className="flex justify-end pt-1">
+            {pending ? (
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="ghost"
+                onClick={() => abortRef.current?.abort()}
+                title="중단"
+                aria-label="중단"
+              >
+                <Square />
+              </Button>
+            ) : (
+              <Button
+                type="submit"
+                size="icon-sm"
+                disabled={!input.trim()}
+                title="보내기"
+                aria-label="보내기"
+              >
+                <Send />
+              </Button>
+            )}
+          </div>
+        </div>
       </form>
-    </aside>
+    </div>
   );
 }
