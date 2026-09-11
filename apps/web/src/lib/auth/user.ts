@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { prisma } from "@dante/db";
@@ -7,17 +8,25 @@ import { createClient } from "@/lib/supabase/server";
 // ⚠️ 서버 전용.
 
 /**
+ * layout·page 가 같은 요청에서 각각 requireUser() 를 부르므로 cache 로 dedup —
+ * getUser() 왕복은 요청당 한 번. redirect 는 캐시 밖(requireUser)에서 던진다.
+ */
+const getAuthUser = cache(async () => {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return user;
+});
+
+/**
  * 로그인한 Supabase 사용자. 없으면 로그인 화면으로 보낸다.
  *
  * getUser() 는 매번 Supabase 서버에 토큰을 검증받는다. getSession() 은 쿠키를
  * 그대로 믿으므로 권한 판단에 쓰면 안 된다.
  */
 export async function requireUser() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+  const user = await getAuthUser();
   if (!user) redirect(LOGIN_PATH);
   return user;
 }
