@@ -46,7 +46,15 @@ const PACKAGE_MANAGERS: PackageManager[] = [
     install: "pnpm install --frozen-lockfile",
     run: "pnpm",
   },
-  { id: "yarn", lockfiles: ["yarn.lock"], install: "yarn install --immutable", run: "yarn" },
+  {
+    id: "yarn",
+    lockfiles: ["yarn.lock"],
+    // 샌드박스 이미지에 node·npm·pnpm·bun·corepack 은 있는데 yarn 만 없다
+    // (2026-09 기준 vercel/sandbox/universal 에서 직접 확인). corepack 이
+    // package.json 의 packageManager 를 보고 맞는 yarn 을 깔아준다.
+    install: "corepack enable && yarn install --immutable",
+    run: "corepack yarn",
+  },
   {
     id: "bun",
     lockfiles: ["bun.lock", "bun.lockb"],
