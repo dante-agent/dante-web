@@ -30,7 +30,7 @@ packages/db   Prisma 6 — 스키마/클라이언트, web·runner 공유 (@dante
 - Prisma 연결 문자열 2개: `DATABASE_URL`(pooler 6543, `?pgbouncer=true&connection_limit=1`) 런타임, `DIRECT_URL`(5432) migrate 전용. 우리 테이블은 `public` 스키마에만. Supabase CLI 마이그레이션과 섞지 않음.
 - Monaco Editor는 SSR에서 깨짐 → `dynamic(() => import(...), { ssr: false })`.
 - GitHub 레포는 Octokit 공식 API로만 읽는다. 크롤링 금지.
-- 사용자 API 키·GitHub 토큰은 평문 저장 금지. Node 내장 `crypto` 로 AES-256-GCM (`ENCRYPTION_KEY`).
+- 비밀값은 평문 저장 금지. Node 내장 `crypto` 로 AES-256-GCM (`ENCRYPTION_KEY`, `src/lib/crypto/secret.ts`). 지금 저장하는 비밀값은 없다 — 사용자 API 키는 사라졌고(Dante 가 프로바이더와 직접 계약) GitHub 은 설치 토큰을 매번 새로 발급받는다. AI 제공자 키는 서버 환경변수로만 둔다.
 - 리포는 `dante-web` / `dante-extension` 2개 유지. 모노레포로 합치지 않음.
 
 ## 커밋 컨벤션
