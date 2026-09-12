@@ -35,12 +35,12 @@ const hack = localFont({
 
 export const metadata: Metadata = {
   title: "Dante",
-  description: "AI 테스트 코드 생성·관리",
+  description: "AI test code generation and management.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="ko" className={`${geist.variable} ${hack.variable}`}>
+    <html lang="en" className={`${geist.variable} ${hack.variable}`}>
       <body>
         <Providers>{children}</Providers>
       </body>

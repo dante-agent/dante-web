@@ -19,8 +19,9 @@ export async function sendFeedback(
   formData: FormData
 ): Promise<FeedbackState> {
   const message = String(formData.get("message") ?? "").trim();
-  if (!message) return { error: "문의 내용을 입력해주세요." };
-  if (message.length > MAX_LENGTH) return { error: `${MAX_LENGTH}자까지 보낼 수 있어요.` };
+  if (!message) return { error: "Enter a message." };
+  if (message.length > MAX_LENGTH)
+    return { error: `Messages can be up to ${MAX_LENGTH} characters.` };
 
   // 보낸 사람은 폼이 아니라 세션에서 읽는다 — 남의 이름으로 문의를 넣지 못하게.
   const user = await requireUser();
@@ -29,7 +30,7 @@ export async function sendFeedback(
   const to = process.env.FEEDBACK_TO_EMAIL;
   if (!apiKey || !to) {
     console.error("[feedback] RESEND_API_KEY / FEEDBACK_TO_EMAIL 이 없다");
-    return { error: "지금은 문의를 받을 수 없어요. 잠시 후 다시 시도해주세요." };
+    return { error: "Feedback is unavailable right now. Try again in a moment." };
   }
 
   const name = displayName(user);
@@ -48,7 +49,7 @@ export async function sendFeedback(
 
   if (error) {
     console.error("[feedback] 전송 실패", error);
-    return { error: "전송에 실패했어요. 잠시 후 다시 시도해주세요." };
+    return { error: "Sending failed. Try again in a moment." };
   }
 
   return { sent: true };
