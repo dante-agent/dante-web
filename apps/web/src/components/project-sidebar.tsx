@@ -8,7 +8,7 @@ import { LayoutDashboard, Folder, Sparkles, Settings } from "lucide-react";
 import { SidebarRail } from "@/components/sidebar-rail";
 
 const ITEMS = [
-  { key: "dashboard", label: "Overview", Icon: LayoutDashboard },
+  { key: "dashboard", label: "Dashboard", Icon: LayoutDashboard },
   { key: "folder", label: "Explorer", Icon: Folder },
   { key: "recommend", label: "AI Recommendations", Icon: Sparkles },
   { key: "settings", label: "Settings", Icon: Settings },
