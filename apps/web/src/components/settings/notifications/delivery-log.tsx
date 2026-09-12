@@ -22,10 +22,12 @@ const SURFACE_LABEL: Record<string, string> = {
   github_check: "check",
 };
 
-const STATUS_MARK: Record<string, string> = {
-  ok: "✅",
-  skipped: "⏭️",
-  failed: "❌",
+// 결과는 글자로 적는다. 기호 하나로 줄이면 스크린리더가 읽을 것이 없고,
+// 성공과 건너뜀이 한눈에 구분되지도 않는다.
+const STATUS_LABEL: Record<string, string> = {
+  ok: "delivered",
+  skipped: "skipped",
+  failed: "failed",
 };
 
 export function DeliveryLog({
@@ -61,7 +63,14 @@ export function DeliveryLog({
                 {SURFACE_LABEL[delivery.surface] ?? delivery.surface}
               </span>
               <span className="min-w-0 flex-1 break-words">
-                {STATUS_MARK[delivery.status] ?? ""} {delivery.detail ?? delivery.status}
+                <span
+                  className={
+                    delivery.status === "failed" ? "text-destructive" : "text-muted-foreground"
+                  }
+                >
+                  {STATUS_LABEL[delivery.status] ?? delivery.status}
+                </span>
+                {delivery.detail && <> — {delivery.detail}</>}
               </span>
 
               {/* 재시도는 실패한 건에만. 성공한 걸 다시 보내면 같은 코멘트를

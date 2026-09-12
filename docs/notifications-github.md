@@ -35,15 +35,15 @@ PR 열림 / 푸시
 
 PR 하나에서 순서대로 일어난다. 개별 알림이 아니라 **하나의 코멘트가 거쳐가는 상태**로 다룬다.
 
-| 키                    | 시점                 | 코멘트 상태   |
-| --------------------- | -------------------- | ------------- |
-| `sync.queued`         | PR 열림·푸시 감지    | ⏳ Queued     |
-| `sync.scanning`       | 컴포넌트 스캔 시작   | 🔍 Scanning   |
-| `test.generating`     | 테스트 생성 시작     | ✍️ Generating |
-| `test.running`        | 러너에 제출          | ▶️ Running    |
-| `test.run.completed`  | 실행 끝              | ✅ / ❌       |
-| `sync.failed`         | 어느 단계든 실패     | ⚠️ Failed     |
-| `component.unchanged` | 변경된 컴포넌트 없음 | (생략 가능)   |
+| 키                    | 시점                 | 코멘트 상태                              |
+| --------------------- | -------------------- | ---------------------------------------- |
+| `sync.queued`         | PR 열림·푸시 감지    | Queued                                   |
+| `sync.scanning`       | 컴포넌트 스캔 시작   | Scanning components                      |
+| `test.generating`     | 테스트 생성 시작     | Generating tests                         |
+| `test.running`        | 러너에 제출          | Running tests                            |
+| `test.run.completed`  | 실행 끝              | all N tests passed / N of M tests failed |
+| `sync.failed`         | 어느 단계든 실패     | could not finish                         |
+| `component.unchanged` | 변경된 컴포넌트 없음 | (생략 가능)                              |
 
 중간 상태를 **같은 코멘트에 덮어쓴다**. 단계마다 새 코멘트를 달면 PR 타임라인이 망가진다.
 
@@ -74,7 +74,7 @@ PR 당 코멘트 **하나**를 만들고 이후에는 계속 수정한다.
 ### 3.3 전부 통과하면 한 줄로 접는다
 
 ```
-✅ Dante — 24 passed · 3 components updated · 12s
+Dante — 24 passed · 3 components updated · 12s
 ```
 
 `<details>` 안에 상세를 넣고 접은 상태로 둔다. 실패가 있을 때만 펼친 상태로 렌더한다.
@@ -84,7 +84,7 @@ PR 당 코멘트 **하나**를 만들고 이후에는 계속 수정한다.
 ```markdown
 <!-- dante:pr-summary -->
 
-### ❌ Dante — 21 / 24 passed
+### Dante — 3 of 24 tests failed
 
 |            |                                         |
 | ---------- | --------------------------------------- |
@@ -116,18 +116,18 @@ PR 당 코멘트 **하나**를 만들고 이후에는 계속 수정한다.
 
 ## 4. PR 코멘트 — 표시 항목 토글
 
-설정 화면에서 켜고 끈다. 기본값은 ✅.
+설정 화면에서 켜고 끈다. 기본값은 켬.
 
 | 항목                        | 기본 | 비고                                               |
 | --------------------------- | ---- | -------------------------------------------------- |
-| 전체 / 성공 / 실패 수       | ✅   | 끄면 제목 줄만 남는다                              |
-| 실패한 테스트 목록          | ✅   | 최대 N 개 (기본 10), 나머지는 `…and 4 more`        |
-| 실패 사유(assertion 메시지) | ✅   | 끄면 테스트 이름만                                 |
-| 변경된 컴포넌트 표          | ✅   | added / changed / removed                          |
-| 커버리지 델타               | ⬜   | base 브랜치 대비. 커버리지 수집이 켜진 경우만 노출 |
-| 소요 시간                   | ✅   |                                                    |
-| 단테 딥링크                 | ✅   | 끌 수 없게 할지 논의 — 제품 유입 경로              |
-| Re-run 링크                 | ✅   |                                                    |
+| 전체 / 성공 / 실패 수       | 켬   | 끄면 제목 줄만 남는다                              |
+| 실패한 테스트 목록          | 켬   | 최대 N 개 (기본 10), 나머지는 `…and 4 more`        |
+| 실패 사유(assertion 메시지) | 켬   | 끄면 테스트 이름만                                 |
+| 변경된 컴포넌트 표          | 켬   | added / changed / removed                          |
+| 커버리지 델타               | 끔   | base 브랜치 대비. 커버리지 수집이 켜진 경우만 노출 |
+| 소요 시간                   | 켬   |                                                    |
+| 단테 딥링크                 | 켬   | 끌 수 없게 할지 논의 — 제품 유입 경로              |
+| Re-run 링크                 | 켬   |                                                    |
 
 > 토글이 8 개면 화면이 지저분하다. **Compact / Detailed 프리셋 2 개**를 위에 두고,
 > "Customize" 를 열면 개별 토글이 나오는 구조를 제안한다.
@@ -149,11 +149,21 @@ PR 당 코멘트 **하나**를 만들고 이후에는 계속 수정한다.
 설정 항목:
 
 - **테스트 실패 시 머지 차단** — 켜면 실패를 `failure` 로, 끄면 `neutral` 로 보고한다.
-- ⚠️ 우리가 직접 머지를 막을 수는 없다. 실제 차단은 레포의 branch protection /
+- 우리가 직접 머지를 막을 수는 없다. 실제 차단은 레포의 branch protection /
   ruleset 에서 `dante` 를 required check 로 추가해야 동작한다.
   → 토글 옆에 **"레포 설정에서 required 로 추가하기"** 딥링크와, 현재 required 인지
   아닌지 감지해서 보여주는 배지를 같이 둔다. 이게 없으면 "켰는데 왜 안 막지?" 문의가 온다.
 - Check 상세 화면의 "Re-run" 버튼 → `check_run.rerequested` 웹훅으로 재실행.
+
+### 끝나지 않는 체크를 만들지 않는다
+
+중간 상태(`in_progress`)는 **결론을 채워줄 쪽이 있을 때만** 만든다. 스캔·생성·실행이
+아직 없으므로, 그때까지는 PR 이벤트를 받자마자 `neutral` 로 닫는다
+(제목 `Not running tests yet`).
+
+in_progress 로 열어두면 GitHub 이 알아서 끝내주지 않아 PR 마다 스피너가 영원히 돌고,
+`dante` 를 required check 로 걸어둔 레포에서는 **테스트가 깨져서가 아니라 끝나지 않아서**
+머지가 막힌다. 러너 콜백이 붙으면 `check-run.ts` 의 `RUNNER_REPORTS_BACK` 을 켠다.
 
 ---
 
@@ -190,12 +200,12 @@ GitHub 문서 범위에서는 하나만 관련된다:
 
 `settings/notifications` 하단. 최근 20 건.
 
-| 시각        | PR  | 표면    | 결과                             |
-| ----------- | --- | ------- | -------------------------------- |
-| 2 min ago   | #42 | comment | ✅ updated                       |
-| 2 min ago   | #42 | check   | ✅ failure                       |
-| 1 hour ago  | #41 | comment | ❌ 403 — resource not accessible |
-| 3 hours ago | #40 | comment | ⏭️ skipped (draft PR)            |
+| 시각        | PR  | 표면    | 결과                                 |
+| ----------- | --- | ------- | ------------------------------------ |
+| 2 min ago   | #42 | comment | delivered — updated                  |
+| 2 min ago   | #42 | check   | delivered — failure                  |
+| 1 hour ago  | #41 | comment | failed — 403 resource not accessible |
+| 3 hours ago | #40 | comment | skipped — draft PR                   |
 
 - 실패한 건은 사유 원문을 그대로 보여준다 (`403 Resource not accessible by integration`
   → 권한 부족, `422` → 코멘트 삭제됨 등).
@@ -217,7 +227,7 @@ GitHub 문서 범위에서는 하나만 관련된다:
 | 레포가 설치에서 빠짐        | 위와 같음                                           |
 | `pull_requests: write` 없음 | "PR 코멘트 권한이 없습니다" + App 권한 승인 링크    |
 | `checks: write` 없음        | "Check 를 만들 수 없습니다" + 위와 같음             |
-| 최근 3 건 연속 전달 실패    | ⚠️ "최근 알림이 전달되지 않았습니다" + 로그 링크    |
+| 최근 3 건 연속 전달 실패    | "최근 알림이 전달되지 않았습니다" + 로그 링크       |
 
 앞의 두 줄은 이미 `lib/github/connection.ts` 가 접어주는 상태를 그대로 쓴다.
 

@@ -12,6 +12,15 @@ import type { NotificationSettings } from "@/lib/notifications/settings";
 /** GitHub 이 받는 이름. 레포의 required check 목록에 이 문자열이 들어간다. */
 export const CHECK_RUN_NAME = "dante";
 
+/**
+ * 러너가 결과를 되돌려주는가.
+ *
+ * 스캔·테스트 생성·실행이 붙고 그 콜백이 `deliverRunSummary` 를 부르게 되면
+ * true 로 바꾼다. 그때부터 중간 상태가 in_progress 로 나가고, 끝나면 같은
+ * 체크에 결론이 채워진다. 그 전에는 끝나지 않는 체크를 만들지 않는다.
+ */
+const RUNNER_REPORTS_BACK = false;
+
 export type CheckConclusion = "success" | "failure" | "neutral" | "skipped" | "cancelled";
 
 export type CheckRunResult = {
@@ -33,6 +42,23 @@ export type CheckRunResult = {
  */
 export function checkRunResult(run: RunSummary, settings: NotificationSettings): CheckRunResult {
   if (!isTerminal(run.status)) {
+    // 끝나지 않은 체크는 누군가 결론을 채워줄 때만 만들어도 된다. 지금은 스캔·
+    // 생성·실행이 없어서 그 "누군가"가 없다 — in_progress 로 두면 PR 마다
+    // 스피너가 영원히 돌고, `dante` 를 required check 로 걸어둔 레포에서는
+    // 테스트가 깨져서가 아니라 끝나지 않아서 머지가 막힌다.
+    //
+    // 그래서 파이프라인이 붙기 전까지는 바로 닫는다. neutral 이라 required 로
+    // 걸려 있어도 아무것도 막지 않고, 자리는 잡아둔다.
+    if (!RUNNER_REPORTS_BACK) {
+      return {
+        status: "completed",
+        conclusion: "neutral",
+        title: "Not running tests yet",
+        summary:
+          "Dante recorded this pull request but does not run tests yet. This check will report a real result once the runner lands.",
+      };
+    }
+
     return {
       status: "in_progress",
       conclusion: null,

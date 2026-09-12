@@ -28,12 +28,19 @@ export function commentMarker(projectRef: string) {
   return `${COMMENT_MARKER}:${projectRef} -->`;
 }
 
-/** 진행 중 상태의 제목 줄. 하나의 코멘트가 이 문구들을 거쳐 간다. */
+/**
+ * 진행 중 상태의 제목 줄. 하나의 코멘트가 이 문구들을 거쳐 간다.
+ *
+ * TODO(파이프라인): 러너가 없는 동안 이 코멘트는 "Queued" 에서 멈춰 있는데,
+ * 같은 PR 의 체크는 "Not running tests yet" 이라고 말한다(check-run.ts 의
+ * RUNNER_REPORTS_BACK). 두 문구가 서로 다른 말을 하는 셈이라 코멘트도 같은
+ * 톤으로 맞춰야 한다. 파이프라인 작업과 함께 한 번에 정리한다.
+ */
 const PROGRESS_LABEL: Record<Exclude<RunStatus, "completed" | "failed" | "unchanged">, string> = {
-  queued: "⏳ Queued",
-  scanning: "🔍 Scanning components",
-  generating: "✍️ Generating tests",
-  running: "▶️ Running tests",
+  queued: "Queued",
+  scanning: "Scanning components",
+  generating: "Generating tests",
+  running: "Running tests",
 };
 
 export function renderPrComment(
@@ -64,7 +71,7 @@ function renderTerminal(run: RunSummary, settings: NotificationSettings) {
 
   if (run.status === "failed") {
     return [
-      "### ⚠️ Dante — could not finish",
+      "### Dante — could not finish",
       "",
       run.error ? blockquote(run.error) : "The run stopped before any tests were reported.",
     ].join("\n");
@@ -74,9 +81,11 @@ function renderTerminal(run: RunSummary, settings: NotificationSettings) {
   const green = failed === 0;
   const fields = settings.prCommentFields;
 
+  // 통과와 실패는 글자로 가른다. 기호를 쓰면 알림 목록이나 메일 제목처럼
+  // 서식이 죽는 자리에서 상태가 통째로 사라진다.
   const title = green
-    ? `### ✅ Dante — ${passed} passed`
-    : `### ❌ Dante — ${passed} / ${total} passed`;
+    ? `### Dante — all ${passed} tests passed`
+    : `### Dante — ${failed} of ${total} tests failed`;
 
   const details = [
     summaryTable(run, fields),
@@ -106,7 +115,7 @@ function oneLine(run: RunSummary, fields: CommentFields) {
     fields.duration && run.durationMs !== null ? formatDuration(run.durationMs) : null,
   ].filter(Boolean);
 
-  return parts.length > 0 ? `✅ Dante — ${parts.join(" · ")}` : "✅ Dante";
+  return parts.length > 0 ? `Dante — ${parts.join(" · ")}` : "Dante";
 }
 
 /**
