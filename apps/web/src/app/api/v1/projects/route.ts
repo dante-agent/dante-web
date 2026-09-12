@@ -12,13 +12,16 @@ export async function GET(request: Request) {
 
   const projects = await prisma.project.findMany({
     where: { userId: token.userId },
-    select: { id: true, name: true, repoOwner: true, repoName: true, defaultBranch: true },
+    select: { ref: true, name: true, repoOwner: true, repoName: true, defaultBranch: true },
     orderBy: { createdAt: "desc" },
   });
 
   return Response.json(
     projects.map((project) => ({
-      id: project.id,
+      // UUID(PK)가 아니라 ref 를 준다. 익스텐션은 이 값을 workspaceState 에 저장해
+      // 계속 되돌려 보내는데, ref 는 웹 URL(/project/<ref>)과 같은 식별자라
+      // 에디터에서 "웹에서 보기" 링크를 서버에 다시 묻지 않고 조립할 수 있다.
+      id: project.ref,
       name: project.name,
       // 익스텐션은 이 값을 git remote 파서(normalizeRepo)에 그대로 넣는다. 그 파서는
       // ssh·https URL 만 알아보므로 `owner/name` 으로 주면 매칭이 조용히 실패한다.
