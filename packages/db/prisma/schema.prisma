@@ -41,6 +41,7 @@ model User {
   projects           Project[]
   extensionAuthCodes ExtensionAuthCode[]
   extensionTokens    ExtensionToken[]
+  aiUsage            AiUsage[]
 
   @@map("users")
 }
@@ -148,6 +149,7 @@ model Project {
   notificationSetting ProjectNotificationSetting?
   pullRequestSurfaces PullRequestSurface[]
   deliveries          NotificationDelivery[]
+  aiUsage             AiUsage[]
 
   /// 같은 레포를 같은 사용자가 두 번 연결하지 못하게 막는다.
   /// TODO(팀 PR): 소유 주체가 User → Team 으로 바뀌면 이 제약도 teamId 기준으로 옮긴다.
@@ -411,4 +413,48 @@ model NotificationDelivery {
 
   @@index([projectId, createdAt])
   @@map("notification_deliveries")
+}
+
+/// AI 호출 1건의 사용량.
+///
+/// BYOK 를 걷어내면서 원가 부담 주체가 사용자에서 Dante 로 넘어왔다. 누가 얼마를
+/// 썼는지 우리가 모르면 청구서를 설명할 수도, 한도를 걸 수도 없다. 그 근거가 이 표다.
+///
+/// 요청 1건 = 1행. 집계 테이블을 따로 두지 않는 이유: 지금 규모에서는 인덱스 하나로
+/// 충분하고, 집계를 미리 접어두면 "이번 달" 경계나 환불 같은 걸 나중에 다시 못 편다.
+model AiUsage {
+  id        String  @id @default(uuid()) @db.Uuid
+  /// 한도가 붙는 주체. 레포를 몇 개 연결하든 한 사람이 쓴 총량이 청구서에 맞닿는다.
+  userId    String  @map("user_id") @db.Uuid
+  /// 어느 프로젝트 맥락이었는지. 프로젝트 없이 부르는 자리가 생길 수 있어 nullable.
+  projectId String? @map("project_id") @db.Uuid
+
+  /// 어디서 불렀는지. "chat" | (나중에) "generate" 등.
+  /// 문자열인 이유는 testFramework 와 같다 — 값이 늘 때마다 마이그레이션하지 않으려고.
+  surface String
+
+  /// 부른 모델 id 그대로. 단가표가 바뀌어도 "그때 무엇을 불렀나"는 남아야
+  /// 과거 원가를 다시 계산할 수 있다.
+  model String
+
+  /// 프로바이더가 준 값. AI SDK 의 LanguageModelUsage 는 전부 number | undefined 라
+  /// 실제로 모를 수 있다. 0 으로 뭉개면 "안 썼다"와 "모른다"가 같아지므로 null 을 남긴다.
+  inputTokens       Int? @map("input_tokens")
+  /// 캐시에서 읽은 입력 토큰. 단가가 1/10 이라 따로 세지 않으면 원가가 부풀려진다.
+  cachedInputTokens Int? @map("cached_input_tokens")
+  outputTokens      Int? @map("output_tokens")
+
+  /// 계산한 원가(USD). 토큰을 모르면 이것도 null 이다.
+  /// Decimal 인 이유: 달러를 Float 로 누적하면 틀린다. 한도 판정에 쓰는 값이라
+  /// 반올림 오차가 "막혔는데 왜 막혔는지 설명이 안 되는" 상황을 만든다.
+  costUsd Decimal? @map("cost_usd") @db.Decimal(12, 6)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  /// "이 사용자가 이번 달 얼마 썼나" 가 가장 잦은 질문이다.
+  @@index([userId, createdAt])
+  @@map("ai_usage")
 }

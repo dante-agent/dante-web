@@ -10,7 +10,9 @@ import type { LanguageModel } from "ai";
 // 모델 id 는 이 파일에만 적는다. 모델은 몇 달마다 바뀌는데 이름이 여러 곳에
 // 흩어져 있으면 바꿀 때 한 곳을 빠뜨린다. engine.ts 는 화면에 보일 이름만 갖고,
 // 그 이름과 실제로 부르는 모델은 따로 움직인다.
-const MODEL = "gpt-5.3-codex";
+// 사용량 기록(usage.ts)과 단가표(pricing.ts)가 같은 값을 봐야 한다. 기록에 남는
+// 모델과 실제로 부른 모델이 어긋나면 원가가 조용히 틀린다.
+export const MODEL = "gpt-5.3-codex";
 
 /**
  * 채팅·생성이 부르는 모델.
