@@ -45,8 +45,9 @@ export default async function DashboardPage({
   const { suite, usage, advisories } = dashboardMock;
   const repoPath = `${project.repoOwner}/${project.repoName}`;
 
+  // p-8: 프로젝트 셸의 <main> 이 여백을 더 이상 주지 않는다 (폴더 보기가 화면을 꽉 써야 해서)
   return (
-    <div className="flex flex-col gap-12">
+    <div className="flex flex-col gap-12 p-8">
       {/* 히어로 — 좌: 프로젝트 사실들, 우: 테스트 스위트 패널 */}
       <div className="grid gap-8 lg:grid-cols-2">
         <div className="flex flex-col justify-center gap-8">

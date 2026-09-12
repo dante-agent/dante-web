@@ -31,22 +31,24 @@ export default async function ProjectSettingsLayout({
   if (!project) notFound();
 
   return (
-    <SettingsShell
-      title="Project"
-      scope={project.name}
-      items={items(projectRef)}
-      footer={
-        <Link
-          href="/account/settings/ai"
-          className="text-muted-foreground hover:text-foreground block text-[13px] leading-relaxed transition-colors duration-[180ms] ease-out"
-        >
-          AI and the editor extension are
-          <span className="underline underline-offset-4"> account settings</span> — one setting for
-          every project.
-        </Link>
-      }
-    >
-      {children}
-    </SettingsShell>
+    <div className="p-8">
+      <SettingsShell
+        title="Project"
+        scope={project.name}
+        items={items(projectRef)}
+        footer={
+          <Link
+            href="/account/settings/ai"
+            className="text-muted-foreground hover:text-foreground block text-[13px] leading-relaxed transition-colors duration-[180ms] ease-out"
+          >
+            AI and the editor extension are
+            <span className="underline underline-offset-4"> account settings</span> — one setting
+            for every project.
+          </Link>
+        }
+      >
+        {children}
+      </SettingsShell>
+    </div>
   );
 }
