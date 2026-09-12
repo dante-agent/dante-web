@@ -9,7 +9,17 @@ import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { ko } from "date-fns/locale";
-import { History, Loader2, Send, Sparkles, Square, SquarePen, Trash2, X } from "lucide-react";
+import {
+  History,
+  Loader2,
+  Send,
+  Sparkles,
+  Square,
+  SquarePen,
+  Trash2,
+  Wallet,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   chatTitle,
@@ -26,6 +36,25 @@ const PANE_HEIGHT = "h-[calc(100svh-47px)]";
 
 /** 헤더에 쓸 짧은 경로 — 상위 폴더 한 단계까지. 전체 경로는 왼쪽 본문에 있다. */
 const shortPath = (path: string) => path.split("/").slice(-2).join("/");
+
+/**
+ * 무엇이 실패했는지. `limit` 은 AI 사용 한도 초과(서버 402)다.
+ *
+ * 한도 초과를 일반 오류와 섞으면 "잠시 후 다시 시도"처럼 읽혀서 사용자가 계속 다시
+ * 보낸다 — 다음 달까지 결과가 같다. 그래서 종류를 들고 다니며 다르게 그린다.
+ */
+type ChatError = { kind: "error" | "limit"; message: string };
+
+/** 서버 상태코드를 catch 까지 들고 가려고 감싼다. fetch 는 !ok 를 throw 하지 않는다. */
+class ResponseError extends Error {
+  constructor(
+    message: string,
+    readonly status: number
+  ) {
+    super(message);
+    this.name = "ResponseError";
+  }
+}
 
 export function AiChatDock({ projectRef, children }: { projectRef: string; children: ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -79,7 +108,7 @@ function ChatPanel({
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ChatError | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   // 지금 쓰고 있는 대화 + 저장된 목록. 목록 보기로 전환하면 이 패널이 목록을 덮는다.
@@ -148,7 +177,10 @@ function ChatPanel({
       if (!response.ok || !response.body) {
         const body: unknown = await response.json().catch(() => null);
         const message = (body as { error?: string } | null)?.error;
-        throw new Error(message ?? "응답을 받지 못했습니다.\n잠시 후 다시 시도해주세요.");
+        throw new ResponseError(
+          message ?? "응답을 받지 못했습니다.\n잠시 후 다시 시도해주세요.",
+          response.status
+        );
       }
 
       const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
@@ -163,9 +195,11 @@ function ChatPanel({
     } catch (e) {
       // 사용자가 중단한 것이면 여기까지 받은 답을 그대로 남긴다.
       if (!(e instanceof Error && e.name === "AbortError")) {
-        setError(
-          e instanceof Error ? e.message : "요청에 실패했습니다.\n잠시 후 다시 시도해주세요."
-        );
+        setError({
+          kind: e instanceof ResponseError && e.status === 402 ? "limit" : "error",
+          message:
+            e instanceof Error ? e.message : "요청에 실패했습니다.\n잠시 후 다시 시도해주세요.",
+        });
         // 한 글자도 못 받은 말풍선은 지운다.
         setMessages((prev) => prev.filter((m, i) => i !== prev.length - 1 || m.content !== ""));
       }
@@ -284,11 +318,21 @@ function ChatPanel({
           )}
 
           {/* 오류 문구는 서버가 준 줄바꿈(\n)을 그대로 살린다 — 한 줄로 이어 붙으면 읽기 힘들다. */}
-          {error && (
-            <p className="text-destructive text-sm leading-relaxed wrap-break-word whitespace-pre-line">
-              {error}
-            </p>
-          )}
+          {error &&
+            (error.kind === "limit" ? (
+              // 한도 초과는 고장이 아니라 계정 상태다. destructive(빨강)로 칠하면 "일시적
+              // 오류"로 읽히니 테두리 있는 안내 블록으로 둔다 — 눈에는 띄지만 경고색은 아니다.
+              // 입력창은 막지 않는다: 이 상태는 서버가 판정하는 것이고(한도를 올렸거나 달이
+              // 바뀌었을 수 있다) 화면이 들고 있는 값은 이미 지난 정보다.
+              <div className="border-border bg-background text-muted-foreground flex gap-2 rounded-lg border p-3 text-sm leading-relaxed">
+                <Wallet className="text-brand-orange mt-0.5 size-4 shrink-0" />
+                <p className="wrap-break-word whitespace-pre-line">{error.message}</p>
+              </div>
+            ) : (
+              <p className="text-destructive text-sm leading-relaxed wrap-break-word whitespace-pre-line">
+                {error.message}
+              </p>
+            ))}
         </div>
       )}
 
