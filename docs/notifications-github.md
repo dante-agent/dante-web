@@ -155,6 +155,16 @@ Dante — 24 passed · 3 components updated · 12s
   아닌지 감지해서 보여주는 배지를 같이 둔다. 이게 없으면 "켰는데 왜 안 막지?" 문의가 온다.
 - Check 상세 화면의 "Re-run" 버튼 → `check_run.rerequested` 웹훅으로 재실행.
 
+### 끝나지 않는 체크를 만들지 않는다
+
+중간 상태(`in_progress`)는 **결론을 채워줄 쪽이 있을 때만** 만든다. 스캔·생성·실행이
+아직 없으므로, 그때까지는 PR 이벤트를 받자마자 `neutral` 로 닫는다
+(제목 `Not running tests yet`).
+
+in_progress 로 열어두면 GitHub 이 알아서 끝내주지 않아 PR 마다 스피너가 영원히 돌고,
+`dante` 를 required check 로 걸어둔 레포에서는 **테스트가 깨져서가 아니라 끝나지 않아서**
+머지가 막힌다. 러너 콜백이 붙으면 `check-run.ts` 의 `RUNNER_REPORTS_BACK` 을 켠다.
+
 ---
 
 ## 6. 알림 제어
