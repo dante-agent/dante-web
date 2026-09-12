@@ -21,8 +21,8 @@ import {
 } from "@/lib/chat-history";
 import { cn } from "@/lib/utils";
 
-/** 본문과 같은 높이. file-view / folder-empty-state 와 같은 값이다. */
-const PANE_HEIGHT = "h-[calc(100svh-7rem)]";
+/** 본문과 같은 높이(헤더 47px 만 빼면 화면 끝까지). file-view / folder-empty-state 와 같은 값. */
+const PANE_HEIGHT = "h-[calc(100svh-47px)]";
 
 /** 헤더에 쓸 짧은 경로 — 상위 폴더 한 단계까지. 전체 경로는 왼쪽 본문에 있다. */
 const shortPath = (path: string) => path.split("/").slice(-2).join("/");
@@ -35,8 +35,8 @@ export function AiChatDock({ projectRef, children }: { projectRef: string; child
       <div className="min-w-0 flex-1">{children}</div>
 
       {/* 패널은 계속 붙어 있고 폭만 0 ↔ 22rem 으로 움직인다. 그래야 본문이 같이
-          부드럽게 줄고(늘고), 닫았다 열어도 대화가 남는다. 여백(ml-4)은 안쪽에
-          둬서 닫혔을 때 같이 접힌다. */}
+          부드럽게 줄고(늘고), 닫았다 열어도 대화가 남는다. 본문과는 border-l 한 줄로만
+          나눈다 — 여백을 두면 에디터가 화면 끝까지 못 간다. */}
       <aside
         // 닫혀 있을 때 폭 0 짜리 안쪽 버튼·입력창으로 탭 이동이 들어가지 않게.
         inert={!open}
@@ -190,14 +190,15 @@ function ChatPanel({
   return (
     <div
       className={cn(
-        // 폭은 고정 — 바깥 aside 가 접히는 동안 내용이 찌그러지지 않게. 내용은
-        // 폭이 어느 정도 열린 뒤에 따라 들어온다(delay).
-        "border-border bg-sidebar ml-4 flex w-[21rem] flex-col overflow-hidden rounded-lg border transition-opacity duration-200 xl:w-[25rem]",
+        // 폭은 바깥 aside 와 같은 값으로 고정 — aside 가 접히는 동안 내용이 찌그러지지
+        // 않게. 내용은 폭이 어느 정도 열린 뒤에 따라 들어온다(delay).
+        "border-border bg-sidebar flex w-[22rem] flex-col overflow-hidden border-l transition-opacity duration-200 xl:w-[26rem]",
         open ? "opacity-100 delay-150" : "opacity-0",
         PANE_HEIGHT
       )}
     >
-      <header className="border-border flex h-10 shrink-0 items-center gap-1.5 border-b px-2.5 text-sm">
+      {/* h-9 = 왼쪽 본문 헤더 행(2.25rem)과 같은 높이 — 사이가 border-l 한 줄이라 선이 맞아야 한다 */}
+      <header className="border-border flex h-9 shrink-0 items-center gap-1.5 border-b px-2.5 text-sm">
         <Sparkles className="text-brand-orange size-4" />
         <span className="font-semibold">AI 채팅</span>
         {file && !showHistory && (

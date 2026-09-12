@@ -87,7 +87,7 @@ export function FileTree({ entries }: { entries: FileEntry[] }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
-      {/* 접기 버튼(SubSidebar absolute top-2 right-2)·메인 레일 아이템과 같은 선. pr-12 로 버튼과 겹침 회피 */}
+      {/* 접기 버튼(SubSidebar absolute top-2 right-1)·메인 레일 아이템과 같은 선. pr-12 로 겹침 회피 */}
       <div className="-mt-1 flex h-9 items-center gap-1 pr-12">
         {FILTERS.map(({ key, label, title }) => (
           <button
