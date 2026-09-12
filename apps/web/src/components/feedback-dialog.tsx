@@ -20,11 +20,11 @@ function FeedbackForm({ onDone }: { onDone: () => void }) {
     return (
       <div className="flex flex-col gap-4">
         <p className="text-muted-foreground text-sm">
-          문의가 전달됐어요. 답변은 가입하신 이메일로 보내드립니다.
+          Your message has been sent. We will reply to the email you signed up with.
         </p>
         <div className="flex justify-end">
           <Button type="button" size="sm" onClick={onDone}>
-            닫기
+            Close
           </Button>
         </div>
       </div>
@@ -39,7 +39,7 @@ function FeedbackForm({ onDone }: { onDone: () => void }) {
         autoFocus
         rows={6}
         maxLength={5000}
-        placeholder="무엇이 불편했는지, 무엇이 필요한지 적어주세요."
+        placeholder="Tell us what went wrong or what you need."
         aria-invalid={state?.error ? true : undefined}
         className="border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:bg-input/30 w-full resize-none rounded-lg border bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-3 aria-invalid:ring-3"
       />
@@ -52,10 +52,10 @@ function FeedbackForm({ onDone }: { onDone: () => void }) {
 
       <div className="flex justify-end gap-2">
         <Dialog.Close render={<Button type="button" variant="ghost" size="sm" />}>
-          취소
+          Cancel
         </Dialog.Close>
         <Button type="submit" size="sm" disabled={pending}>
-          {pending ? "보내는 중…" : "보내기"}
+          {pending ? "Sending…" : "Send"}
         </Button>
       </div>
     </form>
@@ -72,9 +72,9 @@ export function FeedbackDialog() {
         <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/40 transition-opacity duration-150 data-ending-style:opacity-0 data-starting-style:opacity-0" />
         <Dialog.Popup className="border-border bg-popover fixed top-1/2 left-1/2 z-50 flex w-[28rem] max-w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 rounded-xl border p-5 shadow-lg transition-[scale,opacity] duration-100 ease-out outline-none data-ending-style:scale-[0.98] data-ending-style:opacity-0 data-starting-style:scale-[0.98] data-starting-style:opacity-0">
           <div className="flex flex-col gap-1">
-            <Dialog.Title className="text-base font-medium">서비스팀에 문의하기</Dialog.Title>
+            <Dialog.Title className="text-base font-medium">Contact the team</Dialog.Title>
             <Dialog.Description className="text-muted-foreground text-[13px]">
-              버그 제보나 의견을 남겨주시면 팀이 직접 확인합니다.
+              Report a bug or share feedback. The team reads every message.
             </Dialog.Description>
           </div>
 
