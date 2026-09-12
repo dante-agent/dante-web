@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createTextStreamResponse, streamText, type ModelMessage } from "ai";
+import { getMonthlyBudgetStatus } from "@/lib/ai/budget";
 import { chatModel } from "@/lib/ai/chat-model";
 import { recordAiUsage } from "@/lib/ai/usage";
 import { getFileText } from "@/lib/github/blob";
@@ -52,6 +53,29 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: "요청 형식이 올바르지 않습니다.\n새 대화로 다시 시도해주세요." },
       { status: 400 }
+    );
+  }
+
+  // 모델을 부르기 전에 이번 달 한도를 본다. 원가는 Dante 가 낸다 — 여기서 막지 않으면
+  // 로그인한 사람이 무제한으로 우리 청구서를 늘릴 수 있다.
+  //
+  // 레포 파일을 읽기 전에 검사하는 이유: 막힐 요청에 GitHub API 호출을 태울 필요가 없다.
+  //
+  // 상태코드는 402(Payment Required). 429(Too Many Requests)와 고민했는데, 429 는
+  // "잠깐 기다렸다 다시 하라"는 뜻이고 클라이언트·프록시·SDK 가 그 신호를 보고 자동
+  // 재시도한다. 여기서 재시도는 다음 달까지 아무 의미가 없어서(한도는 시간이 아니라 돈으로
+  // 끊긴다) 오히려 해롭다. 402 는 RFC 9110 에서 아직 "reserved" 지만 실무에서는 "결제·쿼터
+  // 문제라 재시도해도 안 된다"는 뜻으로 굳었다. 나중에 분당 호출 제한을 붙이면 그건 429 로
+  // 두면 되고, 두 상황이 상태코드로 구분되는 게 클라이언트 입장에서도 낫다.
+  const budget = await getMonthlyBudgetStatus(user.id);
+  if (budget.exceeded) {
+    return NextResponse.json(
+      {
+        error:
+          `이번 달 AI 사용 한도($${budget.limitUsd})를 모두 썼습니다.\n` +
+          `한도는 매월 1일에 초기화됩니다. 더 필요하면 문의해주세요.`,
+      },
+      { status: 402 }
     );
   }
 
