@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 // 목록 자리만 뼈대로 채운다. SplitShell 이 본문을 세로 중앙에 놓기 때문에 높이가
 // 크게 달라지면 머리말이 위아래로 튄다. 그래서 치수는 RepoPicker 를 따른다:
 //   필터 줄 h-9 · 목록 mt-3 · 행 px-6 py-4 · 이름 15px 한 줄 + mt-1 + 메타 11px 한 줄
+// 행 오른쪽에는 버튼이 없다 — 행 전체가 클릭 대상이라 뼈대도 왼쪽 두 줄만 그린다.
 // 줄 높이는 h-[1lh] 로 잡는다 — 그 글자 크기의 line-height 와 정확히 같아진다.
 const NAME_WIDTHS = ["w-40", "w-28", "w-48", "w-32", "w-36"];
 
@@ -47,8 +48,6 @@ export default function Loading() {
                     <Skeleton className="h-2.5 w-24 rounded-[2px]" />
                   </div>
                 </div>
-                {/* Import 버튼 (outline · sm) 자리 */}
-                <Skeleton className="h-7 w-16 rounded-[4px]" />
               </li>
             ))}
           </ul>

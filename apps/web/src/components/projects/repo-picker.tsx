@@ -3,9 +3,8 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
-import { Lock, Search } from "lucide-react";
+import { ArrowRight, Lock, Search } from "lucide-react";
 import { importRepo } from "@/app/projects/(onboarding)/new/github/actions";
-import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -18,8 +17,9 @@ import type { InstallationRepo } from "@/lib/github/repos";
 
 // 설치가 열어준 레포 목록.
 //
-// 행마다 Import 버튼을 둔다 (Vercel 방식). "선택 → 하단 버튼" 2단계보다 클릭이
-// 하나 적고, 어떤 레포를 고른 상태인지 기억할 필요가 없다.
+// 행 전체가 하나의 클릭 대상이다 (행 안의 Import 버튼을 없앴다). "선택 → 하단
+// 버튼" 2단계보다 클릭이 하나 적고, 어떤 레포를 고른 상태인지 기억할 필요가 없다.
+// 작은 버튼 하나보다 행 전체가 과녁이면 조준할 필요도 없다.
 //
 // 생김새는 CodeRabbit 기준 — 각진 테두리(radius 0), 행 사이는 헤어라인,
 // 기술적인 메타데이터는 Hack mono (DESIGN.md §3).
@@ -157,13 +157,19 @@ function RepoRow({
   projectRef?: string;
   installationId?: string;
 }) {
+  // 클릭 대상은 행을 덮는 투명한 레이어다. 이름·메타를 버튼 안에 넣는 방법도
+  // 있지만 <button> 은 블록 요소를 담을 수 없고(p 두 줄이 들어간다), 서버 액션
+  // 폼도 그대로 써야 한다. 레이어를 콘텐츠 다음에 두면 위로 얹혀서 텍스트를
+  // 눌러도 이 레이어가 받는다 — 행 안에 다른 클릭 대상은 없다.
+  const overlay = "absolute inset-0 cursor-pointer outline-none disabled:cursor-not-allowed";
+
   return (
-    <li className="group hover:bg-muted/30 relative flex items-center gap-4 px-6 py-4 transition-colors duration-[180ms] ease-out">
+    <li className="group hover:bg-muted/30 has-[:focus-visible]:bg-muted/30 relative flex items-center gap-4 px-6 py-4 transition-colors duration-[180ms] ease-out has-[:focus-visible]:inset-ring-2 has-[:focus-visible]:inset-ring-[#ff570a]/40">
       {/* 왼쪽 액센트 바. 세로로 펼쳐지며 들어온다 — CodeRabbit 활성 표시와 같은 장치.
           420ms expo-out 은 칸 확장용이고, 이런 작은 요소는 180ms 가 맞다. */}
       <span
         aria-hidden="true"
-        className="absolute inset-y-0 left-0 w-0.5 origin-center scale-y-0 bg-[#ff570a] transition-transform duration-[180ms] ease-out group-hover:scale-y-100 motion-reduce:transition-none"
+        className="absolute inset-y-0 left-0 w-0.5 origin-center scale-y-0 bg-[#ff570a] transition-transform duration-[180ms] ease-out group-hover:scale-y-100 group-has-[:focus-visible]:scale-y-100 motion-reduce:transition-none"
       />
       <div className="min-w-0 flex-1">
         <p className="flex items-center gap-2 truncate text-[15px] font-medium">
@@ -176,32 +182,31 @@ function RepoRow({
         </p>
       </div>
 
+      {projectRef && (
+        <span className="text-brand-mint font-mono text-[10px] font-bold tracking-[0.12em]">
+          CONNECTED
+        </span>
+      )}
+
+      {/* 버튼이 없어진 자리. 행이 눌리는 곳임을 알려주는 유일한 힌트라서 hover
+          뿐 아니라 키보드 포커스에도 같이 나온다. */}
+      <ArrowRight
+        aria-hidden="true"
+        className="text-muted-foreground size-4 shrink-0 -translate-x-1 opacity-0 transition-all duration-[180ms] ease-out group-hover:translate-x-0 group-hover:opacity-100 group-has-[:disabled]:hidden group-has-[:focus-visible]:translate-x-0 group-has-[:focus-visible]:opacity-100 motion-reduce:transition-none"
+      />
+
       {projectRef ? (
-        <>
-          <span className="text-brand-mint font-mono text-[10px] font-bold tracking-[0.12em]">
-            CONNECTED
-          </span>
-          <Link
-            href={`/project/${projectRef}/dashboard`}
-            className={buttonVariants({ variant: "ghost", size: "sm", className: "rounded-[4px]" })}
-          >
-            Open
-          </Link>
-        </>
+        <Link href={`/project/${projectRef}/dashboard`} className={overlay}>
+          <span className="sr-only">Open {repo.name}</span>
+        </Link>
       ) : (
         // 서버 액션. 폼으로 보내야 CSRF 보호가 자동으로 걸리고 JS 없이도 동작한다.
-        <form action={importRepo}>
+        <form action={importRepo} className="absolute inset-0">
           <input type="hidden" name="repoId" value={repo.id} />
           <input type="hidden" name="installationId" value={installationId ?? ""} />
-          <Button
-            type="submit"
-            variant="outline"
-            size="sm"
-            className="rounded-[4px]"
-            disabled={!installationId}
-          >
-            Import
-          </Button>
+          <button type="submit" className={overlay} disabled={!installationId}>
+            <span className="sr-only">Import {repo.name}</span>
+          </button>
         </form>
       )}
     </li>
