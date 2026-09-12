@@ -166,7 +166,7 @@ function Cell({
 }
 
 const GRID =
-  "border-border relative grid h-[calc(100svh-7rem)] grid-cols-2 grid-rows-[2.25rem_2.25rem_minmax(0,1fr)] overflow-hidden rounded-lg border";
+  "border-border relative grid h-[calc(100svh-47px)] grid-cols-2 grid-rows-[2.25rem_2.25rem_minmax(0,1fr)] overflow-hidden";
 
 function FileHeading({ name }: { name: string }) {
   return (

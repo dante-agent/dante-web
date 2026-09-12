@@ -18,11 +18,12 @@ export default async function ProjectLayout({
 
   // <main> 은 여기 한 곳에만 둔다. 페이지마다 반복하지 않는다.
   // 메인 사이드바는 fixed(콘텐츠 위로 덮음)라 <main> 은 접힌 폭만큼 ml-14 로 비켜둔다.
+  // 여백은 섹션이 각자 준다 — 폴더 보기는 에디터를 화면 끝까지 채워야 해서 0 이다.
   return (
     <div className="min-h-svh pt-[47px]">
       <AppHeader project={project} projects={projects} user={headerUser} />
       <ProjectSidebar />
-      <main className="ml-14 p-8">{children}</main>
+      <main className="ml-14">{children}</main>
     </div>
   );
 }

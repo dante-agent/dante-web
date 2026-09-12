@@ -33,7 +33,7 @@ export default async function DashboardPage({
     dashboardMock;
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 p-8">
       {/* 프로젝트 정보 */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
