@@ -28,7 +28,14 @@ export function commentMarker(projectRef: string) {
   return `${COMMENT_MARKER}:${projectRef} -->`;
 }
 
-/** 진행 중 상태의 제목 줄. 하나의 코멘트가 이 문구들을 거쳐 간다. */
+/**
+ * 진행 중 상태의 제목 줄. 하나의 코멘트가 이 문구들을 거쳐 간다.
+ *
+ * TODO(파이프라인): 러너가 없는 동안 이 코멘트는 "Queued" 에서 멈춰 있는데,
+ * 같은 PR 의 체크는 "Not running tests yet" 이라고 말한다(check-run.ts 의
+ * RUNNER_REPORTS_BACK). 두 문구가 서로 다른 말을 하는 셈이라 코멘트도 같은
+ * 톤으로 맞춰야 한다. 파이프라인 작업과 함께 한 번에 정리한다.
+ */
 const PROGRESS_LABEL: Record<Exclude<RunStatus, "completed" | "failed" | "unchanged">, string> = {
   queued: "Queued",
   scanning: "Scanning components",
