@@ -1,10 +1,11 @@
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@dante/db";
+import { EngineCards } from "@/components/ai/engine-cards";
 import { BackLink } from "@/components/projects/back-link";
 import { StepHeader } from "@/components/projects/step-header";
 import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth/user";
-import { ENGINE } from "@/lib/ai/engine";
+import { ACTIVE_ENGINE } from "@/lib/ai/engine";
 import { finishSetup } from "../actions";
 
 // 온보딩 4단계 — 무엇이 테스트를 쓰는지 알리고 끝낸다.
@@ -37,7 +38,7 @@ export default async function AiPage({ params }: PageProps<"/projects/setup/[pro
       </div>
 
       <StepHeader
-        title={`${ENGINE.name} writes your tests`}
+        title={`${ACTIVE_ENGINE.name} writes your tests`}
         description="Already connected — there is no key to paste and nothing to install."
       />
 
@@ -45,10 +46,15 @@ export default async function AiPage({ params }: PageProps<"/projects/setup/[pro
         {project.repoOwner}/{project.repoName}
       </p>
 
+      <div className="mt-6">
+        <EngineCards />
+      </div>
+
       {/* 누를 것이 하나뿐이라 클라이언트 컴포넌트가 필요 없다 — 폼이 서버 액션을
           그대로 부른다. 실패 경로가 없으므로(소유 검사에 걸리면 404) 돌려줄
-          상태도 없고, useActionState 도 쓰지 않는다. */}
-      <form action={finishSetup} className="mt-10">
+          상태도 없고, useActionState 도 쓰지 않는다. 고를 엔진이 하나라 폼에
+          실어 보낼 값도 없다 — 어느 엔진을 부를지는 서버가 안다. */}
+      <form action={finishSetup} className="mt-6">
         <input type="hidden" name="projectRef" value={projectRef} />
         <Button type="submit" size="lg" className="w-full rounded-[4px]">
           Finish
