@@ -58,7 +58,8 @@ export async function GET(
 
   return Response.json(
     project.components.map((component) => {
-      const run = component.testFiles[0]?.versions[0]?.runs[0] ?? null;
+      const testFile = component.testFiles[0] ?? null;
+      const run = testFile?.versions[0]?.runs[0] ?? null;
 
       return {
         id: component.id,
@@ -69,7 +70,10 @@ export async function GET(
         // 열이 생기기 전에 아무 값이나 채우면 익스텐션이 웹과 다른 해시를 비교하게 되어
         // 모든 컴포넌트가 영원히 스테일로 보인다.
         sourceSha: null,
-        testStatus: toTestStatus(run?.status),
+        // 테스트 파일 자체가 없을 때만 none 이다. 익스텐션은 none 을 트리에
+        // "테스트 없음" 으로 적으므로, 테스트는 있는데 아직 안 돌린 경우까지
+        // none 으로 주면 있는 테스트가 없는 것처럼 보인다.
+        testStatus: testFile ? toTestStatus(run?.status) : "none",
         lastRunAt: run ? (run.finishedAt ?? run.createdAt).toISOString() : null,
       };
     })
@@ -88,7 +92,7 @@ export async function GET(
  * "실행 자체가 실패함"은 둘 다 통과·실패로 말할 수 없는 상태다.
  */
 function toTestStatus(status: string | undefined) {
-  if (status === undefined) return "none"; // 테스트 파일이 없거나 한 번도 돌리지 않았다
+  if (status === undefined) return "unknown"; // 테스트는 있는데 아직 돌린 적이 없다
   if (status === "passed") return "passed";
   if (status === "failed") return "failed";
   return "unknown";
