@@ -2,10 +2,12 @@ import { format } from "date-fns";
 import { notFound } from "next/navigation";
 import { FlaskConical, GitBranch, Clock, FileCode2 } from "lucide-react";
 import { GitHubIcon } from "@/components/brand-icons";
+import { getMonthlyProjectAiUsage } from "@/lib/ai/usage-queries";
 import { requireUser } from "@/lib/auth/user";
 import type { ConnectionStatus } from "@/lib/github/connection";
-import { getDashboardProject } from "@/lib/projects/queries";
+import { getDashboardProject, getOwnedProjectId } from "@/lib/projects/queries";
 import { AdvisorSection } from "./_components/advisor-section";
+import { AiUsageSection } from "./_components/ai-usage-section";
 import { CopyButton } from "./_components/copy-button";
 import { GetStarted } from "./_components/get-started";
 import { HeroStat, StatusDots } from "./_components/hero-stat";
@@ -37,10 +39,18 @@ export default async function DashboardPage({
 }: PageProps<"/project/[projectRef]/dashboard">) {
   const { projectRef } = await params;
   const user = await requireUser();
-  const project = await getDashboardProject(projectRef, user.id);
+  // 사용량은 내부 id 로 집계한다. DashboardProject 에는 id 가 없어서
+  // (ref 만 화면으로 내보내는 게 그 타입의 뜻이다) 한 번 더 읽는다 —
+  // getOwnedProjectId 는 cache 라 같은 요청 안에서는 왕복이 한 번이다.
+  const [project, projectId] = await Promise.all([
+    getDashboardProject(projectRef, user.id),
+    getOwnedProjectId(projectRef, user.id),
+  ]);
   // 레이아웃이 이미 소유를 확인했으므로 여기서 없을 일은 사실상 없다.
   // 그래도 타입을 좁혀야 하고, 사이에 레포가 지워졌다면 404 가 맞는 답이다.
-  if (!project) notFound();
+  if (!project || !projectId) notFound();
+
+  const aiUsage = await getMonthlyProjectAiUsage(projectId);
 
   const { suite, usage, advisories } = dashboardMock;
   const repoPath = `${project.repoOwner}/${project.repoName}`;
@@ -112,6 +122,8 @@ export default async function DashboardPage({
         to={usage.to}
         passRate={suite.passRate}
       />
+
+      <AiUsageSection usage={aiUsage} />
 
       <AdvisorSection advisories={advisories} projectRef={projectRef} />
 
