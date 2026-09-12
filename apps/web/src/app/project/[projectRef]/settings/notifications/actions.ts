@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@dante/db";
 import { requireUser } from "@/lib/auth/user";
+import { invalidateRepoLookups } from "@/lib/github/lookup-cache";
 import {
   errorDetail,
   fetchHeadCommitMessage,
@@ -87,6 +88,9 @@ export async function saveGithubNotifications(
   };
 
   await saveNotificationSettings(project.id, patch);
+  // "머지 차단"을 켜는 사람은 대개 막 GitHub 에서 룰셋을 걸고 온 참이다.
+  // required check 상태를 캐시된 옛 값이 아니라 지금 값으로 보여준다.
+  invalidateRepoLookups(project.ref);
   revalidatePath(settingsPath(project.ref));
   return { saved: true };
 }

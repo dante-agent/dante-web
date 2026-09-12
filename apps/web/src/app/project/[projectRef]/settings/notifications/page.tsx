@@ -11,12 +11,14 @@ import { ComingSoon, SettingsHeader } from "@/components/settings/settings-secti
 import { requireUser } from "@/lib/auth/user";
 import { installationSettingsUrl } from "@/lib/github/app";
 import { connectionNotice, projectConnection } from "@/lib/github/connection";
+import { cachedRepoLookup, repoLookupKey } from "@/lib/github/lookup-cache";
 import { checkRequiredStatus, installationClient } from "@/lib/github/pull-request";
 import { danteLinks } from "@/lib/notifications/links";
 import { SAMPLE_RUNS } from "@/lib/notifications/run-summary";
 import { isSnoozed, toNotificationSettings } from "@/lib/notifications/settings";
 import { notificationBadges } from "@/lib/notifications/status";
 import { recentDeliveries } from "@/lib/notifications/store";
+import type { ProjectRepo } from "@/lib/projects/queries";
 
 // 알림 — 언제, 어디로 알릴지.
 //
@@ -129,21 +131,21 @@ export default async function ProjectNotificationsPage({
 /**
  * `dante` 가 required check 인지 확인한다.
  *
- * 화면을 그릴 때마다 GitHub 을 한 번 부른다. 실패해도 페이지는 떠야 하므로
- * (설치가 막 끊겼거나 GitHub 이 느릴 수 있다) 모르면 "unknown" 으로 둔다.
+ * GitHub 을 부르되 결과는 몇 분 캐시한다(lib/github/lookup-cache.ts) — 알림
+ * 설정을 저장하면 비워진다. 실패해도 페이지는 떠야 하므로 (설치가 막 끊겼거나
+ * GitHub 이 느릴 수 있다) 모르면 "unknown" 으로 둔다. 실패는 캐시되지 않는다.
  */
-async function requiredCheckStatus(project: {
-  repoOwner: string;
-  repoName: string;
-  defaultBranch: string;
-  installationId: bigint;
-}) {
+async function requiredCheckStatus(project: ProjectRepo & { ref: string }) {
   try {
-    const octokit = await installationClient(project.installationId);
-    return await checkRequiredStatus(
-      octokit,
-      { owner: project.repoOwner, repo: project.repoName },
-      project.defaultBranch
+    return await cachedRepoLookup(
+      "required-check",
+      repoLookupKey(project.ref, project),
+      async (key) =>
+        checkRequiredStatus(
+          await installationClient(Number(key.installationId)),
+          { owner: key.owner, repo: key.repo },
+          key.branch
+        )
     );
   } catch {
     return "unknown" as const;

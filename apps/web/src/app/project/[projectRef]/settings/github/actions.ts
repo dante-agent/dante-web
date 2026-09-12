@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@dante/db";
 import { requireUser } from "@/lib/auth/user";
+import { invalidateRepoLookups } from "@/lib/github/lookup-cache";
 import { listInstallationRepos } from "@/lib/github/repos";
 
 /**
@@ -42,6 +43,10 @@ export async function recheckConnection(
   if (!project) {
     return { ok: false, message: "Project not found." };
   }
+
+  // 연결 상태가 바뀌었을 수 있으니, 끊기기 전에 캐시해 둔 GitHub 조회 결과
+  // (runtime 기본값·required check)도 버리고 다음에 새로 받게 한다.
+  invalidateRepoLookups(projectRef);
 
   let repos;
   try {

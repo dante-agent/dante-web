@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@dante/db";
 import { requireUser } from "@/lib/auth/user";
+import { invalidateRepoLookups } from "@/lib/github/lookup-cache";
 import { detectRuntimeCommands } from "@/lib/projects/detect-runtime";
 import { DEFAULT_TIMEOUT_MS, validateRuntimeInput } from "@/lib/projects/runtime";
 
@@ -58,7 +59,7 @@ export async function saveRuntimeSettings(
   //
   // 화면이 쓴 것과 같은 기본값이어야 한다 — 그래서 여기서도 레포를 다시 본다.
   // (같은 요청 안이라면 react cache 가 GitHub 왕복을 한 번으로 줄인다.)
-  const defaults = await detectRuntimeCommands(project, project.testFramework);
+  const defaults = await detectRuntimeCommands(project.ref, project, project.testFramework);
   const resolved = {
     installCommand: installCommand || defaults.install,
     testCommand: testCommand || defaults.test,
@@ -79,6 +80,9 @@ export async function saveRuntimeSettings(
     },
   });
 
+  // 저장은 "지금 레포 기준으로 다시 봐" 의 기회이기도 하다. 레포에 lockfile 을
+  // 막 바꾸고 온 사용자가 몇 분 캐시 때문에 옛 기본값을 보지 않게 한다.
+  invalidateRepoLookups(project.ref);
   revalidatePath(settingsPath(project.ref));
   return { saved: true };
 }
