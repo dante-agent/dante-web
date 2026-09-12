@@ -86,6 +86,23 @@ export type ProjectRepo = {
   installationId: bigint;
 };
 
+/**
+ * ref 가 내 프로젝트면 내부 id, 아니면 null.
+ *
+ * ProjectRepo 에 id 를 끼워 넣지 않은 이유: 그 타입은 "GitHub 호출에 필요한 필드"
+ * 라서, 관계없는 값이 섞이면 무엇을 위한 묶음인지가 흐려진다. 사용량 기록처럼
+ * 내부 id 만 필요한 자리가 따로 있으니 조회도 따로 둔다.
+ */
+export const getOwnedProjectId = cache(
+  async (ref: string, userId: string): Promise<string | null> => {
+    const row = await prisma.project.findFirst({
+      where: { ref, userId },
+      select: { id: true },
+    });
+    return row?.id ?? null;
+  }
+);
+
 /** layout·page 가 같은 요청에서 각각 부르므로 cache 로 dedup. */
 export const getProjectRepo = cache((ref: string, userId: string): Promise<ProjectRepo | null> =>
   prisma.project.findFirst({

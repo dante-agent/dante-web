@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { createTextStreamResponse, streamText, type ModelMessage } from "ai";
 import { chatModel } from "@/lib/ai/chat-model";
+import { recordAiUsage } from "@/lib/ai/usage";
 import { getFileText } from "@/lib/github/blob";
-import { getProjectRepo } from "@/lib/projects/queries";
+import { getOwnedProjectId, getProjectRepo } from "@/lib/projects/queries";
 import { createClient } from "@/lib/supabase/server";
 
 // 폴더 보기 화면의 AI 채팅.
@@ -57,11 +58,18 @@ export async function POST(request: Request) {
   // 열어둔 파일을 컨텍스트로 붙인다. 레포를 읽기 전에 소유 확인을 거친다
   // (projectRef 는 클라이언트가 보낸 값이다).
   let context = "";
-  if (typeof body.projectRef === "string" && typeof body.file === "string") {
-    const repo = await getProjectRepo(body.projectRef, user.id);
-    const text = repo ? await getFileText(repo, body.file) : null;
-    if (text) {
-      context = `\n\n지금 사용자가 보고 있는 파일:\n<file path="${body.file}">\n${text.slice(0, MAX_CONTEXT)}\n</file>`;
+  let projectId: string | null = null;
+  if (typeof body.projectRef === "string") {
+    // 사용량을 어느 프로젝트에 붙일지. 소유 확인을 겸한다 — 남의 ref 를 보내면
+    // null 이라 사용량이 그 프로젝트에 붙지 않는다.
+    projectId = await getOwnedProjectId(body.projectRef, user.id);
+
+    if (typeof body.file === "string") {
+      const repo = await getProjectRepo(body.projectRef, user.id);
+      const text = repo ? await getFileText(repo, body.file) : null;
+      if (text) {
+        context = `\n\n지금 사용자가 보고 있는 파일:\n<file path="${body.file}">\n${text.slice(0, MAX_CONTEXT)}\n</file>`;
+      }
     }
   }
 
@@ -71,6 +79,10 @@ export async function POST(request: Request) {
     messages,
     // 스트림 도중 에러는 throw 되지 않고 스트림으로 흘러간다 — 서버 로그에는 남긴다.
     onError: ({ error }) => console.error("[chat]", error),
+    // 사용량은 스트림이 끝나야 확정된다. 여기서만 실제 토큰 수를 알 수 있다.
+    // projectId 는 위 소유 확인을 통과한 프로젝트만 쓴다 — 클라이언트가 보낸
+    // projectRef 를 그대로 믿으면 남의 프로젝트에 사용량을 붙일 수 있다.
+    onFinish: ({ usage }) => recordAiUsage({ userId: user.id, projectId, surface: "chat", usage }),
   });
 
   return createTextStreamResponse({ stream: result.textStream });
