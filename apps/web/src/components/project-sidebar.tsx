@@ -9,7 +9,7 @@ import { SidebarRail } from "@/components/sidebar-rail";
 
 // subSidebar: 이 섹션에 서브 사이드바가 있다 → 활성 아이콘 재클릭으로 접기/펼치기
 const ITEMS = [
-  { key: "dashboard", label: "Overview", Icon: LayoutDashboard },
+  { key: "dashboard", label: "Dashboard", Icon: LayoutDashboard },
   { key: "folder", label: "Explorer", Icon: Folder, subSidebar: true },
   { key: "recommend", label: "AI Recommendations", Icon: Sparkles, subSidebar: true },
   { key: "settings", label: "Settings", Icon: Settings },

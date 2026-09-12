@@ -4,6 +4,7 @@ import { cache } from "react";
 import { notFound } from "next/navigation";
 import { prisma } from "@dante/db";
 import { requireUser } from "@/lib/auth/user";
+import { projectConnection, type ConnectionStatus } from "@/lib/github/connection";
 
 export type ProjectSummary = {
   ref: string;
@@ -41,6 +42,40 @@ export async function requireProjectContext(ref: string) {
   const project = projects.find((p) => p.ref === ref);
   if (!project) notFound();
   return { user, project, projects };
+}
+
+/** 대시보드 히어로가 그리는 값. 지표(테스트 수·통과율)는 아직 목업이다. */
+export type DashboardProject = ProjectSummary & {
+  testFramework: string | null;
+  connection: ConnectionStatus;
+};
+
+/**
+ * 요약(ProjectSummary)에 러너 이름과 연결 상태를 얹어서 한 번에 읽는다.
+ * 레이아웃의 requireProjectContext 로는 두 값을 알 수 없어 대시보드만 한 번 더 읽는다.
+ */
+export async function getDashboardProject(
+  ref: string,
+  userId: string
+): Promise<DashboardProject | null> {
+  const row = await prisma.project.findFirst({
+    where: { ref, userId },
+    select: {
+      ...summarySelect,
+      testFramework: true,
+      // 연결 상태는 프로젝트와 설치 두 군데에 나뉘어 적힌다 (lib/github/connection.ts).
+      disconnectedAt: true,
+      disconnectedReason: true,
+      installation: { select: { suspendedAt: true, deletedAt: true } },
+    },
+  });
+  if (!row) return null;
+
+  const { disconnectedAt, disconnectedReason, installation, ...summary } = row;
+  return {
+    ...summary,
+    connection: projectConnection({ disconnectedAt, disconnectedReason, installation }),
+  };
 }
 
 /** GitHub 호출에 필요한 필드. installationId(BigInt)가 있어 클라이언트로 넘기지 않는다. */
