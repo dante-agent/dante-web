@@ -95,11 +95,11 @@ CodeRabbit이 공개한 스텝 번호만 존재. 표면 틴트 → 진한 배경
 
 ### 우리 스택 현황 (`apps/web`)
 
-- `layout.tsx`: `Geist`를 `next/font/google`로 로드 → `--font-sans` 주입. `hack-font/build/web/hack.css` import.
+- `layout.tsx`: `Geist`를 `next/font/google`로 로드 → `--font-sans` 주입. Hack은 `next/font/local`로 `hack-font` 패키지의 서브셋 woff2(400/700)만 로드 → `--font-hack` 주입 (`display: swap`).
 - `globals.css`:
   - 팔레트는 `:root` 하나. `.dark` 블록 없음.
   - `@custom-variant dark (&)` — 다크 단일이라 shadcn 컴포넌트의 `dark:` 유틸이 항상 적용되게 항등 처리.
-  - `--font-mono` → `var(--font-mono)` (`:root`에서 `"Hack", …`). `--font-heading`은 `--font-sans` 공유.
+  - `--font-mono` → `var(--font-mono)` (`:root`에서 `var(--font-hack), …`). `--font-heading`은 `--font-sans` 공유.
 
 ---
 
