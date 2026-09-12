@@ -30,19 +30,37 @@ export function RepoPicker({
   repos,
   refByRepoId,
   installationIdByRepoId,
-  settingsUrl,
+  settingsUrlByInstallationId,
+  initialOwner = "",
 }: {
   repos: InstallationRepo[];
   refByRepoId: Record<string, string>;
   installationIdByRepoId: Record<string, string>;
-  settingsUrl: string;
+  /** 설치 ID → 그 설치의 GitHub 설정 화면. 계정마다 URL 이 다르다. */
+  settingsUrlByInstallationId: Record<string, string>;
+  /** 방금 설치를 끝내고 돌아온 계정. 목록에 없으면 무시한다. */
+  initialOwner?: string;
 }) {
-  const [owner, setOwner] = useState<string>("");
+  const [owner, setOwner] = useState<string>(initialOwner);
   const [query, setQuery] = useState("");
 
   // 설치가 여러 계정(개인 + 조직)에 걸쳐 있을 수 있다.
   const owners = useMemo(() => [...new Set(repos.map((repo) => repo.owner))].sort(), [repos]);
-  const activeOwner = owner || owners[0] || "";
+  // 고른 계정이 목록에 없을 수 있다 — 레포를 하나도 안 열어준 설치가 그렇다.
+  const activeOwner = owners.includes(owner) ? owner : (owners[0] ?? "");
+
+  // 지금 보고 있는 계정의 레포에서 설치 ID 를 되짚는다. 계정 이름으로 맞추지
+  // 않는 이유는 GitHub 이 주는 두 값(레포의 owner.login, 설치의 account.login)의
+  // 대소문자가 어긋날 수 있어서다.
+  const settingsUrl = useMemo(() => {
+    const repo = repos.find((item) => item.owner === activeOwner);
+    const installationId = repo ? installationIdByRepoId[String(repo.id)] : undefined;
+    return (
+      (installationId ? settingsUrlByInstallationId[installationId] : undefined) ??
+      Object.values(settingsUrlByInstallationId)[0] ??
+      ""
+    );
+  }, [repos, activeOwner, installationIdByRepoId, settingsUrlByInstallationId]);
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();

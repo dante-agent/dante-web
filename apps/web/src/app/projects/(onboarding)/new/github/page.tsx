@@ -21,6 +21,8 @@ export default async function GitHubConnectPage({
   const params = await searchParams;
   const error = first(params.error);
   const notice = first(params.notice);
+  // 설치를 막 끝내고 돌아온 경우 /api/github/setup 이 붙여준다. 그 계정을 골라둔다.
+  const installedId = first(params.installation_id);
 
   // 지워진 설치(deletedAt)는 뺀다. 행은 남겨두지만 — 프로젝트가 참조를 잃으면
   // 통째로 사라진다(onDelete: Cascade) — GitHub 에 물어보면 404 라서, 남겨두면
@@ -53,7 +55,36 @@ export default async function GitHubConnectPage({
     }
   });
 
-  const failed = results.some((r) => r.status === "rejected");
+  // 404 는 "GitHub 에 그 설치가 없다" — 앱을 지웠는데 웹훅을 놓친 경우다. 행에
+  // deletedAt 을 적어두지 않으면 방문할 때마다 같은 404 로 빨간 배너가 다시 뜬다.
+  // 5xx·레이트리밋·네트워크 오류에는 적지 않는다. 잠깐의 장애를 영구 표시로
+  // 굳히면 되돌릴 길이 없다 (설정 화면의 recheckConnection 과 같은 규칙).
+  const gone = results.map((r) => r.status === "rejected" && httpStatus(r.reason) === 404);
+  const goneIds = installations.filter((_, index) => gone[index]).map((i) => i.id);
+
+  if (goneIds.length > 0) {
+    await prisma.githubInstallation.updateMany({
+      where: { id: { in: goneIds }, deletedAt: null },
+      data: { deletedAt: new Date() },
+    });
+  }
+
+  // 지워진 설치는 배너에서 뺀다. 방금 deletedAt 을 적어서 다음 방문에는 목록에서
+  // 아예 빠지므로, 이번 방문만 다르게 보일 이유가 없다.
+  const failed = results.some((r, index) => r.status === "rejected" && !gone[index]);
+
+  // "ADD ONE ON GITHUB" 는 지금 고른 계정의 설치 화면으로 가야 한다. 계정마다
+  // URL 이 다르고, 남의 org 설치 화면은 사용자에게 404 로 보인다 (app.ts 주석).
+  const settingsUrlByInstallationId = Object.fromEntries(
+    installations.map((installation) => [
+      installation.id.toString(),
+      installationSettingsUrl(installation),
+    ])
+  );
+
+  const initialOwner =
+    installations.find((installation) => installation.id.toString() === installedId)
+      ?.accountLogin ?? "";
 
   return (
     <>
@@ -89,7 +120,8 @@ export default async function GitHubConnectPage({
             installationIdByRepoId={Object.fromEntries(
               [...installationIdByRepoId].map(([repoId, id]) => [repoId, id.toString()])
             )}
-            settingsUrl={installationSettingsUrl(installations[0])}
+            settingsUrlByInstallationId={settingsUrlByInstallationId}
+            initialOwner={initialOwner}
           />
         )}
       </div>
@@ -101,6 +133,13 @@ function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+/** Octokit 이 던지는 RequestError 의 status. 다른 예외면 null. */
+function httpStatus(error: unknown) {
+  if (typeof error !== "object" || error === null || !("status" in error)) return null;
+  const status = (error as { status: unknown }).status;
+  return typeof status === "number" ? status : null;
+}
+
 function errorMessage(code: string) {
   switch (code) {
     case "state":
@@ -110,6 +149,10 @@ function errorMessage(code: string) {
       return "The GitHub account you installed with is not the one you signed in with.";
     case "account":
       return "Enterprise accounts are not supported yet.";
+    case "installation":
+      // installation_id 가 없거나 GitHub 에 그 설치가 없다. 설치를 중간에 취소했거나
+      // Setup URL 을 직접 열어본 경우다.
+      return "Could not confirm the installation on GitHub. Please try installing again.";
     default:
       return "Could not load the GitHub installation. Please try again.";
   }
