@@ -1,4 +1,5 @@
 import { prisma } from "@dante/db";
+import { currentBillingPeriod } from "./billing-period";
 
 // ⚠️ 서버 전용. "이 사용자가 이번 달 쓴 원가가 한도를 넘었나"를 판정한다.
 //
@@ -81,18 +82,6 @@ function monthlyLimitUsd(): number {
 }
 
 /**
- * 집계 시작 시각 = 이번 달 1일 00:00 UTC.
- *
- * 한국 시간(KST)이 아니라 UTC 인 이유: 우리가 막으려는 건 OpenAI 청구서이고, 그
- * 청구서가 UTC 월 단위로 끊긴다. 사용자에게 보이는 "이번 달"과 최대 9시간 어긋나지만,
- * 한도가 청구 주기와 어긋나는 쪽이 더 나쁘다(월말에 한도가 남았는데 청구서는 이미
- * 다음 달로 넘어간 상태).
- */
-function monthStartUtc(now: Date): Date {
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-}
-
-/**
  * 이번 달 사용량과 한도 초과 여부.
  *
  * 쿼리 한 번으로 끝낸다. `_count` 에 `_all` 과 `costUsd` 를 같이 물어보면 전체 행 수와
@@ -102,13 +91,18 @@ function monthStartUtc(now: Date): Date {
  *
  * 이 함수는 throw 할 수 있다(설정 누락). recordAiUsage() 와 반대다 — 그쪽은 응답이 이미
  * 나간 뒤라 삼켜야 하고, 이쪽은 호출 전이라 막아야 한다.
+ *
+ * 구간은 billing-period.ts 에서 받는다. 직접 계산하지 않는 이유: 사용량 화면
+ * (usage-queries.ts)이 같은 구간을 보여줘야 한다. 예전에 여기는 UTC 월, 화면은
+ * Asia/Seoul 월로 각자 계산해서 월초 9시간 동안 "화면에 뜬 합계"와 "차단을 결정한
+ * 합계"가 달랐다. 사용자가 왜 막혔는지 설명할 수 없는 상태다.
  */
 export async function getMonthlyBudgetStatus(userId: string): Promise<BudgetStatus> {
   const limitUsd = monthlyLimitUsd();
-  const since = monthStartUtc(new Date());
+  const period = currentBillingPeriod();
 
   const agg = await prisma.aiUsage.aggregate({
-    where: { userId, createdAt: { gte: since } },
+    where: { userId, createdAt: { gte: period.start, lt: period.end } },
     _sum: { costUsd: true },
     _count: { _all: true, costUsd: true },
   });
