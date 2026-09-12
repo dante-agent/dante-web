@@ -24,6 +24,7 @@ packages/db   Prisma 6 — 스키마/클라이언트, web·runner 공유 (@dante
 ## 규칙
 
 - **DB 접근은 전부 Next.js 서버에서.** 모든 테이블 RLS ON, 정책 없음. 권한 검사(팀 멤버 여부)는 앱 코드에서.
+  - **새 테이블을 만들면 그 마이그레이션에 `ALTER TABLE "public"."<표>" ENABLE ROW LEVEL SECURITY;` 를 같이 넣는다.** RLS 는 Prisma 스키마로 표현할 수 없어서 `migrate dev` 가 생성해주지 않는다 — 손으로 안 넣으면 조용히 빠지고, 그 표는 anon 키로 PostgREST 에 열린다. (실제로 `extension_auth_codes`·`extension_tokens` 가 이렇게 빠졌다)
 - `SUPABASE_SERVICE_ROLE_KEY` 에 `NEXT_PUBLIC_` 절대 붙이지 말 것. 서버 전용 (`src/lib/supabase/admin.ts`).
 - Supabase 클라이언트: 브라우저 `src/lib/supabase/client.ts` / 서버 `server.ts` / 세션 갱신 `proxy.ts`. Next 16은 `middleware.ts` → `proxy.ts` (`src/proxy.ts`).
 - Prisma 연결 문자열 2개: `DATABASE_URL`(pooler 6543, `?pgbouncer=true&connection_limit=1`) 런타임, `DIRECT_URL`(5432) migrate 전용. 우리 테이블은 `public` 스키마에만. Supabase CLI 마이그레이션과 섞지 않음.
