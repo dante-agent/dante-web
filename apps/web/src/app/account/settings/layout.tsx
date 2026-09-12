@@ -1,5 +1,5 @@
 import { SettingsShell } from "@/components/settings/settings-shell";
-import { requireUser } from "@/lib/auth/user";
+import { displayName, requireUser } from "@/lib/auth/user";
 
 // 계정 설정 셸.
 //
@@ -18,16 +18,9 @@ export default async function AccountSettingsLayout({
 }: LayoutProps<"/account/settings">) {
   const user = await requireUser();
 
-  // GitHub 프로바이더가 채워주는 값. 계정에 따라 비어 있어 순서대로 폴백한다
-  // (projects/(app)/layout.tsx 과 같은 순서).
-  const displayName =
-    (user.user_metadata.user_name as string | undefined) ??
-    (user.user_metadata.full_name as string | undefined) ??
-    user.email ??
-    "Account";
-
+  // 이름은 displayName() 한 곳에서만 정한다 — 헤더 메뉴와 다른 이름이 뜨면 안 된다.
   return (
-    <SettingsShell title="Account" scope={displayName} items={ITEMS}>
+    <SettingsShell title="Account" scope={displayName(user)} items={ITEMS}>
       {children}
     </SettingsShell>
   );
