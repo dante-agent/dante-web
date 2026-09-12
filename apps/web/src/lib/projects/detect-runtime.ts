@@ -1,5 +1,7 @@
 import { cache } from "react";
 import { githubApp } from "@/lib/github/app";
+import { cachedRepoLookup, repoLookupKey, type RepoLookupKey } from "@/lib/github/lookup-cache";
+import { errorStatus } from "@/lib/github/pull-request";
 import type { ProjectRepo } from "@/lib/projects/queries";
 import {
   FALLBACK_COMMANDS,
@@ -74,17 +76,25 @@ const NO_LOCKFILE: PackageManager = {
 
 interface RootPackageJson {
   packageManager?: string;
-  scripts?: Record<string, string>;
+  scripts?: { test?: string };
 }
 
 /**
  * 레포 루트만 본다. 모노레포 하위 패키지까지 뒤지지 않는 이유는, 어느 패키지를
  * 테스트할지는 우리가 정할 문제가 아니라서다 — 그건 사용자가 이 화면에서 적는다.
+ *
+ * GitHub 조회 결과는 몇 분 캐시된다(lib/github/lookup-cache.ts). 그래서
+ * projectRef 를 받는다 — 캐시 키와 태그가 프로젝트 단위다.
  */
 export const detectRuntimeCommands = cache(
-  async (repo: ProjectRepo, testFramework: string | null): Promise<RuntimeCommands> => {
+  async (
+    projectRef: string,
+    repo: ProjectRepo,
+    testFramework: string | null
+  ): Promise<RuntimeCommands> => {
     try {
-      const [root, pkg] = await Promise.all([listRootFiles(repo), readRootPackageJson(repo)]);
+      const key = repoLookupKey(projectRef, repo);
+      const [root, pkg] = await Promise.all([listRootFiles(key), readRootPackageJson(key)]);
       const manager = pickManager(root, pkg);
 
       return {
@@ -139,33 +149,67 @@ function testCommand(
   return frameworkTestCommand(testFramework);
 }
 
-/** 루트 디렉터리 한 겹만. 트리 전체(recursive=1)를 받을 이유가 없다. */
-async function listRootFiles(repo: ProjectRepo): Promise<Set<string>> {
-  const octokit = await githubApp().getInstallationOctokit(Number(repo.installationId));
-  const { data } = await octokit.request("GET /repos/{owner}/{repo}/git/trees/{tree_sha}", {
-    owner: repo.repoOwner,
-    repo: repo.repoName,
-    tree_sha: repo.defaultBranch,
+/**
+ * 루트 디렉터리 한 겹만. 트리 전체(recursive=1)를 받을 이유가 없다.
+ *
+ * 캐시에는 배열로 둔다 — 캐시 값은 JSON 으로 저장돼서 Set 이 그대로 안 남는다.
+ * 실패하면 던진다(캐시되지 않는다). 위의 detectRuntimeCommands 가 받아서
+ * 일반 기본값으로 떨어진다.
+ */
+async function listRootFiles(key: RepoLookupKey): Promise<Set<string>> {
+  const files = await cachedRepoLookup("runtime-root-files", key, async (key) => {
+    const octokit = await githubApp().getInstallationOctokit(Number(key.installationId));
+    const { data } = await octokit.request("GET /repos/{owner}/{repo}/git/trees/{tree_sha}", {
+      owner: key.owner,
+      repo: key.repo,
+      tree_sha: key.branch,
+    });
+
+    return data.tree.filter((entry) => entry.type === "blob").map((entry) => entry.path ?? "");
   });
 
-  return new Set(
-    data.tree.filter((entry) => entry.type === "blob").map((entry) => entry.path ?? "")
-  );
+  return new Set(files);
 }
 
-async function readRootPackageJson(repo: ProjectRepo): Promise<RootPackageJson | null> {
+async function readRootPackageJson(key: RepoLookupKey): Promise<RootPackageJson | null> {
   try {
-    const octokit = await githubApp().getInstallationOctokit(Number(repo.installationId));
-    const { data } = await octokit.request("GET /repos/{owner}/{repo}/contents/{path}", {
-      owner: repo.repoOwner,
-      repo: repo.repoName,
-      path: "package.json",
-      ref: repo.defaultBranch,
-    });
-    if (Array.isArray(data) || data.type !== "file" || data.encoding !== "base64") return null;
-    return JSON.parse(Buffer.from(data.content, "base64").toString("utf8"));
+    return await cachedRepoLookup("runtime-package-json", key, fetchRootPackageJson);
   } catch {
-    // 없거나, 접근이 끊겼거나, JSON 이 깨졌거나. 어느 쪽이든 러너 기본값으로 간다.
+    // 접근이 끊겼거나 GitHub 이 잠깐 안 됐다. 러너 기본값으로 가되, 이 null 은
+    // 캐시하지 않는다 — 다음에 열면 다시 물어본다.
     return null;
   }
+}
+
+/**
+ * "없다"(404·파일 아님·JSON 깨짐)는 레포의 사실이라 null 로 돌려주고 캐시한다.
+ * 그 밖의 실패는 던져서 캐시에 남지 않게 한다.
+ */
+async function fetchRootPackageJson(key: RepoLookupKey): Promise<RootPackageJson | null> {
+  const octokit = await githubApp().getInstallationOctokit(Number(key.installationId));
+
+  let data;
+  try {
+    ({ data } = await octokit.request("GET /repos/{owner}/{repo}/contents/{path}", {
+      owner: key.owner,
+      repo: key.repo,
+      path: "package.json",
+      ref: key.branch,
+    }));
+  } catch (error) {
+    if (errorStatus(error) === 404) return null;
+    throw error;
+  }
+
+  if (Array.isArray(data) || data.type !== "file" || data.encoding !== "base64") return null;
+
+  let pkg: RootPackageJson | null;
+  try {
+    pkg = JSON.parse(Buffer.from(data.content, "base64").toString("utf8"));
+  } catch {
+    return null;
+  }
+
+  // 쓰는 필드만 남긴다. package.json 을 통째로 캐시에 들고 있을 이유가 없다.
+  return pkg && { packageManager: pkg.packageManager, scripts: { test: pkg.scripts?.test } };
 }

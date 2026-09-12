@@ -35,7 +35,7 @@ export default async function ProjectRuntimePage({
 
   // 기본값은 레포를 보고 정한다 — lockfile 로 패키지 매니저를, package.json 의
   // scripts.test 로 테스트 커맨드를. 못 읽으면 일반 기본값으로 떨어진다.
-  const defaults = await detectRuntimeCommands(project, project.testFramework);
+  const defaults = await detectRuntimeCommands(projectRef, project, project.testFramework);
 
   return (
     <>

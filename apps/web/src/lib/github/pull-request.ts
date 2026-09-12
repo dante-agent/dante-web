@@ -231,25 +231,25 @@ export async function fetchHeadCommitMessage(octokit: Octokit, ref: RepoRef, sha
  * (`administration: read`)이 없다. 룰셋 쪽은 메타데이터만으로 읽히지만 예전
  * 방식(classic branch protection)은 그렇지 않아서, 모를 때는 모른다고 해야
  * 한다 — "안 걸려 있음"으로 단정하면 이미 잘 걸어둔 팀에게 거짓 경고를 낸다.
+ *
+ * 조회가 실패하면 "unknown" 을 돌려주지 않고 던진다. 호출부가 이 결과를 몇 분
+ * 캐시하는데(lib/github/lookup-cache.ts), 실패를 결과로 돌려주면 그 실패가 캐시에
+ * 남는다. 던지면 캐시되지 않고, 호출부가 "unknown" 으로 접는다.
  */
 export async function checkRequiredStatus(
   octokit: Octokit,
   ref: RepoRef,
   branch: string
 ): Promise<"required" | "not_required" | "unknown"> {
-  try {
-    const { data } = await octokit.request("GET /repos/{owner}/{repo}/rules/branches/{branch}", {
-      ...ref,
-      branch,
-    });
+  const { data } = await octokit.request("GET /repos/{owner}/{repo}/rules/branches/{branch}", {
+    ...ref,
+    branch,
+  });
 
-    for (const rule of data) {
-      if (rule.type !== "required_status_checks") continue;
-      const checks = rule.parameters?.required_status_checks ?? [];
-      if (checks.some((check) => check.context === CHECK_RUN_NAME)) return "required";
-    }
-  } catch {
-    return "unknown";
+  for (const rule of data) {
+    if (rule.type !== "required_status_checks") continue;
+    const checks = rule.parameters?.required_status_checks ?? [];
+    if (checks.some((check) => check.context === CHECK_RUN_NAME)) return "required";
   }
 
   // 룰셋에 없다고 끝이 아니다. classic branch protection 은 이 엔드포인트에
