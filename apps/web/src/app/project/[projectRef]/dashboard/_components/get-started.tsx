@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Bell, FolderCode, KeyRound, Puzzle, Sparkles, SquareTerminal } from "lucide-react";
+import { Bell, Bot, FolderCode, Puzzle, Sparkles, SquareTerminal } from "lucide-react";
 
 /**
  * 프로젝트를 굴리는 데 필요한 화면들로 가는 줄.
@@ -35,10 +35,10 @@ const ENTRIES = [
     href: (ref: string) => `/project/${ref}/settings/notifications`,
   },
   {
-    key: "api-keys",
-    Icon: KeyRound,
-    title: "API keys",
-    hint: "Bring your own model",
+    key: "ai",
+    Icon: Bot,
+    title: "AI",
+    hint: "Codex writes your tests",
     href: () => "/account/settings/ai",
   },
   {

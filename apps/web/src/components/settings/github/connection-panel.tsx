@@ -8,7 +8,8 @@ import type { ConnectionNotice } from "@/lib/github/connection";
 //
 // 배너는 Recheck 로 생기거나 사라진다. 그냥 그리면 그 순간 아래 카드 두 장이
 // 통째로 튄다 — 사용자가 누른 결과인데도 "화면이 깨졌나"로 읽힌다. 그래서
-// 자리를 접었다 폈다 한다 (0fr ↔ 1fr). api-key-form.tsx 와 같은 장치다.
+// 자리를 접었다 폈다 한다 (0fr ↔ 1fr). 지웠다 그렸다 하면 전환이 안 걸리고,
+// 높이를 px 로 재려면 JS 가 필요해서 grid-template-rows 를 쓴다.
 //
 // 접히는 동안 보여줄 내용을 state 에 남겨두는 게 핵심이다. 서버가 notice 를
 // null 로 내려보내면 서브트리가 통째로 사라져서 전환이 걸릴 대상이 없어진다

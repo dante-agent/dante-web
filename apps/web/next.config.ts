@@ -12,6 +12,19 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "**.googleusercontent.com" },
     ],
   },
+
+  async redirects() {
+    return [
+      // 온보딩 4단계가 /api-key → /ai 로 바뀌었다. 키를 받지 않는데 URL 에
+      // api-key 가 남아 있으면 거짓말이라 이름을 옮겼고, 그동안 나간 링크
+      // (메일·북마크·에러 리포트)가 404 로 죽지 않게 여기서 받아준다.
+      {
+        source: "/projects/setup/:projectRef/api-key",
+        destination: "/projects/setup/:projectRef/ai",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

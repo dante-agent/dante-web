@@ -18,7 +18,7 @@ const STEPS = [
   { label: "Provider", detail: "Where your code lives" },
   { label: "Repository", detail: "Which repo to start with" },
   { label: "Test runner", detail: "Vitest or Jest" },
-  { label: "API key", detail: "Which model writes the tests" },
+  { label: "AI", detail: "Already connected" },
 ];
 
 const TINT = "transition-colors duration-[180ms] ease-out motion-reduce:transition-none";
@@ -33,7 +33,7 @@ function stepFromPath(pathname: string) {
   if (pathname.endsWith("/new")) return 1;
   if (pathname.endsWith("/new/github")) return 2;
   if (pathname.includes("/setup/") && pathname.endsWith("/framework")) return 3;
-  if (pathname.includes("/setup/") && pathname.endsWith("/api-key")) return 4;
+  if (pathname.includes("/setup/") && pathname.endsWith("/ai")) return 4;
   return 1;
 }
 

@@ -41,7 +41,7 @@ export default async function ProjectSettingsLayout({
             href="/account/settings/ai"
             className="text-muted-foreground hover:text-foreground block text-[13px] leading-relaxed transition-colors duration-[180ms] ease-out"
           >
-            AI models and the editor extension are
+            AI and the editor extension are
             <span className="underline underline-offset-4"> account settings</span> — one setting
             for every project.
           </Link>

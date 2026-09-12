@@ -39,7 +39,6 @@ model User {
 
   installations      GithubInstallation[]
   projects           Project[]
-  apiKeys            UserApiKey[]
   extensionAuthCodes ExtensionAuthCode[]
   extensionTokens    ExtensionToken[]
 
@@ -103,7 +102,7 @@ model Project {
   /// (vitest/jest → +playwright/cypress) 초기엔 자주 늘어난다.
   testFramework String? @map("test_framework")
 
-  /// 온보딩(레포 → 러너 → API 키)을 끝낸 시각. null 이면 /project/<ref>/setup 으로 되돌린다.
+  /// 온보딩(레포 → 러너 → AI)을 끝낸 시각. null 이면 /project/<ref>/setup 으로 되돌린다.
   /// 중간에 이탈해도 이어서 할 수 있게 만드는 값이다.
   setupCompletedAt DateTime? @map("setup_completed_at")
 
@@ -115,7 +114,7 @@ model Project {
   // ProjectNotificationSetting 과 같다 — 기본값을 바꾸면 기존 행을 전부 손봐야 한다.
   //
   // Node 버전과 환경 변수는 아직 없다. 전자는 레포의 .nvmrc 를 읽는 편이 낫고,
-  // 후자는 평문 저장 금지라 UserApiKey 처럼 암호화가 따로 필요하다.
+  // 후자는 평문 저장 금지라 암호화가 따로 필요하다(lib/crypto/secret.ts).
 
   /// 예: "pnpm install --frozen-lockfile"
   installCommand String? @map("install_command")
@@ -155,31 +154,6 @@ model Project {
   @@unique([userId, repoId])
   @@index([installationId])
   @@map("projects")
-}
-
-/// 사용자가 직접 넣는 LLM API 키 (온보딩 4단계).
-///
-/// 평문 저장 금지(AGENTS.md). Node 내장 crypto 로 AES-256-GCM 암호화해서 넣고,
-/// 복호화는 서버에서만 한다. 화면에는 끝 4자리(hint)만 보여준다.
-model UserApiKey {
-  id       String @id @default(uuid()) @db.Uuid
-  userId   String @map("user_id") @db.Uuid
-  /// "anthropic" | "openai" | "google" — AI SDK 프로바이더 이름과 맞춘다.
-  provider String
-
-  /// AES-256-GCM 결과. iv·authTag 를 같이 담는다.
-  encryptedKey String @map("encrypted_key")
-  /// 화면 표시용 마지막 4자리. 복호화 없이 "어떤 키였더라"를 알 수 있게.
-  lastFour     String @map("last_four")
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  /// 프로바이더당 키 하나. 바꾸면 덮어쓴다.
-  @@unique([userId, provider])
-  @@map("user_api_keys")
 }
 
 /// 익스텐션 로그인 중간 단계의 1회용 code (dante-extension 결정 D-6).
