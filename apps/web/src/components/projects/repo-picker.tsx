@@ -124,29 +124,46 @@ export function RepoPicker({
         )}
       </ul>
 
-      {/* "안 보여요" 두 케이스: 이 설치에 레포 더 열기 / 다른 org·계정에 App 설치. */}
-      <div className="text-muted-foreground mt-4 space-y-1.5 font-mono text-[11px] tracking-wide">
-        <p>
-          Missing a repository?{" "}
-          <a
-            href={settingsUrl}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="text-foreground underline underline-offset-4"
-          >
-            ADD ONE ON GITHUB ↗
+      {/* "안 보여요" 두 케이스: 이 설치에 레포 더 열기 / 다른 org·계정에 App 설치.
+          라벨 길이가 달라서 그냥 두면 두 링크의 시작점이 어긋난다. grid 의 auto
+          칸은 넓은 라벨에 맞춰지니 ch 단위 폭을 손으로 재지 않아도 세로로 떨어진다
+          (tracking-wide 가 붙은 mono 라 글자 수로 계산해도 안 맞는다). */}
+      <dl className="text-muted-foreground mt-4 grid grid-cols-[auto_1fr] gap-x-2 gap-y-1.5 font-mono text-[11px] tracking-wide">
+        {/* 설치가 하나도 없으면 RepoPicker 자체가 안 그려지지만, 설정 URL 이 빈
+            문자열로 떨어지면 href="" 는 이 페이지를 다시 여는 죽은 링크가 된다. */}
+        {settingsUrl && (
+          <>
+            <dt>Missing a repository?</dt>
+            <dd>
+              <a
+                href={settingsUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                className={footerLink}
+              >
+                Add one on GitHub ↗
+              </a>
+            </dd>
+          </>
+        )}
+        <dt>Missing an organization?</dt>
+        <dd>
+          {/* ↗ 를 달지 않는다. 새 탭이 아니라 이 탭에서 /api/github/install 로
+              가야 한다 — 서버가 state 쿠키를 심고 GitHub 로 넘긴다. */}
+          <a href="/api/github/install" className={footerLink}>
+            Add another organization
           </a>
-        </p>
-        <p>
-          Missing an organization?{" "}
-          <a href="/api/github/install" className="text-foreground underline underline-offset-4">
-            Add another organization ↗
-          </a>
-        </p>
-      </div>
+        </dd>
+      </dl>
     </>
   );
 }
+
+// 목록 아래 두 링크. 쉬는 상태는 밝게(주변 라벨이 muted 라 링크만 떠 보인다),
+// hover·키보드 포커스에는 행의 액센트와 같은 주황을 쓴다 — 같은 화면에서 두
+// 가지 강조색을 쓰지 않는다.
+const footerLink =
+  "text-foreground underline underline-offset-4 transition-colors duration-[180ms] ease-out hover:text-[#ff570a] focus-visible:text-[#ff570a] focus-visible:outline-none motion-reduce:transition-none";
 
 function RepoRow({
   repo,
