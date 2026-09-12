@@ -10,6 +10,7 @@
   "scripts": {
     "postinstall": "prisma generate",
     "generate": "prisma generate",
+    "build": "prisma generate",
     "migrate": "prisma migrate dev",
     "deploy": "prisma migrate deploy",
     "studio": "prisma studio"
