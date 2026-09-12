@@ -9,7 +9,7 @@ import { displayName, requireUser } from "@/lib/auth/user";
 // "이 키는 사실 계정 것입니다" 라고 해명을 달아야 했다.
 const ITEMS = [
   { href: "/account/settings/general", label: "General" },
-  { href: "/account/settings/ai", label: "AI models" },
+  { href: "/account/settings/ai", label: "AI" },
   { href: "/account/settings/extension", label: "Extension" },
 ];
 
