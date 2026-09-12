@@ -50,6 +50,8 @@ export async function saveRuntimeSettings(
     return { error: "Project not found." };
   }
 
+  // 공백만 친 칸은 빈 칸과 같은 뜻이다 — 화면에 보이는 게 같으니 결과도 같아야
+  // 한다. 여기서 한 번 다듬고 나면 아래는 둘을 구분하지 않는다.
   const installCommand = String(formData.get("installCommand") ?? "").trim();
   const testCommand = String(formData.get("testCommand") ?? "").trim();
   const timeoutMs = Number(formData.get("timeoutMs"));

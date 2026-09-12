@@ -106,19 +106,18 @@ export type RuntimeFieldError = {
 /**
  * 폼에서 온 값 검증. 커맨드는 사용자가 쓴 셸 명령이라 내용을 판단하지 않는다 —
  * 어차피 격리된 샌드박스 안에서만 돌고, 무엇이 옳은 명령인지는 레포마다 다르다.
- * 여기서 막는 건 "비었거나 터무니없이 긴" 정도다.
+ * 여기서 막는 건 "터무니없이 긴" 정도다.
+ *
+ * 빈 커맨드는 여기서 막지 않는다. 빈 칸(과 공백만 친 칸)은 "기본값으로
+ * 되돌린다" 는 뜻이고, 부르는 쪽이 이미 기본값으로 바꿔 넘기기 때문이다
+ * (`settings/runtime/actions.ts`). 막는 규칙을 두면 도달하지 못할 뿐 아니라,
+ * 지워서 기본값으로 돌리는 길을 막는 거짓말이 된다.
  */
 export function validateRuntimeInput(input: {
   installCommand: string;
   testCommand: string;
   timeoutMs: number;
 }): RuntimeFieldError | null {
-  if (input.installCommand.trim() === "") {
-    return { field: "installCommand", message: "Install command cannot be empty." };
-  }
-  if (input.testCommand.trim() === "") {
-    return { field: "testCommand", message: "Test command cannot be empty." };
-  }
   if (input.installCommand.length > 500 || input.testCommand.length > 500) {
     return {
       field: input.installCommand.length > 500 ? "installCommand" : "testCommand",
