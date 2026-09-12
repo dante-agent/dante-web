@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createTextStreamResponse, streamText, type ModelMessage } from "ai";
-import { userChatModel } from "@/lib/ai/chat-model";
+import { chatModel } from "@/lib/ai/chat-model";
 import { getFileText } from "@/lib/github/blob";
 import { getProjectRepo } from "@/lib/projects/queries";
 import { createClient } from "@/lib/supabase/server";
@@ -54,16 +54,6 @@ export async function POST(request: Request) {
     );
   }
 
-  const model = await userChatModel(user.id);
-  if (!model) {
-    return NextResponse.json(
-      // 오류 문구의 \n 은 화면에서 그대로 줄바꿈된다(whitespace-pre-line).
-      // "무엇이 잘못됐는지 / 무엇을 하면 되는지" 를 줄로 나눈다.
-      { error: "등록된 AI API 키가 없습니다.\n계정 설정 → AI 에서 키를 넣어주세요." },
-      { status: 400 }
-    );
-  }
-
   // 열어둔 파일을 컨텍스트로 붙인다. 레포를 읽기 전에 소유 확인을 거친다
   // (projectRef 는 클라이언트가 보낸 값이다).
   let context = "";
@@ -76,7 +66,7 @@ export async function POST(request: Request) {
   }
 
   const result = streamText({
-    model,
+    model: chatModel(),
     system: SYSTEM + context,
     messages,
     // 스트림 도중 에러는 throw 되지 않고 스트림으로 흘러간다 — 서버 로그에는 남긴다.
