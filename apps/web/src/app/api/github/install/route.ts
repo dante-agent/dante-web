@@ -5,7 +5,7 @@ import {
   INSTALL_STATE_MAX_AGE,
   createInstallState,
 } from "@/lib/github/state";
-import { LOGIN_PATH } from "@/lib/auth/redirect";
+import { LOGIN_PATH, safeNext } from "@/lib/auth/redirect";
 import { createClient } from "@/lib/supabase/server";
 
 // GitHub App 설치 시작. "GitHub 연결" 버튼이 여기로 온다.
@@ -18,8 +18,13 @@ export async function GET(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // 비로그인이면 로그인 화면으로 보내되 여기로 돌아올 주소를 ?next 로 넘긴다.
+  // 그냥 "/" 로 보내면 로그인 후 /projects 로 떨어져, 사용자가 "GitHub 연결" 을
+  // 처음부터 다시 눌러야 한다. safeNext 로 한 번 걸러 오픈 리다이렉트를 막는다.
   if (!user) {
-    return NextResponse.redirect(new URL(LOGIN_PATH, request.url));
+    const url = new URL(LOGIN_PATH, request.url);
+    url.searchParams.set("next", safeNext(new URL(request.url).pathname));
+    return NextResponse.redirect(url);
   }
 
   const state = createInstallState();
