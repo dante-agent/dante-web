@@ -5,7 +5,13 @@ import { prisma } from "@dante/db";
 import { verifyApiKey } from "@/lib/ai/verify-key";
 import { requireUser } from "@/lib/auth/user";
 import { encryptSecret } from "@/lib/crypto/secret";
-import { findAiProvider, isAiProvider } from "@/lib/projects/ai-providers";
+import {
+  emptyKeyMessage,
+  findAiProvider,
+  invalidKeyFormatMessage,
+  isAiProvider,
+  rejectedKeyMessage,
+} from "@/lib/projects/ai-providers";
 import { isTestFramework } from "@/lib/projects/frameworks";
 
 /** 4단계 폼이 화면에 돌려줄 실패 사유. 성공하면 redirect 하므로 반환되지 않는다. */
@@ -70,21 +76,19 @@ export async function saveApiKey(_prev: ApiKeyState, formData: FormData): Promis
       select: { id: true },
     });
     if (!saved) {
-      return { error: `Paste your ${provider.vendor} API key, or skip this step.` };
+      return { error: emptyKeyMessage(provider, { skippable: true }) };
     }
     return completeSetup(project.id, ref);
   }
 
   if (!provider.keyPattern.test(key)) {
-    return { error: `That is not a ${provider.vendor} key format. ${provider.keyHint}.` };
+    return { error: invalidKeyFormatMessage(provider) };
   }
 
   // 벤더에 한 번 물어본다. null 은 "우리가 벤더에 못 닿았다"라서 통과시킨다 —
   // 벤더 장애 때문에 가입이 막히는 편보다, 나중에 실패하는 편이 낫다.
   if ((await verifyApiKey(providerId, key)) === false) {
-    return {
-      error: `${provider.vendor} rejected this key. Check that it is active and try again.`,
-    };
+    return { error: rejectedKeyMessage(provider) };
   }
 
   await prisma.userApiKey.upsert({

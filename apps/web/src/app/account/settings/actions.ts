@@ -5,7 +5,13 @@ import { prisma } from "@dante/db";
 import { verifyApiKey } from "@/lib/ai/verify-key";
 import { requireUser } from "@/lib/auth/user";
 import { encryptSecret } from "@/lib/crypto/secret";
-import { findAiProvider, isAiProvider } from "@/lib/projects/ai-providers";
+import {
+  emptyKeyMessage,
+  findAiProvider,
+  invalidKeyFormatMessage,
+  isAiProvider,
+  rejectedKeyMessage,
+} from "@/lib/projects/ai-providers";
 
 /** 폼이 화면에 돌려줄 결과. 어느 프로바이더 줄에 표시할지 함께 담는다. */
 export type KeyState = { provider: string; error?: string; saved?: boolean } | null;
@@ -33,21 +39,15 @@ export async function updateApiKey(_prev: KeyState, formData: FormData): Promise
   if (!isAiProvider(providerId)) return { provider: providerId, error: "Unknown provider." };
   const provider = findAiProvider(providerId);
 
-  if (!key) return { provider: providerId, error: "Paste a key first." };
+  if (!key) return { provider: providerId, error: emptyKeyMessage(provider) };
 
   if (!provider.keyPattern.test(key)) {
-    return {
-      provider: providerId,
-      error: `That is not a ${provider.vendor} key format. ${provider.keyHint}.`,
-    };
+    return { provider: providerId, error: invalidKeyFormatMessage(provider) };
   }
 
   // 벤더에 못 닿으면(null) 통과시킨다 — 온보딩과 같은 판단.
   if ((await verifyApiKey(providerId, key)) === false) {
-    return {
-      provider: providerId,
-      error: `${provider.vendor} rejected this key. Check that it is active and try again.`,
-    };
+    return { provider: providerId, error: rejectedKeyMessage(provider) };
   }
 
   await prisma.userApiKey.upsert({
