@@ -25,9 +25,9 @@ export default async function GitHubConnectPage({
   const installedId = first(params.installation_id);
 
   // 지워진 설치(deletedAt)는 뺀다. 행은 남겨두지만 — 프로젝트가 참조를 잃으면
-  // 통째로 사라진다(onDelete: Cascade) — GitHub 에 물어보면 404 라서, 남겨두면
+  // 통째로 사라진다(onDelete: Cascade) — GitHub 에 물어보면 실패라서, 남겨두면
   // 재설치하고 돌아온 사용자에게 "일부 설치의 레포를 못 읽었다" 빨간 배너가 뜬다.
-  const installations = await prisma.githubInstallation.findMany({
+  const connected = await prisma.githubInstallation.findMany({
     where: { userId: user.id, suspendedAt: null, deletedAt: null },
     orderBy: { createdAt: "asc" },
   });
@@ -41,7 +41,7 @@ export default async function GitHubConnectPage({
 
   // 설치별로 GitHub 에 물어본다. 하나가 실패해도(설치 취소·권한 변경) 나머지는 보여준다.
   const results = await Promise.allSettled(
-    installations.map((installation) => listInstallationRepos(Number(installation.id)))
+    connected.map((installation) => listInstallationRepos(Number(installation.id)))
   );
 
   const repos: InstallationRepo[] = [];
@@ -51,16 +51,26 @@ export default async function GitHubConnectPage({
     if (result.status !== "fulfilled") return;
     for (const repo of result.value) {
       repos.push(repo);
-      installationIdByRepoId.set(repo.id, installations[index].id);
+      installationIdByRepoId.set(repo.id, connected[index].id);
     }
   });
 
-  // 404 는 "GitHub 에 그 설치가 없다" — 앱을 지웠는데 웹훅을 놓친 경우다. 행에
-  // deletedAt 을 적어두지 않으면 방문할 때마다 같은 404 로 빨간 배너가 다시 뜬다.
-  // 5xx·레이트리밋·네트워크 오류에는 적지 않는다. 잠깐의 장애를 영구 표시로
-  // 굳히면 되돌릴 길이 없다 (설정 화면의 recheckConnection 과 같은 규칙).
-  const gone = results.map((r) => r.status === "rejected" && httpStatus(r.reason) === 404);
-  const goneIds = installations.filter((_, index) => gone[index]).map((i) => i.id);
+  // 401·404 는 "GitHub 에 그 설치가 없다" — 앱을 지웠는데 웹훅을 놓친 경우다.
+  // 두 코드가 갈리는 건 설치 토큰이 캐시에 남아 있었느냐 뿐이다. 새로 발급받으려
+  // 하면 없는 설치라 404 가 오고, 아직 살아 있을 때 받아둔 토큰을 그대로 쓰면
+  // GitHub 이 삭제 시점에 폐기해버려 401 이 온다. 같은 사실을 말하는 두 얼굴이라
+  // 둘 다 받는다 (설정 화면의 recordFailure 와 같은 규칙).
+  //
+  // 행에 deletedAt 을 적어두지 않으면 방문할 때마다 같은 실패로 빨간 배너가 다시
+  // 뜨고, 사라진 설치의 GitHub 설정 화면으로 가는 링크가 계속 그려진다 — 눌러도
+  // 404 다. 5xx·레이트리밋·네트워크 오류에는 적지 않는다. 잠깐의 장애를 영구
+  // 표시로 굳히면 되돌릴 길이 없다.
+  const gone = results.map((r) => {
+    if (r.status !== "rejected") return false;
+    const status = httpStatus(r.reason);
+    return status === 401 || status === 404;
+  });
+  const goneIds = connected.filter((_, index) => gone[index]).map((i) => i.id);
 
   if (goneIds.length > 0) {
     await prisma.githubInstallation.updateMany({
@@ -68,6 +78,11 @@ export default async function GitHubConnectPage({
       data: { deletedAt: new Date() },
     });
   }
+
+  // 방금 지운 설치는 이번 렌더에서도 없는 셈 친다. 남겨두면 계정 목록과 설정 URL
+  // 에 그대로 남아, 하나도 안 남은 사용자에게 "레포가 없다"는 빈 목록과 404 링크를
+  // 보여주게 된다. 지금 필요한 안내는 "앱을 다시 설치해라"다.
+  const installations = connected.filter((_, index) => !gone[index]);
 
   // 지워진 설치는 배너에서 뺀다. 방금 deletedAt 을 적어서 다음 방문에는 목록에서
   // 아예 빠지므로, 이번 방문만 다르게 보일 이유가 없다.
