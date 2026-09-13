@@ -40,6 +40,15 @@ type RepositoryEvent = InstallationEvent & {
   };
 };
 
+type WebhookPayload = InstallationRepositoriesEvent & {
+  repository?: { id: number };
+};
+
+const WEBHOOK_RETENTION_DAYS = 30;
+
+const webhookRetentionCutoff = (now = new Date()) =>
+  new Date(now.getTime() - WEBHOOK_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+
 /**
  * 서명 검증.
  *
@@ -95,6 +104,8 @@ type CheckRunEvent = InstallationEvent & {
  * @returns 로그에 남길 한 줄. 처리하지 않은 이벤트면 null.
  */
 export async function handleWebhookEvent(event: string, payload: unknown) {
+  await recordWebhookDelivery(event, payload as WebhookPayload);
+
   switch (event) {
     case "installation":
       return handleInstallation(payload as InstallationEvent);
@@ -108,6 +119,48 @@ export async function handleWebhookEvent(event: string, payload: unknown) {
       return handleCheckRun(payload as CheckRunEvent);
     default:
       return null;
+  }
+}
+
+/**
+ * 수신한 웹훅을 이 레포와 연결된 프로젝트별로 한 줄씩 남긴다.
+ *
+ * installation 사건은 레포가 없어서 설치의 모든 프로젝트에, 레포 목록 변경은
+ * payload 에 든 레포들에 기록한다. 기록 실패가 본래 웹훅 처리를 막지는 않는다.
+ */
+async function recordWebhookDelivery(event: string, payload: WebhookPayload) {
+  const id = installationId(payload);
+  if (id === null) return;
+
+  const repositoryId = payload.repository?.id;
+  const listedRepoIds = repoIds([
+    ...(payload.repositories_added ?? []),
+    ...(payload.repositories_removed ?? []),
+  ]);
+  const webhookRepoIds =
+    typeof repositoryId === "number" && Number.isSafeInteger(repositoryId) && repositoryId > 0
+      ? [BigInt(repositoryId)]
+      : listedRepoIds;
+
+  try {
+    const projects = await prisma.project.findMany({
+      where: {
+        installationId: id,
+        ...(webhookRepoIds.length > 0 && { repoId: { in: webhookRepoIds } }),
+      },
+      select: { id: true },
+    });
+    if (projects.length === 0) return;
+
+    const projectIds = projects.map((project) => project.id);
+    await prisma.webhookDelivery.createMany({
+      data: projectIds.map((projectId) => ({ projectId, event })),
+    });
+    await prisma.webhookDelivery.deleteMany({
+      where: { projectId: { in: projectIds }, createdAt: { lt: webhookRetentionCutoff() } },
+    });
+  } catch (error) {
+    console.error("[github-webhook] delivery log failed", error);
   }
 }
 

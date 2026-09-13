@@ -4,8 +4,7 @@
 // surface 로 둘을 가르고, status="ok"(실제로 올라간 것)를 volume 으로, "failed" 를
 // 경고 카운터로 본다. "skipped" 는 의도된 침묵이라 세지 않는다(store.ts 와 같은 규칙).
 //
-// Test runs·Generations·Webhooks 는 아직 소스가 없어(러너 미연결 / 배달 로그 없음)
-// 여기서 다루지 않는다.
+// Test runs·Generations 는 test-metrics.ts 에서 다룬다.
 
 import { prisma } from "@dante/db";
 import { activityWindow, dayIndex, emptyBuckets, type ActivitySeries } from "./window";
@@ -65,5 +64,26 @@ export async function getDeliveryActivity(projectId: string): Promise<DeliveryAc
     to: to.toISOString(),
     prComments: toSeries("pr-comments", "PR comments", buckets.github_comment),
     checkRuns: toSeries("check-runs", "Check runs", buckets.github_check),
+  };
+}
+
+/** 최근 7일의 GitHub 웹훅 배달을 하루 단위로 버킷한다. */
+export async function getWebhookActivity(projectId: string): Promise<ActivitySeries> {
+  const { from } = activityWindow();
+  const rows = await prisma.webhookDelivery.findMany({
+    where: { projectId, createdAt: { gte: from } },
+    select: { createdAt: true },
+  });
+  const points = emptyBuckets();
+
+  for (const row of rows) points[dayIndex(row.createdAt, from)] += 1;
+
+  return {
+    key: "webhooks",
+    label: "Webhooks",
+    total: rows.length,
+    failed: 0,
+    errors: 0,
+    points,
   };
 }

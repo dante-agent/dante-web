@@ -7,7 +7,7 @@ import { requireUser } from "@/lib/auth/user";
 import type { ConnectionStatus } from "@/lib/github/connection";
 import type { FileEntry } from "@/lib/file-tree";
 import { getRepoStats, getRepoTree, type RepoStats } from "@/lib/github/tree";
-import { getDeliveryActivity } from "@/lib/projects/activity";
+import { getDeliveryActivity, getWebhookActivity } from "@/lib/projects/activity";
 import { buildAdvisories } from "@/lib/projects/advisories";
 import { getDashboardProject, getOwnedProjectId, getProjectRepo } from "@/lib/projects/queries";
 import { getTestActivity, getTestSummary } from "@/lib/projects/test-metrics";
@@ -20,7 +20,6 @@ import { ReportsSection } from "./_components/reports-section";
 import { Section } from "./_components/section";
 import { SuitePanel } from "./_components/suite-panel";
 import { UsageSection } from "./_components/usage-section";
-import { dashboardMock } from "./mock-data";
 
 /**
  * 상태 한 단어. 자세한 안내(무엇을 눌러야 하는지)는 연결 배너가 따로 한다 —
@@ -76,18 +75,17 @@ export default async function DashboardPage({
   // 실행 관련 지표는 전부 DB 에서 온다 — 연결 상태와 무관하게 읽는다.
   // Usage 카드: Test runs·Generations(러너 붙기 전엔 0), PR comments·Check runs.
   // summary: SuitePanel 의 Runs·pass rate, Hero 의 Last run·Last generated,
-  // Advisor 의 reliability. aiUsage: AI 사용량 섹션. Webhooks 만 아직 목업.
-  const [aiUsage, testActivity, activity, summary] = await Promise.all([
+  // Advisor 의 reliability. aiUsage: AI 사용량 섹션.
+  const [aiUsage, testActivity, activity, webhooks, summary] = await Promise.all([
     getMonthlyProjectAiUsage(projectId),
     getTestActivity(projectId),
     getDeliveryActivity(projectId),
+    getWebhookActivity(projectId),
     getTestSummary(projectId),
   ]);
 
-  const { usage } = dashboardMock;
   const repoPath = `${project.repoOwner}/${project.repoName}`;
 
-  const webhooks = usage.series.find((s) => s.key === "webhooks")!;
   const usageSeries = [
     testActivity.testRuns,
     testActivity.generations,
