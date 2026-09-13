@@ -1,3 +1,4 @@
+import { revalidateTag, unstable_cache } from "next/cache";
 import { githubApp } from "@/lib/github/app";
 
 // ⚠️ 서버 전용 (app.ts 참고).
@@ -56,4 +57,31 @@ export async function listInstallationRepos(installationId: number): Promise<Ins
 
   // 최근 푸시 순. 방금 작업하던 레포가 위에 오는 편이 고르기 쉽다.
   return collected.sort((a, b) => (b.pushedAt ?? "").localeCompare(a.pushedAt ?? ""));
+}
+
+/** 목록 캐시 수명(초). 레포를 넣고 빼면 웹훅·setup 이 바로 비우므로 길 필요가 없다. */
+const REPOS_TTL_SECONDS = 120;
+
+const installationReposTag = (installationId: number | bigint) =>
+  `installation:${installationId}:repos`;
+
+/**
+ * listInstallationRepos 에 짧은 서버 캐시를 건 것. 레포 고르기 화면을 새로고침할 때마다
+ * GitHub 에 최대 5번씩 묻지 않게 한다.
+ *
+ * 던지면 캐시되지 않는다 — 401·404 로 "설치가 사라졌다"를 알아채는 호출부가 그대로 동작한다.
+ */
+export function cachedInstallationRepos(installationId: number): Promise<InstallationRepo[]> {
+  return unstable_cache(listInstallationRepos, ["github-installation-repos"], {
+    tags: [installationReposTag(installationId)],
+    revalidate: REPOS_TTL_SECONDS,
+  })(installationId);
+}
+
+/**
+ * 설치의 레포 목록 캐시를 바로 버린다. 라우트 핸들러(웹훅·setup)에서도 부를 수 있게
+ * updateTag 가 아니라 revalidateTag 에 expire 0 을 준다.
+ */
+export function invalidateInstallationRepos(installationId: number | bigint) {
+  revalidateTag(installationReposTag(installationId), { expire: 0 });
 }

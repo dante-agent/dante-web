@@ -11,8 +11,18 @@ function isPublic(pathname: string) {
   return PUBLIC_PREFIXES.some((path) => pathname === path || pathname.startsWith(`${path}/`));
 }
 
+// 공개 경로 중 세션과 아예 무관한 것. /auth 는 로그인 흐름이라 빼면 안 된다.
+const STATIC_PUBLIC = ["/terms", "/privacy"];
+
+function isStaticPublic(pathname: string) {
+  return STATIC_PUBLIC.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+}
+
 // 매 요청에서 Supabase 세션 쿠키를 갱신한다. src/proxy.ts에서 호출.
 export async function updateSession(request: NextRequest) {
+  // 약관·개인정보 화면은 로그인 여부로 달라지는 게 없다. 세션을 볼 이유가 없으니 바로 넘긴다.
+  if (isStaticPublic(request.nextUrl.pathname)) return NextResponse.next({ request });
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -34,10 +44,13 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  // getUser()를 호출해야 만료 토큰이 갱신된다. 이 줄과 createServerClient 사이에 로직 넣지 말 것.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getClaims()를 호출해야 만료 토큰이 갱신된다. 이 줄과 createServerClient 사이에 로직 넣지 말 것.
+  //
+  // getUser() 가 아니라 getClaims() 인 이유: getUser() 는 요청마다 Supabase Auth 서버에
+  // 왕복한다. getClaims() 는 JWT 서명을 프로젝트 공개키로 여기서 검증하고, 토큰이
+  // 만료됐을 때만 갱신하러 나간다. (대칭키(HS256) 프로젝트면 알아서 getUser() 로 떨어진다.)
+  const { data } = await supabase.auth.getClaims();
+  const user = data?.claims ?? null;
 
   const { pathname, search } = request.nextUrl;
 

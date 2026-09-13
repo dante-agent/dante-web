@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { LOGIN_PATH, safeNext } from "@/lib/auth/redirect";
+import { syncUser } from "@/lib/auth/user";
 import { createClient } from "@/lib/supabase/server";
+import { chosenTeamId, rememberCurrentTeam } from "@/lib/teams/current";
 
 // GitHub·Google 동의 → Supabase → 여기로 돌아온다.
 // 받은 1회용 code 를 세션(쿠키)으로 바꾸는 곳. 회원가입/로그인 모두 이 경로를 탄다
@@ -25,8 +27,13 @@ export async function GET(request: Request) {
     const supabase = await createClient();
     // 브라우저가 심어둔 PKCE code_verifier 쿠키와 code 를 맞춰본다.
     // 성공하면 세션 쿠키가 응답에 실린다.
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
+      // 미러 행·개인 팀은 로그인할 때 한 번 챙긴다. 지금 팀 쿠키가 없으면 개인 팀으로
+      // 심어 둔다 — 안 그러면 쿠키가 없는 사용자는 화면마다 syncUser 가 DB 에 쓴다
+      // (lib/teams/current.ts). 이미 고른 팀이 있으면 건드리지 않는다.
+      const { personalTeamId } = await syncUser(data.user);
+      if (!(await chosenTeamId(data.user.id))) await rememberCurrentTeam(personalTeamId);
       return NextResponse.redirect(`${baseUrl}${next}`);
     }
   }

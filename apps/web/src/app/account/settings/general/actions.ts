@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { accountConfirmation, deleteAccountData, soleOwnerTeams } from "@/lib/account/delete";
 import { LOGIN_PATH } from "@/lib/auth/redirect";
-import { requireUser } from "@/lib/auth/user";
+import { requireVerifiedUser } from "@/lib/auth/user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -24,7 +24,7 @@ export async function deleteAccount(
   _prev: DeleteAccountState,
   formData: FormData
 ): Promise<DeleteAccountState> {
-  const user = await requireUser();
+  const user = await requireVerifiedUser();
 
   // 버튼은 입력이 맞을 때만 눌리지만 그건 화면 사정이다. 서버 액션은 POST 로 직접 부를 수 있다.
   if (String(formData.get("confirmation") ?? "") !== accountConfirmation(user)) {

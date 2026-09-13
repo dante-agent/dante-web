@@ -43,15 +43,17 @@ export function listProjects(userId: string): Promise<ProjectSummary[]> {
  *
  * 헤더의 조직·레포 목록은 이 프로젝트의 팀 것만 남긴다. 팀 드롭다운이 이 팀을
  * 가리키는데 그 옆 목록에 다른 팀 레포가 섞이면 어느 팀을 보고 있는지 흐려진다.
+ *
+ * 프로젝트 레이아웃과 설정 레이아웃이 같은 요청에서 부르므로 cache 로 dedup.
  */
-export async function requireProjectContext(ref: string) {
+export const requireProjectContext = cache(async (ref: string) => {
   const user = await requireUser();
   const [all, teams] = await Promise.all([listProjects(user.id), listTeams(user.id)]);
   const project = all.find((p) => p.ref === ref);
   if (!project) notFound();
   const projects = all.filter((p) => p.teamId === project.teamId);
   return { user, project, projects, teams };
-}
+});
 
 /** 대시보드 히어로가 그리는 값. 지표(테스트 수·통과율)는 아직 목업이다. */
 export type DashboardProject = ProjectSummary & {
