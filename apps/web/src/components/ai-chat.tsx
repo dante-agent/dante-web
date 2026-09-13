@@ -5,7 +5,7 @@
 // layout 에서 children 을 감싸므로 파일을 옮겨 다녀도 이 컴포넌트는 살아 있다
 // — 대화가 파일 클릭마다 날아가지 않는다. 대화 기록은 lib/chat-history.ts (localStorage).
 
-import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { ko } from "date-fns/locale";
@@ -174,6 +174,17 @@ function ChatPanel({
   const [chatId, setChatId] = useState(() => crypto.randomUUID());
   const [showHistory, setShowHistory] = useState(false);
   const chats = useChats(projectRef);
+
+  // 입력창 높이를 내용에 맞춘다. CSS field-sizing: content 는 크롬 계열만 돼서 직접 잰다.
+  // auto 로 한 번 접어야 줄이 줄었을 때도 줄어든다. 보내서 input 이 비면 한 줄로 돌아가고,
+  // 패널 폭이 바뀌면 줄바꿈이 달라지므로 width 에도 다시 잰다.
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [input, width, showHistory]);
 
   const listRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -347,7 +358,9 @@ function ChatPanel({
           }}
         />
       ) : (
-        <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto p-3">
+        // 메시지 영역만 한 단계 어둡게(Mauve 1). 헤더·입력 영역(Mauve 2)이 위아래 틀이 되고
+        // 내용은 그 사이에 들어앉은 것으로 읽힌다 — 셋이 같은 색이면 한 덩어리로 보인다.
+        <div ref={listRef} className="bg-background flex-1 space-y-3 overflow-y-auto p-3">
           {messages.length === 0 ? (
             // 안내 문구 한 줄이 전부다. 뭘 물어볼지는 사용자가 안다.
             <p className="text-muted-foreground flex h-full items-center justify-center px-6 text-center text-sm">
@@ -371,8 +384,12 @@ function ChatPanel({
                       : "text-foreground max-w-full leading-relaxed"
                   )}
                 >
-                  {m.content ||
-                    (pending && <Loader2 className="text-muted-foreground size-4 animate-spin" />)}
+                  {m.role === "user" ? (
+                    <CollapsibleText text={m.content} />
+                  ) : (
+                    m.content ||
+                    (pending && <Loader2 className="text-muted-foreground size-4 animate-spin" />)
+                  )}
                 </div>
               </div>
             ))
@@ -397,18 +414,22 @@ function ChatPanel({
         </div>
       )}
 
-      {/* 입력창: 한 줄짜리 textarea 와 버튼을 가운데 정렬로 나란히 둔다.
-          박스 패딩(p-2)만으로 아이콘 위아래 여백이 같아진다. */}
+      {/* 입력창: textarea 는 내용만큼 자라고(최대 6줄, 그 뒤로는 안에서 스크롤) 버튼은
+          아래에 붙는다 — 여러 줄일 때 마지막 줄 옆에 있어야 손이 덜 간다. 한 줄일 때는
+          textarea 줄 높이(leading-7)와 버튼(size-7)이 같아 가운데 정렬과 똑같이 보인다.
+          바깥 틀(border-t·Mauve 2 띠)은 두지 않는다. 메시지 영역과 같은 바탕 위에 입력 필드만
+          올려서(Mauve 3 + 그림자) 대화 위에 떠 있는 칸으로 보이게 한다. */}
       {!showHistory && (
         <form
           onSubmit={(e) => {
             e.preventDefault();
             void send(input);
           }}
-          className="border-border shrink-0 border-t p-2"
+          className="bg-background shrink-0 px-3 pb-3"
         >
-          <div className="border-border bg-background focus-within:border-ring flex items-center gap-1.5 rounded-lg border p-2 transition-colors">
+          <div className="border-input bg-muted focus-within:border-ring flex items-end gap-1.5 rounded-xl border p-2 shadow-lg shadow-black/40 transition-colors">
             <textarea
+              ref={inputRef}
               rows={1}
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -420,7 +441,7 @@ function ChatPanel({
                 }
               }}
               placeholder="Ask anything — Enter to send"
-              className="text-foreground placeholder:text-muted-foreground block max-h-28 min-w-0 flex-1 resize-none bg-transparent px-0.5 text-sm leading-7 outline-none"
+              className="text-foreground placeholder:text-muted-foreground block max-h-42 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent px-0.5 text-sm leading-7 outline-none"
             />
             {pending ? (
               <Button
@@ -451,6 +472,44 @@ function ChatPanel({
   );
 }
 
+/**
+ * 사용자 말풍선 본문. 8줄을 넘으면 접고 "더보기"로 편다.
+ *
+ * 코드를 붙여 넣고 물어보는 일이 많은데, 그대로 두면 말풍선 하나가 패널을 다 덮어서
+ * 답을 보려면 한참 스크롤해야 한다. 줄 수(\n)가 아니라 실제 높이로 판단한다 — 줄바꿈
+ * 없는 긴 문단도 패널 폭에서 여러 줄로 접히기 때문이다.
+ */
+function CollapsibleText({ text }: { text: string }) {
+  const ref = useRef<HTMLParagraphElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [overflows, setOverflows] = useState(false);
+
+  // 접힌 상태(line-clamp)에서 잘린 내용이 있을 때만 버튼을 보인다. 펼친 뒤에는 다시 재지
+  // 않는다 — 펼친 상태에선 늘 안 넘치므로, 재면 "접기" 버튼이 사라진다.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el && !expanded) setOverflows(el.scrollHeight > el.clientHeight + 1);
+  }, [text, expanded]);
+
+  return (
+    <>
+      <p ref={ref} className={cn(!expanded && "line-clamp-8")}>
+        {text}
+      </p>
+      {overflows && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          className="text-primary-foreground/80 hover:text-primary-foreground mt-1.5 text-xs font-semibold underline-offset-2 hover:underline"
+        >
+          {expanded ? "접기" : "더보기"}
+        </button>
+      )}
+    </>
+  );
+}
+
 /** 저장된 대화 목록. 줄을 누르면 그 대화를 불러온다. */
 function HistoryList({
   chats,
@@ -465,14 +524,14 @@ function HistoryList({
 }) {
   if (chats.length === 0) {
     return (
-      <p className="text-muted-foreground flex-1 pt-10 text-center text-sm">
+      <p className="bg-background text-muted-foreground flex-1 pt-10 text-center text-sm">
         저장된 대화가 없습니다.
       </p>
     );
   }
 
   return (
-    <ul className="flex-1 space-y-0.5 overflow-y-auto p-2">
+    <ul className="bg-background flex-1 space-y-0.5 overflow-y-auto p-2">
       {chats.map((chat) => (
         <li key={chat.id}>
           <div
