@@ -95,9 +95,8 @@ export const getAccessibleProject = cache(
       },
     });
 
-    // teamId 가 비어 있는 행은 위 조건에 걸리지 않지만, 타입이 nullable 이라 한 번 더 좁힌다.
-    const role = row?.team?.members[0]?.role;
-    if (!row?.teamId || !role) return null;
+    const role = row?.team.members[0]?.role;
+    if (!row || !role) return null;
     return { id: row.id, ref: row.ref, teamId: row.teamId, role };
   }
 );

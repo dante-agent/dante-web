@@ -151,9 +151,8 @@ model GithubInstallation {
   /// 설치를 연결한 사람. 이관이 끝나면 teamId 로 대체된다.
   userId       String    @map("user_id") @db.Uuid
   /// 설치의 주인. 설치 ID 가 PK 라서 설치 1건은 팀 1개만 가진다.
-  /// 이관 중이라 nullable 이다 — 새 코드가 배포되기 전에 옛 코드가 만든 행이 비어
-  /// 있을 수 있어서, feat/team-access 에서 한 번 더 채운 뒤 NOT NULL 로 바꾼다.
-  teamId       String?   @map("team_id") @db.Uuid
+  /// 한 번 정해지면 다시 연결해도 바뀌지 않는다(api/github/setup).
+  teamId       String    @map("team_id") @db.Uuid
   /// 설치된 계정 (개인 또는 조직)
   accountLogin String    @map("account_login")
   accountId    BigInt    @map("account_id")
@@ -172,7 +171,7 @@ model GithubInstallation {
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  team     Team?     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  team     Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
   projects Project[]
 
   @@index([userId])
@@ -240,15 +239,15 @@ model Project {
 
   /// 프로젝트를 만든 사람. 이관이 끝나면 teamId 로 대체된다.
   userId         String  @map("user_id") @db.Uuid
-  /// 프로젝트의 주인. nullable 인 이유는 GithubInstallation.teamId 와 같다.
-  teamId         String? @map("team_id") @db.Uuid
+  /// 프로젝트의 주인. 레포를 열어준 설치와 같은 팀이다.
+  teamId         String  @map("team_id") @db.Uuid
   installationId BigInt  @map("installation_id")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  team         Team?              @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  team         Team               @relation(fields: [teamId], references: [id], onDelete: Cascade)
   installation GithubInstallation @relation(fields: [installationId], references: [id], onDelete: Cascade)
   components   Component[]
 
