@@ -7,6 +7,7 @@ import { prisma } from "@dante/db";
 import { requireUser } from "@/lib/auth/user";
 import { projectConnection, type ConnectionStatus } from "@/lib/github/connection";
 import { accessibleProjectWhere } from "@/lib/teams/access";
+import { listTeams } from "@/lib/teams/current";
 
 export type ProjectSummary = {
   ref: string;
@@ -14,6 +15,7 @@ export type ProjectSummary = {
   repoOwner: string;
   repoName: string;
   defaultBranch: string;
+  teamId: string;
 };
 
 const summarySelect = {
@@ -22,6 +24,7 @@ const summarySelect = {
   repoOwner: true,
   repoName: true,
   defaultBranch: true,
+  teamId: true,
 } as const;
 
 /** 이 사용자가 멤버인 팀들의 프로젝트 전부. 최근 생성 순. 헤더 스위처·목록용. */
@@ -37,13 +40,17 @@ export function listProjects(userId: string): Promise<ProjectSummary[]> {
  * 프로젝트 스코프 레이아웃 진입점. 로그인 + 멤버 확인.
  * ref 에 해당하는 프로젝트가 없거나 내가 멤버가 아닌 팀의 것이면 notFound().
  * 목록도 같이 돌려준다 — 헤더가 필요로 하고, 조회 한 번으로 끝난다.
+ *
+ * 헤더의 조직·레포 목록은 이 프로젝트의 팀 것만 남긴다. 팀 드롭다운이 이 팀을
+ * 가리키는데 그 옆 목록에 다른 팀 레포가 섞이면 어느 팀을 보고 있는지 흐려진다.
  */
 export async function requireProjectContext(ref: string) {
   const user = await requireUser();
-  const projects = await listProjects(user.id);
-  const project = projects.find((p) => p.ref === ref);
+  const [all, teams] = await Promise.all([listProjects(user.id), listTeams(user.id)]);
+  const project = all.find((p) => p.ref === ref);
   if (!project) notFound();
-  return { user, project, projects };
+  const projects = all.filter((p) => p.teamId === project.teamId);
+  return { user, project, projects, teams };
 }
 
 /** 대시보드 히어로가 그리는 값. 지표(테스트 수·통과율)는 아직 목업이다. */

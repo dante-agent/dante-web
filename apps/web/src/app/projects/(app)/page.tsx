@@ -3,23 +3,32 @@ import { ArrowRight, GitBranch, Plus } from "lucide-react";
 import { prisma } from "@dante/db";
 import { GitHubIcon } from "@/components/brand-icons";
 import { DeletedNotice } from "@/components/projects/deleted-notice";
+import { TeamSwitcher } from "@/components/team-switcher";
 import { buttonVariants } from "@/components/ui/button";
-import { requireUser } from "@/lib/auth/user";
 import { accessibleInstallationWhere, accessibleProjectWhere } from "@/lib/teams/access";
+import { requireCurrentTeam } from "@/lib/teams/current";
 import { installationSettingsUrl } from "@/lib/github/app";
 
-// 로그인 후 착륙 지점.
+// 로그인 후 착륙 지점. 지금 팀(lib/teams/current.ts)의 프로젝트만 보여준다.
 //
 // 프로젝트가 0개여도 /projects/new 로 자동 리다이렉트하지 않는다 — 뒤로가기를
 // 누르면 다시 튕겨 나와 루프가 생긴다. 대신 빈 상태를 보여주고 CTA 를 둔다.
 //
 // 분할 셸의 왼쪽 컬럼(~450px)에 들어가므로 카드가 아니라 세로 목록이다.
+// 이 셸에는 헤더가 없어서 팀 드롭다운을 본문 맨 위에 둔다.
 export default async function ProjectsPage({ searchParams }: PageProps<"/projects">) {
-  const user = await requireUser();
+  const { user, teamId, teams } = await requireCurrentTeam();
   const { deleted } = await searchParams;
+  const switcher = (
+    <div className="mb-6 -ml-2">
+      <TeamSwitcher teams={teams} value={teamId} landing="projects" />
+    </div>
+  );
 
   const projects = await prisma.project.findMany({
-    where: accessibleProjectWhere(user.id),
+    // 멤버십 조건을 빼지 않는다. teamId 는 이미 검사했지만, 조회마다 같은 조건을 거는
+    // 규칙(access.ts)을 여기서만 깨면 grep 으로 검사 누락을 찾을 수 없다.
+    where: { teamId, ...accessibleProjectWhere(user.id) },
     orderBy: { createdAt: "desc" },
     select: {
       ref: true,
@@ -38,6 +47,7 @@ export default async function ProjectsPage({ searchParams }: PageProps<"/project
   if (projects.length === 0) {
     return (
       <>
+        {switcher}
         {notice}
         <EmptyState />
       </>
@@ -46,6 +56,7 @@ export default async function ProjectsPage({ searchParams }: PageProps<"/project
 
   return (
     <>
+      {switcher}
       {notice}
 
       <div className="flex items-baseline justify-between gap-4">

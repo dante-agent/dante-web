@@ -6,9 +6,11 @@ import danteLogo from "@/assets/dante-logo.png";
 import { AccountSidebar } from "@/components/account/account-sidebar";
 import { FeedbackDialog } from "@/components/feedback-dialog";
 import { SettingsShell } from "@/components/settings/settings-shell";
+import { TeamSwitcher } from "@/components/team-switcher";
 import { UserMenu } from "@/components/user-menu";
 import { avatarUrl, displayName } from "@/lib/auth/user";
 import { requireTeamMember } from "@/lib/teams/access";
+import { listTeams } from "@/lib/teams/current";
 
 // 팀 설정 셸. 헤더·레일·본문 여백은 계정 셸(account/layout.tsx)과 같게 맞춘다.
 //
@@ -22,7 +24,10 @@ export default async function TeamSettingsLayout({
 
   // 멤버가 아니면 404. 페이지와 액션도 각자 다시 확인한다 (AGENTS.md).
   const { user } = await requireTeamMember(teamId);
-  const team = await prisma.team.findUnique({ where: { id: teamId }, select: { name: true } });
+  const [team, teams] = await Promise.all([
+    prisma.team.findUnique({ where: { id: teamId }, select: { name: true } }),
+    listTeams(user.id),
+  ]);
   if (!team) notFound();
 
   const headerUser = { name: displayName(user), avatarUrl: avatarUrl(user) };
@@ -42,7 +47,8 @@ export default async function TeamSettingsLayout({
 
         <div className="flex shrink-0 items-center gap-4">
           <span className="text-muted-foreground/40 text-sm select-none">/</span>
-          <span className="px-2 text-sm font-medium">Team</span>
+          {/* 드롭다운의 값은 쿠키가 아니라 URL 의 팀이다. 고르면 그 팀의 설정으로 간다. */}
+          <TeamSwitcher teams={teams} value={teamId} landing="settings" />
         </div>
 
         <div className="ml-auto flex shrink-0 items-center gap-2">

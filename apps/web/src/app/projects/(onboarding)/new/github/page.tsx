@@ -5,8 +5,8 @@ import { BackLink } from "@/components/projects/back-link";
 import { RepoPicker } from "@/components/projects/repo-picker";
 import { StepHeader } from "@/components/projects/step-header";
 import { buttonVariants } from "@/components/ui/button";
-import { requireUser } from "@/lib/auth/user";
 import { accessibleInstallationWhere, accessibleProjectWhere } from "@/lib/teams/access";
+import { requireCurrentTeam } from "@/lib/teams/current";
 import { installationSettingsUrl } from "@/lib/github/app";
 import { listInstallationRepos, type InstallationRepo } from "@/lib/github/repos";
 
@@ -16,7 +16,9 @@ import { listInstallationRepos, type InstallationRepo } from "@/lib/github/repos
 export default async function GitHubConnectPage({
   searchParams,
 }: PageProps<"/projects/new/github">) {
-  const user = await requireUser();
+  // 레포는 지금 팀의 설치에서만 고른다. 새 프로젝트는 설치의 팀에 붙으므로(actions.ts),
+  // 다른 팀 설치의 레포를 보여주면 목록에 안 보이는 팀에 프로젝트가 생긴다.
+  const { user, teamId } = await requireCurrentTeam();
 
   // searchParams 값은 같은 키가 여러 번 오면 배열이 된다. 첫 값만 쓴다.
   const params = await searchParams;
@@ -29,7 +31,12 @@ export default async function GitHubConnectPage({
   // 통째로 사라진다(onDelete: Cascade) — GitHub 에 물어보면 실패라서, 남겨두면
   // 재설치하고 돌아온 사용자에게 "일부 설치의 레포를 못 읽었다" 빨간 배너가 뜬다.
   const connected = await prisma.githubInstallation.findMany({
-    where: { ...accessibleInstallationWhere(user.id), suspendedAt: null, deletedAt: null },
+    where: {
+      teamId,
+      ...accessibleInstallationWhere(user.id),
+      suspendedAt: null,
+      deletedAt: null,
+    },
     orderBy: { createdAt: "asc" },
   });
 

@@ -61,12 +61,36 @@ export async function load(tx: Tx, teamId: string, actorId: string) {
   return { team, actor, owners };
 }
 
-export async function renameTeam(actorId: string, teamId: string, rawName: string) {
-  const name = rawName.trim();
+/** 폼에서 온 팀 이름을 저장할 모양으로. 틀리면 실패 문구. 만들기·바꾸기가 같은 규칙을 쓴다. */
+function cleanTeamName(raw: string): string | TeamChangeFailure {
+  const name = raw.trim();
   if (!name) return fail("Enter a team name.");
   if (name.length > TEAM_NAME_MAX) {
     return fail(`Team names can be up to ${TEAM_NAME_MAX} characters.`);
   }
+  return name;
+}
+
+/**
+ * 새 공유 팀. 만든 사람이 owner 다.
+ *
+ * 트랜잭션이 필요 없다. 팀과 멤버십을 중첩 create 한 번으로 만들어서 "주인 없는 팀"이
+ * 생길 틈이 없고, 여러 행을 보고 판단하는 규칙도 없다.
+ */
+export async function createTeam(actorId: string, rawName: string) {
+  const name = cleanTeamName(rawName);
+  if (typeof name !== "string") return name;
+
+  const team = await prisma.team.create({
+    data: { name, members: { create: { userId: actorId, role: "owner" } } },
+    select: { id: true },
+  });
+  return { ok: true as const, teamId: team.id };
+}
+
+export async function renameTeam(actorId: string, teamId: string, rawName: string) {
+  const name = cleanTeamName(rawName);
+  if (typeof name !== "string") return name;
 
   return run(async (tx) => {
     const ctx = await load(tx, teamId, actorId);

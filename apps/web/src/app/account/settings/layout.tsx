@@ -9,6 +9,8 @@ import { displayName, requireUser } from "@/lib/auth/user";
 // "이 키는 사실 계정 것입니다" 라고 해명을 달아야 했다.
 const ITEMS = [
   { href: "/account/settings/general", label: "General" },
+  // 내가 속한 팀 목록. 팀 자체의 설정은 /team/<id>/settings 에 있다.
+  { href: "/account/settings/teams", label: "Teams" },
   { href: "/account/settings/ai", label: "AI" },
   { href: "/account/settings/extension", label: "Extension" },
 ];

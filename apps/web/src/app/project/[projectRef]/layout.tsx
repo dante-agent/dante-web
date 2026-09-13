@@ -10,7 +10,7 @@ export default async function ProjectLayout({
   params,
 }: LayoutProps<"/project/[projectRef]">) {
   const { projectRef } = await params;
-  const { user, project, projects } = await requireProjectContext(projectRef);
+  const { user, project, projects, teams } = await requireProjectContext(projectRef);
 
   // 프로필 이미지·이름은 로그인 세션(Supabase)에서 바로 꺼낸다 — public.users 미러는
   // 로그인 시점에만 갱신되므로 세션 쪽이 항상 최신이다.
@@ -21,7 +21,7 @@ export default async function ProjectLayout({
   // 여백은 섹션이 각자 준다 — 폴더 보기는 에디터를 화면 끝까지 채워야 해서 0 이다.
   return (
     <div className="min-h-svh pt-[47px]">
-      <AppHeader project={project} projects={projects} user={headerUser} />
+      <AppHeader project={project} projects={projects} teams={teams} user={headerUser} />
       <ProjectSidebar />
       <main className="ml-14">{children}</main>
     </div>
