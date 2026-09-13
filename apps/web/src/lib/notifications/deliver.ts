@@ -9,6 +9,7 @@ import {
 } from "@/lib/github/pull-request";
 import { checkRunResult, skippedCheckRun } from "@/lib/notifications/check-run";
 import { renderPrComment } from "@/lib/notifications/comment";
+import type { PullRequestAuthor } from "@/lib/notifications/pr-author-rules";
 import type { RunSummary } from "@/lib/notifications/run-summary";
 import { evaluateScope } from "@/lib/notifications/scope";
 import { isSnoozed, type NotificationSettings } from "@/lib/notifications/settings";
@@ -32,6 +33,8 @@ export type PullRequestContext = {
   draft: boolean;
   labels: string[];
   headCommitMessage: string | null;
+  /** PR 작성자. 테스트 생성 비용을 이 사람 한도로 센다. 페이로드에 없으면 null */
+  author: PullRequestAuthor | null;
 };
 
 /** 알림을 보내는 데 필요한 프로젝트 쪽 사실. */

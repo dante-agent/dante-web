@@ -32,7 +32,10 @@ export const COMMENT_MARKER = "<!-- dante:pr-summary -->";
 export const COMMENT_MARKER_PREFIX = "<!-- dante:pr-summary";
 
 /** 진행 중 상태의 제목 줄. 하나의 코멘트가 이 문구들을 거쳐 간다. */
-const PROGRESS_LABEL: Record<Exclude<RunStatus, "completed" | "failed" | "unchanged">, string> = {
+const PROGRESS_LABEL: Record<
+  Exclude<RunStatus, "completed" | "failed" | "unchanged" | "skipped">,
+  string
+> = {
   queued: "Queued",
   scanning: "Scanning components",
   generating: "Generating tests",
@@ -85,6 +88,15 @@ function renderTerminal(run: RunSummary, settings: NotificationSettings) {
     // 이 문구가 실제로 보이는 건 "변경 없으면 코멘트 안 달기"를 껐거나, 이미
     // 코멘트가 있는 PR 에 무변경 푸시가 온 경우다(지우지 않고 갱신만 한다).
     return "### Dante — no components changed in this push";
+  }
+
+  if (run.status === "skipped") {
+    // 왜 안 했는지를 한 줄로 적는다. 코멘트가 없으면 "Dante 가 고장났나"로 읽힌다.
+    return [
+      "### Dante — skipped test generation",
+      "",
+      blockquote(run.skipReason ?? "Dante skipped test generation for this pull request."),
+    ].join("\n");
   }
 
   if (run.status === "failed") {
