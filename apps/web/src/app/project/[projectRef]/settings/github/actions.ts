@@ -5,7 +5,8 @@ import { prisma } from "@dante/db";
 import { requireUser } from "@/lib/auth/user";
 import { accessibleProjectWhere } from "@/lib/teams/access";
 import { invalidateRepoLookups } from "@/lib/github/lookup-cache";
-import { listInstallationRepos } from "@/lib/github/repos";
+import { invalidateInstallationRepos, listInstallationRepos } from "@/lib/github/repos";
+import { invalidateInstallationPermissions } from "@/lib/notifications/status";
 
 /**
  * "지금 다시 확인해줘".
@@ -48,6 +49,9 @@ export async function recheckConnection(
   // 연결 상태가 바뀌었을 수 있으니, 끊기기 전에 캐시해 둔 GitHub 조회 결과
   // (runtime 기본값·required check)도 버리고 다음에 새로 받게 한다.
   invalidateRepoLookups(projectRef);
+  // 레포 고르기 화면의 목록·알림 화면의 권한 배지도 설치 상태에 달려 있다.
+  invalidateInstallationRepos(project.installationId);
+  invalidateInstallationPermissions(project.installationId);
 
   let repos;
   try {

@@ -1,9 +1,6 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import { prisma } from "@dante/db";
 import { SettingsShell } from "@/components/settings/settings-shell";
-import { requireUser } from "@/lib/auth/user";
-import { accessibleProjectWhere } from "@/lib/teams/access";
+import { requireProjectContext } from "@/lib/projects/queries";
 
 // 프로젝트 설정 셸.
 //
@@ -21,15 +18,11 @@ export default async function ProjectSettingsLayout({
   children,
   params,
 }: LayoutProps<"/project/[projectRef]/settings">) {
-  const user = await requireUser();
   const { projectRef } = await params;
 
-  // 권한 검사는 앱 코드에서 (AGENTS.md).
-  const project = await prisma.project.findFirst({
-    where: { ref: projectRef, ...accessibleProjectWhere(user.id) },
-    select: { name: true },
-  });
-  if (!project) notFound();
+  // 권한 검사는 앱 코드에서 (AGENTS.md). 바깥 프로젝트 레이아웃이 같은 요청에서 이미
+  // 읽은 결과를 그대로 받는다 — 멤버가 아니면 거기서 notFound() 가 난다.
+  const { project } = await requireProjectContext(projectRef);
 
   return (
     <div className="p-8">
