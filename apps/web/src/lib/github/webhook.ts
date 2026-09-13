@@ -94,6 +94,8 @@ type CheckRunEvent = InstallationEvent & {
     head_sha: string;
     pull_requests?: { number: number }[];
   };
+  /** Re-run 을 누른 사람. 다시 돌린 작업의 비용을 이 사람 한도로 센다 */
+  sender?: { id: number; login: string } | null;
 };
 
 /**
@@ -291,7 +293,7 @@ async function handlePullRequest(payload: PullRequestEvent) {
       author: pr.user ? { githubId: pr.user.id, login: pr.user.login } : null,
     };
 
-    await enqueuePullRequestJob(project, context);
+    await enqueuePullRequestJob(project, context, { kind: "author" });
   }
 
   return `pr #${pr.number} ${payload.action} → ${projects.length} project(s)`;
@@ -330,7 +332,10 @@ async function handleCheckRun(payload: CheckRunEvent) {
       continue;
     }
 
-    await enqueuePullRequestJob(project, context);
+    await enqueuePullRequestJob(project, context, {
+      kind: "github-requester",
+      account: payload.sender ? { githubId: payload.sender.id, login: payload.sender.login } : null,
+    });
   }
 
   return `check re-run #${prNumber} → ${projects.length} project(s)`;

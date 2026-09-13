@@ -32,6 +32,14 @@ export async function requireUser() {
   return user;
 }
 
+/**
+ * PR 코멘트에 적을 사용자 이름. GitHub 핸들이 있으면 그것, 없으면 이메일.
+ * Re-run 을 누른 사람을 적을 때 쓴다. 코멘트는 레포 사람들이 보니 이메일은 최후 수단이다.
+ */
+export function requesterLabel(user: SupabaseUser) {
+  return githubIdentity(user).login ?? user.email ?? "a team member";
+}
+
 /** GitHub 로그인으로 들어온 사용자의 GitHub 핸들·숫자 ID. 다른 프로바이더면 null. */
 export function githubIdentity(user: SupabaseUser) {
   const meta = user.user_metadata ?? {};
