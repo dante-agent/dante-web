@@ -1,7 +1,6 @@
 import { prisma } from "@dante/db";
 import { ConnectedEditors } from "@/components/settings/extension/connected-editors";
-import { PairingCodeGuide } from "@/components/settings/extension/pairing-code-guide";
-import { SettingsHeader } from "@/components/settings/settings-section";
+import { ComingSoon, SettingsHeader } from "@/components/settings/settings-section";
 import { requireUser } from "@/lib/auth/user";
 
 // 익스텐션 연결.
@@ -29,7 +28,11 @@ export default async function AccountExtensionPage() {
 
       <ConnectedEditors editors={editors} />
 
-      <PairingCodeGuide />
+      {/* 코드로 로그인은 웹(/auth/extension?redirect=manual)에 구현돼 있지만, 익스텐션 배포를
+          미뤄서 따라 할 수 있는 사용자가 없다. 익스텐션을 내보낼 때 사용 안내로 바꾼다. */}
+      <ComingSoon>
+        Pairing codes, for connecting an editor by hand when the browser hand-off cannot reach it.
+      </ComingSoon>
     </>
   );
 }
