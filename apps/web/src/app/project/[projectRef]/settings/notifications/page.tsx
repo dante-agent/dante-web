@@ -24,8 +24,8 @@ import type { ProjectRepo } from "@/lib/projects/queries";
 // 알림 — 언제, 어디로 알릴지.
 //
 // 지금은 GitHub 만 있다. Slack 은 두 층으로 나뉜다 — 워크스페이스를 붙이는
-// OAuth 는 한 번만 하면 되는 일이라 팀 설정으로 갈 것이고(팀 모델이 아직 없다),
-// 어느 채널로 무엇을 보낼지는 프로젝트마다 다르니 여기 남는다.
+// OAuth 는 팀마다 한 번만 하면 되는 일이라 팀 설정(/team/<id>/settings)에 붙이고,
+// 어느 채널로 무엇을 보낼지는 프로젝트마다 다르니 여기 남긴다. 둘 다 아직 없다.
 export default async function ProjectNotificationsPage({
   params,
 }: PageProps<"/project/[projectRef]/settings/notifications">) {
@@ -119,8 +119,8 @@ export default async function ProjectNotificationsPage({
 
       <div className="mt-12 max-w-2xl">
         <ComingSoon>
-          Slack, Discord and email. Connecting a Slack workspace is a once-per-team step, so it
-          moves to team settings when the team model lands; only the channel routing stays here.
+          Slack, Discord and email. You&apos;ll connect a Slack workspace once in team settings,
+          then choose here which channel this project posts to.
         </ComingSoon>
       </div>
 
