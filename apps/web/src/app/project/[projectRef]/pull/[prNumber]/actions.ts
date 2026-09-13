@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { prisma } from "@dante/db";
-import { requireUser } from "@/lib/auth/user";
+import { requesterLabel, requireUser } from "@/lib/auth/user";
 import {
   fetchHeadCommitMessage,
   fetchPullRequest,
@@ -19,8 +19,8 @@ import { accessibleProjectWhere } from "@/lib/teams/access";
  * 여는 것만으로 작업이 돈다. 사람이 버튼을 눌렀을 때만 여기로 온다.
  *
  * GitHub 체크의 Re-run 버튼(webhook.ts handleCheckRun)과 같은 일을 한다 — PR 의 지금 head
- * 커밋을 다시 읽어 작업을 다시 돌린다. 비용은 누른 사람이 아니라 PR 작성자 한도로 센다
- * (pull-request-job.ts 가 작성자를 본다).
+ * 커밋을 다시 읽어 작업을 다시 돌린다. 비용은 PR 작성자가 아니라 누른 사람 한도로 센다
+ * (pr-author-rules.ts 의 Payer).
  */
 export async function rerunPullRequest(formData: FormData) {
   const projectRef = String(formData.get("projectRef") ?? "");
@@ -49,10 +49,11 @@ export async function rerunPullRequest(formData: FormData) {
   const octokit = await installationClient(project.installationId);
   const pr = await fetchPullRequest(octokit, ref, prNumber);
 
-  await enqueuePullRequestJob(project, {
-    ...pr,
-    headCommitMessage: await fetchHeadCommitMessage(octokit, ref, pr.headSha),
-  });
+  await enqueuePullRequestJob(
+    project,
+    { ...pr, headCommitMessage: await fetchHeadCommitMessage(octokit, ref, pr.headSha) },
+    { kind: "dante-requester", userId: user.id, login: requesterLabel(user) }
+  );
 
   // ?rerun=1 을 떼고 돌아간다. 새로고침으로 같은 요청이 다시 가지 않게.
   redirect(`/project/${project.ref}/pull/${prNumber}`);

@@ -15,8 +15,8 @@ import {
 import { deliverRunSummary, type PullRequestContext } from "@/lib/notifications/deliver";
 import { extractComponents } from "@/lib/notifications/extract-components";
 import { danteLinks } from "@/lib/notifications/links";
-import { checkPullRequestAuthor } from "@/lib/notifications/pr-author";
-import { authorSkipReason } from "@/lib/notifications/pr-author-rules";
+import { checkPayer } from "@/lib/notifications/pr-author";
+import { payerOutcome, type Payer } from "@/lib/notifications/pr-author-rules";
 import {
   generatePullRequestTests,
   savePullRequestTests,
@@ -63,8 +63,14 @@ export type JobProject = {
  *
  * 같은 커밋에 대한 작업은 하나다(projectId·prNumber·headSha). GitHub 이 같은 배달을
  * 다시 보내거나 Re-run 을 누르면 새로 만들지 않고 그 작업을 다시 queued 로 되돌린다.
+ *
+ * payer 는 AI 비용을 낼 사람이다. 푸시는 PR 작성자, Re-run 은 누른 사람을 넘긴다.
  */
-export async function enqueuePullRequestJob(project: JobProject, pr: PullRequestContext) {
+export async function enqueuePullRequestJob(
+  project: JobProject,
+  pr: PullRequestContext,
+  payer: Payer
+) {
   const key = { projectId: project.id, prNumber: pr.number, headSha: pr.headSha };
   const job = await prisma.pullRequestJob.upsert({
     where: { projectId_prNumber_headSha: key },
@@ -73,10 +79,15 @@ export async function enqueuePullRequestJob(project: JobProject, pr: PullRequest
     select: { id: true },
   });
 
-  after(() => runPullRequestJob(job.id, project, pr));
+  after(() => runPullRequestJob(job.id, project, pr, payer));
 }
 
-async function runPullRequestJob(jobId: string, project: JobProject, pr: PullRequestContext) {
+async function runPullRequestJob(
+  jobId: string,
+  project: JobProject,
+  pr: PullRequestContext,
+  payer: Payer
+) {
   await prisma.pullRequestJob.update({
     where: { id: jobId },
     data: { status: "running", startedAt: new Date(), attempts: { increment: 1 } },
@@ -90,7 +101,7 @@ async function runPullRequestJob(jobId: string, project: JobProject, pr: PullReq
   };
 
   try {
-    const run = await pullRequestRun(jobId, project, pr, progress);
+    const run = await pullRequestRun(jobId, project, pr, payer, progress);
 
     // 처리하는 사이에 새 커밋이 푸시됐으면 옛 결과로 코멘트를 덮지 않는다.
     // sticky 코멘트는 PR 에 하나라, 늦게 끝난 옛 작업이 새 결과를 지워버린다.
@@ -146,6 +157,7 @@ async function pullRequestRun(
   jobId: string,
   project: JobProject,
   pr: PullRequestContext,
+  payer: Payer,
   progress: (run: RunSummary) => Promise<void>
 ): Promise<RunSummary> {
   const { number: prNumber, headSha } = pr;
@@ -173,12 +185,9 @@ async function pullRequestRun(
   if (located.length === 0) return { ...run, status: "unchanged" };
   const components = located.map(({ name, change, tests }) => ({ name, change, tests }));
 
-  // 할 일이 있을 때만 작성자를 본다. README PR 에 "작성자가 멤버가 아님"을 적을 이유가 없다.
-  const author = await checkPullRequestAuthor(project.teamId, pr.author);
-  if (author.kind !== "ok") {
-    const skipReason = authorSkipReason(author) ?? undefined;
-    return { ...run, status: "skipped", components, skipReason };
-  }
+  // 할 일이 있을 때만 비용을 낼 사람을 본다. README PR 에 "작성자가 멤버가 아님"을 적을 이유가 없다.
+  const author = await checkPayer(project.teamId, pr.author, payer);
+  if (author.kind !== "ok") return { ...run, ...payerOutcome(author, payer), components };
 
   await progress({ ...run, status: "generating", components });
 

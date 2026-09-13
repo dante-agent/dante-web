@@ -170,7 +170,7 @@ function RerunPanel({
         <p className="text-muted-foreground flex-1">
           {inFlight
             ? "Dante is already working on this pull request."
-            : "Generate and run tests again for the latest commit of this pull request. AI usage is billed to the pull request author."}
+            : "Generate and run tests again for the latest commit of this pull request. AI usage is billed to you."}
         </p>
         <button
           type="submit"
