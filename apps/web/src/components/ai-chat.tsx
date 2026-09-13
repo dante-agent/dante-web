@@ -25,6 +25,7 @@ import {
   Wallet,
   X,
 } from "lucide-react";
+import { ChatMarkdown } from "@/components/chat-markdown";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -466,21 +467,26 @@ function ChatPanel({
               <div key={i} className={cn("flex", m.role === "user" && "justify-end")}>
                 <div
                   className={cn(
-                    "animate-in fade-in slide-in-from-bottom-1 text-sm wrap-break-word whitespace-pre-wrap duration-200",
+                    "animate-in fade-in slide-in-from-bottom-1 text-sm wrap-break-word duration-200",
                     m.role === "user"
                       ? // 말풍선 모양은 Figma(찾아줘 v2.0, node 14407:155707) 기준:
                         // radius 24, 보내는 쪽 모서리만 각지게(= 꼬리), 패딩 16/12,
                         // 14px medium, line-height 1.4. 색은 우리 토큰 그대로.
                         // 85% 상한은 유지 — 반대쪽에 여백이 남아야 누가 한 말인지 보인다.
-                        "bg-primary text-primary-foreground max-w-[85%] rounded-3xl rounded-br-none px-4 py-3 leading-[1.4] font-medium"
+                        "bg-primary text-primary-foreground max-w-[85%] rounded-3xl rounded-br-none px-4 py-3 leading-[1.4] font-medium whitespace-pre-wrap"
                       : "text-foreground max-w-full leading-relaxed"
                   )}
                 >
                   {m.role === "user" ? (
                     <CollapsibleText text={m.content} />
+                  ) : m.content ? (
+                    // 사용자 메시지는 입력한 그대로(pre-wrap), AI 답변만 마크다운으로 그린다.
+                    <ChatMarkdown
+                      text={m.content}
+                      streaming={pending && i === messages.length - 1}
+                    />
                   ) : (
-                    m.content ||
-                    (pending && <Loader2 className="text-muted-foreground size-4 animate-spin" />)
+                    pending && <Loader2 className="text-muted-foreground size-4 animate-spin" />
                   )}
                   {"aborted" in m && m.aborted && (
                     <p className="text-muted-foreground mt-1 text-xs">중단됨 · 저장되지 않았어요</p>

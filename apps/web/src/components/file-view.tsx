@@ -7,7 +7,6 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { Monaco } from "@monaco-editor/react";
 import {
   Copy,
   Download,
@@ -21,6 +20,7 @@ import {
 } from "lucide-react";
 import { iconForFile } from "@/components/file-icons";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { MONACO_THEME as THEME, setupMonaco } from "@/lib/monaco-theme";
 import { pushRecent } from "@/lib/recent-files";
 import { cn } from "@/lib/utils";
 
@@ -40,30 +40,6 @@ const DiffEditor = dynamic(() => import("@monaco-editor/react").then((m) => m.Di
   ssr: false,
   loading: Fallback,
 });
-
-const THEME = "dante-black";
-
-const setupMonaco = (monaco: Monaco) => {
-  monaco.editor.defineTheme(THEME, {
-    base: "vs-dark",
-    inherit: true,
-    rules: [],
-    colors: {
-      "editor.background": "#000000",
-      "editorGutter.background": "#000000",
-      "editorLineNumber.background": "#000000",
-      "diffEditor.insertedLineBackground": "#132a1c",
-      "diffEditor.removedLineBackground": "#331a1c",
-      "diffEditor.insertedTextBackground": "#2ea04340",
-      "diffEditor.removedTextBackground": "#f8514940",
-      "diffEditor.border": "#00000000",
-    },
-  });
-  // 목업 코드 뷰어 — 미설치 모듈("vitest" 등) 진단 안 띄운다.
-  const diag = { noSemanticValidation: true, noSuggestionDiagnostics: true };
-  monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions(diag);
-  monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions(diag);
-};
 
 const OPTIONS = {
   readOnly: true,
