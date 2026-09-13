@@ -48,6 +48,8 @@ export async function importRepo(formData: FormData) {
       defaultBranch: repo.default_branch,
       isPrivate: repo.private,
       userId: user.id,
+      // 프로젝트는 레포를 열어준 설치와 같은 팀에 속한다.
+      teamId: installation.teamId,
       installationId,
     },
   });
