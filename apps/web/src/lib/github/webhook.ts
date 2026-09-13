@@ -1,15 +1,23 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { prisma } from "@dante/db";
 import {
+  fetchFileText,
   fetchHeadCommitMessage,
   fetchPullRequest,
   fetchPullRequestFiles,
   installationClient,
+  type Octokit,
+  type RepoRef,
 } from "@/lib/github/pull-request";
-import { changedComponents } from "@/lib/notifications/changed-components";
+import {
+  changedComponentFiles,
+  fileComponentName,
+  type ChangedFile,
+} from "@/lib/notifications/changed-components";
 import { deliverRunSummary, type PullRequestContext } from "@/lib/notifications/deliver";
+import { extractComponents } from "@/lib/notifications/extract-components";
 import { danteLinks } from "@/lib/notifications/links";
-import { queuedRun, type RunSummary } from "@/lib/notifications/run-summary";
+import { queuedRun, type ComponentChange, type RunSummary } from "@/lib/notifications/run-summary";
 
 // ⚠️ 서버 전용. 웹훅 시크릿을 읽는다.
 //
@@ -293,7 +301,11 @@ async function handlePullRequest(payload: PullRequestEvent) {
       headCommitMessage: await commitMessage(project, pr.head.sha),
     };
 
-    await deliverRunSummary(project, context, await pullRequestRun(project, pr.number));
+    await deliverRunSummary(
+      project,
+      context,
+      await pullRequestRun(project, pr.number, pr.head.sha)
+    );
   }
 
   return `pr #${pr.number} ${payload.action} → ${projects.length} project(s)`;
@@ -332,7 +344,11 @@ async function handleCheckRun(payload: CheckRunEvent) {
       continue;
     }
 
-    await deliverRunSummary(project, context, await pullRequestRun(project, prNumber));
+    await deliverRunSummary(
+      project,
+      context,
+      await pullRequestRun(project, prNumber, context.headSha)
+    );
   }
 
   return `check re-run #${prNumber} → ${projects.length} project(s)`;
@@ -347,25 +363,66 @@ async function handleCheckRun(payload: CheckRunEvent) {
  */
 async function pullRequestRun(
   project: { ref: string; repoOwner: string; repoName: string; installationId: bigint },
-  prNumber: number
+  prNumber: number,
+  headSha: string
 ): Promise<RunSummary> {
   const run = queuedRun(danteLinks(project.ref, prNumber));
+  const ref = { owner: project.repoOwner, repo: project.repoName };
 
-  let files;
+  let octokit: Octokit;
+  let files: ChangedFile[];
   try {
-    const octokit = await installationClient(project.installationId);
-    files = await fetchPullRequestFiles(
-      octokit,
-      { owner: project.repoOwner, repo: project.repoName },
-      prNumber
-    );
+    octokit = await installationClient(project.installationId);
+    files = changedComponentFiles(await fetchPullRequestFiles(octokit, ref, prNumber));
   } catch (error) {
     console.error(`[github-webhook] changed files lookup failed for #${prNumber}`, error);
     return run;
   }
 
-  const components = changedComponents(files);
+  // 경로로 먼저 거른다. 여기서 비면 파일 내용을 한 번도 받지 않고 끝난다.
+  if (files.length === 0) return { ...run, status: "unchanged" };
+
+  const components = await componentsIn(octokit, ref, headSha, files);
   return components.length === 0 ? { ...run, status: "unchanged" } : { ...run, components };
+}
+
+/**
+ * 파일 읽기 상한. 웹훅 안에서 읽으므로 GitHub 의 배달 타임아웃(10초)을 넘기면
+ * 안 된다. 넘는 파일은 내용을 안 보고 파일 단위로 센다.
+ * TODO(파이프라인): 생성·실행이 붙어 웹훅 밖(작업 큐)으로 옮기면 상한을 푼다.
+ */
+const MAX_FILES_TO_READ = 30;
+
+/**
+ * 후보 파일을 PR head 시점으로 읽어 실제 컴포넌트만 남긴다.
+ *
+ * 모르면 남긴다. 지워진 파일(읽을 내용이 없다), 못 읽은 파일, 상한을 넘은 파일은
+ * 파일 이름 하나로 센다 — 여기서 빼면 컴포넌트를 고친 PR 이 unchanged 로 끝난다.
+ * 읽었는데 컴포넌트가 없는 파일만 뺀다.
+ */
+async function componentsIn(
+  octokit: Octokit,
+  ref: RepoRef,
+  headSha: string,
+  files: ChangedFile[]
+): Promise<ComponentChange[]> {
+  const perFile = await Promise.all(
+    files.map(async (file, index): Promise<ComponentChange[]> => {
+      const fallback = [{ name: fileComponentName(file.filePath), change: file.change, tests: 0 }];
+      if (file.change === "removed" || index >= MAX_FILES_TO_READ) return fallback;
+
+      const source = await fetchFileText(octokit, ref, file.filePath, headSha);
+      if (source === null) return fallback;
+
+      return extractComponents(file.filePath, source).map((component) => ({
+        name: component.name ?? fileComponentName(file.filePath),
+        change: file.change,
+        tests: 0,
+      }));
+    })
+  );
+
+  return perFile.flat();
 }
 
 /**

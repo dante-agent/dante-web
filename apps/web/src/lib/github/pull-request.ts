@@ -226,6 +226,27 @@ export async function fetchPullRequestFiles(octokit: Octokit, ref: RepoRef, prNu
 }
 
 /**
+ * 특정 커밋 시점의 파일 텍스트.
+ *
+ * 못 읽으면 null 이다 — 없는 파일, 1MB 초과(contents API 가 내용을 안 준다), 권한 문제가
+ * 전부 여기로 온다. lib/github/blob.ts 와 같은 API 지만 그쪽은 기본 브랜치를 읽고,
+ * 여기는 PR head 처럼 아직 머지되지 않은 커밋을 읽는다.
+ */
+export async function fetchFileText(octokit: Octokit, ref: RepoRef, path: string, sha: string) {
+  try {
+    const { data } = await octokit.request("GET /repos/{owner}/{repo}/contents/{path}", {
+      ...ref,
+      path,
+      ref: sha,
+    });
+    if (Array.isArray(data) || data.type !== "file" || data.encoding !== "base64") return null;
+    return Buffer.from(data.content, "base64").toString("utf8");
+  } catch {
+    return null;
+  }
+}
+
+/**
  * head 커밋 메시지. `[skip dante]` 를 찾는 데만 쓴다.
  *
  * pull_request 페이로드에는 커밋 메시지가 없어서 한 번 더 물어봐야 한다.
