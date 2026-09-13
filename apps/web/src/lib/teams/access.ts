@@ -50,6 +50,16 @@ export const getTeamRole = cache(async (teamId: string, userId: string) => {
   return member?.role ?? null;
 });
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * URL·폼에서 온 팀 id 가 UUID 모양인가.
+ * 아니면 DB 에 묻지 않는다 — 컬럼이 uuid 라 Prisma 가 예외를 던져 404 대신 500 이 된다.
+ */
+export function isTeamId(value: string) {
+  return UUID.test(value);
+}
+
 /**
  * 서버 액션·페이지 진입점. 로그인 + 멤버 확인 + (필요하면) 역할 확인.
  *
@@ -58,6 +68,7 @@ export const getTeamRole = cache(async (teamId: string, userId: string) => {
  * 멤버인데 역할이 모자라면 그때는 던진다 — 이미 팀이 보이는 사람이다.
  */
 export async function requireTeamMember(teamId: string, required: TeamRole = "member") {
+  if (!isTeamId(teamId)) notFound();
   const user = await requireUser();
   const role = await getTeamRole(teamId, user.id);
   if (!role) notFound();
