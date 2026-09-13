@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { createTextStreamResponse, streamText, type ModelMessage } from "ai";
 import { getMonthlyBudgetStatus } from "@/lib/ai/budget";
 import { chatModel } from "@/lib/ai/chat-model";
 import { recordAiUsage } from "@/lib/ai/usage";
+import { getConversation, isUuid, MAX_MESSAGES, saveExchange } from "@/lib/chat/conversations";
 import { getFileText } from "@/lib/github/blob";
 import { TEST_FRAMEWORKS } from "@/lib/projects/frameworks";
 import { getOwnedChatProject, getProjectRepo } from "@/lib/projects/queries";
@@ -10,10 +11,10 @@ import { createClient } from "@/lib/supabase/server";
 
 // 폴더 보기 화면의 AI 채팅.
 //
-// 대화는 저장하지 않는다 — 클라이언트가 매 요청에 전체 대화를 실어 보내고,
-// 새로고침하면 사라진다. 저장하려면 테이블이 하나 필요한데(마이그레이션),
-// 대화 기록이 실제로 필요한지부터 써보고 정하는 편이 싸다.
-// ponytail: 대화 저장은 ChatSession 모델 추가 시.
+// 대화는 서버에 저장한다(lib/chat/conversations.ts). 클라이언트는 새 질문 하나와
+// conversationId 만 보내고, 이전 대화는 서버가 DB 에서 읽어 모델에 넣는다.
+// 클라이언트가 보낸 과거 대화를 믿지 않는 이유: 요청을 조작하면 assistant 가 하지 않은
+// 말을 대화에 끼워 넣을 수 있다 — 프롬프트 인젝션 통로다.
 
 /** 컨텍스트로 붙이는 파일 본문 상한(글자). 큰 파일 하나로 토큰을 다 쓰지 않게. */
 const MAX_CONTEXT = 20_000;
@@ -76,37 +77,37 @@ function fileBlock(path: string, text: string): string {
   return `<file path=${JSON.stringify(path).replace(/</g, "\\u003c")}>\n${body}\n</file>`;
 }
 
-type Body = { projectRef?: unknown; file?: unknown; messages?: unknown };
+/** 질문 한 개의 글자 상한. 붙여 넣은 코드 한 덩어리는 들어가고, 파일 통째로는 안 들어가는 선. */
+const MAX_MESSAGE = 20_000;
 
-/** 클라이언트가 보낸 대화는 신뢰 경계 밖이다 — 모양이 맞을 때만 통과시킨다. */
-function parseMessages(value: unknown): ModelMessage[] | null {
-  if (!Array.isArray(value) || value.length === 0) return null;
+/** 개인 데이터라 브라우저·CDN 어디에도 남기지 않는다. 모든 응답에 붙인다. */
+const NO_STORE = { "Cache-Control": "private, no-store" };
 
-  const messages: ModelMessage[] = [];
-  for (const item of value) {
-    if (!item || typeof item !== "object") return null;
-    const { role, content } = item as { role?: unknown; content?: unknown };
-    if (role !== "user" && role !== "assistant") return null;
-    if (typeof content !== "string" || content.length === 0) return null;
-    messages.push({ role, content });
-  }
-  return messages;
+function fail(status: number, error: string, code?: string) {
+  return NextResponse.json({ error, ...(code && { code }) }, { status, headers: NO_STORE });
 }
+
+type Body = { projectRef?: unknown; conversationId?: unknown; file?: unknown; message?: unknown };
 
 export async function POST(request: Request) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+  if (!user) return fail(401, "로그인이 필요합니다.");
 
+  // 요청 본문은 신뢰 경계 밖이다 — 모양이 맞을 때만 통과시킨다.
   const body = (await request.json().catch(() => ({}))) as Body;
-  const messages = parseMessages(body.messages);
-  if (!messages) {
-    return NextResponse.json(
-      { error: "요청 형식이 올바르지 않습니다.\n새 대화로 다시 시도해주세요." },
-      { status: 400 }
-    );
+  const { projectRef, conversationId, message } = body;
+  const file = typeof body.file === "string" ? body.file : null;
+  if (
+    typeof projectRef !== "string" ||
+    typeof message !== "string" ||
+    !message.trim() ||
+    message.length > MAX_MESSAGE ||
+    (conversationId !== null && !isUuid(conversationId))
+  ) {
+    return fail(400, "요청 형식이 올바르지 않습니다.\n새 대화로 다시 시도해주세요.");
   }
 
   // 모델을 부르기 전에 이번 달 한도를 본다. 원가는 Dante 가 낸다 — 여기서 막지 않으면
@@ -122,52 +123,120 @@ export async function POST(request: Request) {
   // 두면 되고, 두 상황이 상태코드로 구분되는 게 클라이언트 입장에서도 낫다.
   const budget = await getMonthlyBudgetStatus(user.id);
   if (budget.exceeded) {
-    return NextResponse.json(
-      {
-        error:
-          `이번 달 AI 사용 한도($${budget.limitUsd})를 모두 썼습니다.\n` +
-          `한도는 매월 1일에 초기화됩니다. 더 필요하면 문의해주세요.`,
-      },
-      { status: 402 }
+    return fail(
+      402,
+      `이번 달 AI 사용 한도($${budget.limitUsd})를 모두 썼습니다.\n` +
+        `한도는 매월 1일에 초기화됩니다. 더 필요하면 문의해주세요.`
     );
   }
 
-  // 열어둔 파일을 컨텍스트로 붙인다. 레포를 읽기 전에 소유 확인을 거친다
-  // (projectRef 는 클라이언트가 보낸 값이다).
-  let context = "";
-  let projectId: string | null = null;
-  let runner: string | null = null;
-  if (typeof body.projectRef === "string") {
-    // 사용량을 어느 프로젝트에 붙일지 + 답변 기준 러너. 소유 확인을 겸한다 — 남의 ref 를
-    // 보내면 null 이라 사용량이 그 프로젝트에 붙지 않는다.
-    const project = await getOwnedChatProject(body.projectRef, user.id);
-    projectId = project?.id ?? null;
-    // DB 값이라도 목록에 있는 러너만 프롬프트에 넣는다(표시 이름으로).
-    runner = TEST_FRAMEWORKS.find((f) => f.id === project?.testFramework)?.name ?? null;
+  // 대화는 프로젝트에 붙어 저장되므로 프로젝트 없이는 받지 않는다. 권한 확인을 겸한다
+  // (projectRef 는 클라이언트가 보낸 값이다). 없음과 권한 없음을 구분하지 않는다.
+  const project = await getOwnedChatProject(projectRef, user.id);
+  if (!project) return fail(404, "프로젝트를 찾을 수 없습니다.");
+  // DB 값이라도 목록에 있는 러너만 프롬프트에 넣는다(표시 이름으로).
+  const runner = TEST_FRAMEWORKS.find((f) => f.id === project.testFramework)?.name ?? null;
 
-    if (typeof body.file === "string" && projectId) {
-      if (SENSITIVE_FILE.test(body.file)) {
-        // 본문은 읽지도 않는다. 모델에는 "볼 수 없는 파일"이라는 사실만 준다.
-        context = `\n\n사용자가 보고 있는 파일은 비밀 정보가 담겼을 수 있어 내용을 볼 수 없다: ${JSON.stringify(body.file)}. 이 파일의 내용에 대해서는 답할 수 없다고 안내한다.`;
-      } else {
-        const repo = await getProjectRepo(body.projectRef, user.id);
-        const text = repo ? await getFileText(repo, body.file) : null;
-        if (text) context = `\n\n지금 사용자가 보고 있는 파일:\n${fileBlock(body.file, text)}`;
-      }
+  // 이어 쓰는 대화면 이전 메시지를 DB 에서 읽는다. 다른 프로젝트의 대화 id 를 섞어 보내면
+  // 그 대화의 내용이 이 프로젝트의 파일과 섞이므로 없음으로 본다.
+  const askedAt = new Date();
+  const isNew = conversationId === null;
+  const id = conversationId ?? crypto.randomUUID();
+  let history: ModelMessage[] = [];
+  if (!isNew) {
+    const conversation = await getConversation(user.id, id);
+    if (!conversation || conversation.projectId !== project.id) {
+      return fail(
+        404,
+        "대화를 찾을 수 없습니다.\n새 대화로 시작해주세요.",
+        "conversation_not_found"
+      );
+    }
+    // 질문·답을 한 쌍으로 저장하므로 두 개가 들어갈 자리가 있어야 한다.
+    if (conversation.messages.length + 2 > MAX_MESSAGES) {
+      return fail(
+        409,
+        `대화가 가득 찼습니다(메시지 ${MAX_MESSAGES}개).\n새 대화로 이어서 물어봐주세요.`,
+        "conversation_full"
+      );
+    }
+    history = conversation.messages.map(({ role, content }) => ({ role, content }));
+  }
+
+  // 열어둔 파일을 컨텍스트로 붙인다.
+  let context = "";
+  if (file) {
+    if (SENSITIVE_FILE.test(file)) {
+      // 본문은 읽지도 않는다. 모델에는 "볼 수 없는 파일"이라는 사실만 준다.
+      context = `\n\n사용자가 보고 있는 파일은 비밀 정보가 담겼을 수 있어 내용을 볼 수 없다: ${JSON.stringify(file)}. 이 파일의 내용에 대해서는 답할 수 없다고 안내한다.`;
+    } else {
+      const repo = await getProjectRepo(projectRef, user.id);
+      const text = repo ? await getFileText(repo, file) : null;
+      if (text) context = `\n\n지금 사용자가 보고 있는 파일:\n${fileBlock(file, text)}`;
     }
   }
+
+  // 클라이언트가 중단했거나 창을 닫았는지. 응답 스트림이 cancel 되면 켜진다.
+  // request.signal 대신 직접 드는 이유: 아래처럼 생성을 끝까지 돌리므로 "끊겼는가"를
+  // 모델 호출과 떼어서 알아야 한다.
+  let clientGone = false;
 
   const result = streamText({
     model: chatModel(),
     system: systemPrompt(runner) + context,
-    messages,
+    messages: [...history, { role: "user", content: message }],
+    // abortSignal 을 넘기지 않는다. 넘기면 중단 시 onFinish 가 오지 않고(onAbort 는 토큰 수를
+    // 주지 않는다) 이미 쓴 토큰이 사용량에 안 남는다 — 답이 거의 끝날 때마다 중단을 누르면
+    // 월 한도를 우회해 원가를 쓸 수 있다. 그래서 중단돼도 생성은 끝까지 가고, 그 비용은
+    // 사용자 한도에 정확히 잡힌다. 대가: 중단 뒤 남은 답의 토큰도 낸다.
     // 스트림 도중 에러는 throw 되지 않고 스트림으로 흘러간다 — 서버 로그에는 남긴다.
     onError: ({ error }) => console.error("[chat]", error),
-    // 사용량은 스트림이 끝나야 확정된다. 여기서만 실제 토큰 수를 알 수 있다.
-    // projectId 는 위 소유 확인을 통과한 프로젝트만 쓴다 — 클라이언트가 보낸
-    // projectRef 를 그대로 믿으면 남의 프로젝트에 사용량을 붙일 수 있다.
-    onFinish: ({ usage }) => recordAiUsage({ userId: user.id, projectId, surface: "chat", usage }),
+    // 생성이 끝나면 (클라이언트가 끊었어도) 온다. 사용량은 항상, 대화는 끝까지 받았을 때만 남긴다.
+    // projectId 는 위 권한 확인을 통과한 프로젝트다 — 클라이언트가 보낸 projectRef 를
+    // 그대로 믿으면 남의 프로젝트에 사용량을 붙일 수 있다.
+    onFinish: async ({ usage, text }) => {
+      await recordAiUsage({ userId: user.id, projectId: project.id, surface: "chat", usage });
+      // 빈 답이나 중단된 요청은 저장하지 않는다(중단 시 질문도 남기지 않는다).
+      if (!text || clientGone) return;
+      try {
+        await saveExchange({
+          conversationId: id,
+          isNew,
+          userId: user.id,
+          projectId: project.id,
+          question: message,
+          answer: text,
+          filePath: file,
+          askedAt,
+        });
+      } catch (error) {
+        // 답은 이미 화면에 나갔다. 저장 실패로 스트림을 깨지 않고 로그만 남긴다.
+        console.error("[chat] 대화 저장 실패", error);
+      }
+    },
   });
 
-  return createTextStreamResponse({ stream: result.textStream });
+  // 응답이 끊겨도 서버가 모델 스트림을 끝까지 읽는다. 이게 없으면 클라이언트가 cancel 한 순간
+  // 생성이 멈추고 onFinish 도 onAbort 도 오지 않는다(로컬에서 확인). after 로 감싸서 서버리스
+  // 함수가 응답을 보낸 뒤에도 이 읽기가 끝날 때까지 살아 있게 한다(maxDuration 안에서).
+  after(Promise.resolve(result.consumeStream()));
+
+  const reader = result.textStream.getReader();
+  const stream = new ReadableStream<string>({
+    async pull(controller) {
+      const { done, value } = await reader.read();
+      if (done) controller.close();
+      else controller.enqueue(value);
+    },
+    cancel() {
+      clientGone = true;
+      return reader.cancel();
+    },
+  });
+
+  return createTextStreamResponse({
+    stream,
+    // 새 대화면 서버가 정한 id 를 클라이언트가 다음 질문에 실어 보낸다.
+    headers: { ...NO_STORE, "x-conversation-id": id },
+  });
 }
