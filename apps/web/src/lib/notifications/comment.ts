@@ -1,3 +1,4 @@
+import { RUNNER_REPORTS_BACK } from "@/lib/notifications/check-run";
 import {
   isTerminal,
   type ComponentChange,
@@ -28,14 +29,7 @@ export function commentMarker(projectRef: string) {
   return `${COMMENT_MARKER}:${projectRef} -->`;
 }
 
-/**
- * 진행 중 상태의 제목 줄. 하나의 코멘트가 이 문구들을 거쳐 간다.
- *
- * TODO(파이프라인): 러너가 없는 동안 이 코멘트는 "Queued" 에서 멈춰 있는데,
- * 같은 PR 의 체크는 "Not running tests yet" 이라고 말한다(check-run.ts 의
- * RUNNER_REPORTS_BACK). 두 문구가 서로 다른 말을 하는 셈이라 코멘트도 같은
- * 톤으로 맞춰야 한다. 파이프라인 작업과 함께 한 번에 정리한다.
- */
+/** 진행 중 상태의 제목 줄. 하나의 코멘트가 이 문구들을 거쳐 간다. */
 const PROGRESS_LABEL: Record<Exclude<RunStatus, "completed" | "failed" | "unchanged">, string> = {
   queued: "Queued",
   scanning: "Scanning components",
@@ -50,7 +44,7 @@ export function renderPrComment(
 ): string {
   const body = isTerminal(run.status)
     ? renderTerminal(run, settings)
-    : `### Dante — ${PROGRESS_LABEL[run.status as keyof typeof PROGRESS_LABEL]}`;
+    : renderProgress(run, settings);
 
   const links = renderLinks(run, settings.prCommentFields);
 
@@ -60,6 +54,35 @@ export function renderPrComment(
       .join("\n")
       .trimEnd() + "\n"
   );
+}
+
+/**
+ * 진행 중 상태.
+ *
+ * 러너가 결과를 되돌려주기 전까지는 "Queued" 라고 적지 않는다. 기다려도 다음
+ * 단계로 넘어가지 않으니 거짓말이 되고, 같은 PR 의 체크("Not running tests yet")와도
+ * 말이 어긋난다. 대신 지금 실제로 한 일 — 바뀐 컴포넌트를 찾은 것 — 까지만 적는다.
+ */
+function renderProgress(run: RunSummary, settings: NotificationSettings) {
+  if (RUNNER_REPORTS_BACK) {
+    return `### Dante — ${PROGRESS_LABEL[run.status as keyof typeof PROGRESS_LABEL]}`;
+  }
+
+  const count = run.components.length;
+  // 파일 목록을 못 읽은 경우에도 여기로 온다. 그때는 몇 개인지 모른다고 적지 않고 뺀다.
+  const title =
+    count > 0
+      ? `### Dante — found ${count} changed component${count === 1 ? "" : "s"}, not running tests yet`
+      : "### Dante — not running tests yet";
+
+  if (count === 0 || !settings.prCommentFields.components) return title;
+
+  // 표(componentsSection)를 쓰지 않는 이유: Tests 열이 전부 0 으로 찍혀서 "테스트가
+  // 없다"로 읽힌다. 아직 세지 않은 것이지 없는 게 아니다.
+  const lines = run.components.map(
+    (component) => `- ${inlineCode(component.name)} ${component.change}`
+  );
+  return [title, "", ...lines].join("\n");
 }
 
 function renderTerminal(run: RunSummary, settings: NotificationSettings) {

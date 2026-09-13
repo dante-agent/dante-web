@@ -19,7 +19,7 @@ export const CHECK_RUN_NAME = "dante";
  * true 로 바꾼다. 그때부터 중간 상태가 in_progress 로 나가고, 끝나면 같은
  * 체크에 결론이 채워진다. 그 전에는 끝나지 않는 체크를 만들지 않는다.
  */
-const RUNNER_REPORTS_BACK = false;
+export const RUNNER_REPORTS_BACK = false;
 
 export type CheckConclusion = "success" | "failure" | "neutral" | "skipped" | "cancelled";
 
@@ -50,12 +50,13 @@ export function checkRunResult(run: RunSummary, settings: NotificationSettings):
     // 그래서 파이프라인이 붙기 전까지는 바로 닫는다. neutral 이라 required 로
     // 걸려 있어도 아무것도 막지 않고, 자리는 잡아둔다.
     if (!RUNNER_REPORTS_BACK) {
+      const count = run.components.length;
+      const found = count > 0 ? `Found ${count} changed component${count === 1 ? "" : "s"}. ` : "";
       return {
         status: "completed",
         conclusion: "neutral",
         title: "Not running tests yet",
-        summary:
-          "Dante recorded this pull request but does not run tests yet. This check will report a real result once the runner lands.",
+        summary: `${found}Dante does not generate or run tests yet. This check will report a real result once the runner lands.`,
       };
     }
 
