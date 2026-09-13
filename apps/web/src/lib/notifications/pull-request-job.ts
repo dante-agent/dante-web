@@ -1,5 +1,5 @@
 import { after } from "next/server";
-import { prisma } from "@dante/db";
+import { Prisma, prisma } from "@dante/db";
 import {
   fetchFileText,
   fetchPullRequestFiles,
@@ -107,6 +107,13 @@ async function runPullRequestJob(jobId: string, project: JobProject, pr: PullReq
     await finish(jobId, "failed", error instanceof Error ? error.message : String(error)).catch(
       () => {}
     );
+    // 진행 상태(generating·running)를 이미 보냈으면 체크가 in_progress 로 남아 영원히 돈다.
+    // 결론을 채워 닫는다. 이것마저 실패하면 할 수 있는 게 없다.
+    await progress({
+      ...queuedRun(danteLinks(project.ref, pr.number)),
+      status: "failed",
+      error: "Dante stopped before it could finish this run. Re-run to try again.",
+    }).catch(() => {});
   }
 }
 
@@ -206,6 +213,22 @@ async function pullRequestRun(
         }
       : { notRun: testRun.reason }
   );
+
+  // preview 화면이 읽는다. 로그는 크니 따로 둔다. 실행하지 않았으면 이전 결과를 지운다 —
+  // Re-run 한 같은 커밋에 옛 결과가 남으면 지금 코멘트와 화면이 어긋난다.
+  // 저장이 실패해도 PR 에는 결과를 보낸다. 화면 하나 때문에 코멘트·체크가 멈추면 안 된다.
+  const { logs, ...runResult } = testRun.kind === "ran" ? testRun.result : { logs: null };
+  await prisma.pullRequestJob
+    .update({
+      where: { id: jobId },
+      data: {
+        runResult: testRun.kind === "ran" ? runResult : Prisma.DbNull,
+        runLogs: logs,
+      },
+    })
+    .catch((error) => {
+      console.error(`[pull-request-job] saving run result failed for #${prNumber}`, error);
+    });
 
   return finalRun(run, { components: located, generation, testRun });
 }
