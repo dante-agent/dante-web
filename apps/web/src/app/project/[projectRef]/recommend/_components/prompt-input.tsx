@@ -5,7 +5,7 @@ export function PromptInput() {
     <form className="bg-card border-border flex items-center gap-3 rounded-xl border p-2 pl-4">
       <input
         type="text"
-        placeholder="어떤 컴포넌트의 테스트가 필요한지 설명해주세요..."
+        placeholder="Describe which component you need tests for..."
         className="text-foreground placeholder:text-muted-foreground flex-1 bg-transparent text-sm outline-none"
       />
       <button

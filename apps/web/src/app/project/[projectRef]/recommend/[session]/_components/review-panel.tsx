@@ -30,7 +30,7 @@ export function ReviewPanel({
       <div className="border-border flex h-12 shrink-0 items-center gap-2 border-b px-4">
         <Link
           href={`/project/${projectRef}/recommend`}
-          aria-label="AI 추천 목록으로 돌아가기"
+          aria-label="Back to AI recommendations"
           className="text-muted-foreground hover:bg-muted hover:text-foreground -ml-2 flex size-8 items-center justify-center rounded-md"
         >
           <ArrowLeft className="size-4" />
@@ -54,27 +54,27 @@ export function ReviewPanel({
       {/* 본문 */}
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
         <p className="text-muted-foreground text-sm">
-          테스트 생성·검증·리뷰를 위한 사전 단계가 모두 완료되었습니다.
+          All preliminary steps for test generation, verification, and review are complete.
         </p>
 
         <p className="flex items-center gap-2 text-sm">
-          <span className="text-muted-foreground">대상</span>
+          <span className="text-muted-foreground">Target</span>
           <span className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs">
             {session.targetFile}
           </span>
         </p>
 
         <div>
-          <p className="text-sm font-semibold">모든 계획 단계 완료</p>
+          <p className="text-sm font-semibold">All plan steps complete</p>
           <p className="text-muted-foreground mt-0.5 text-sm">
-            모든 계획 단계가 성공적으로 끝났습니다. 제출 준비가 되었습니다.
+            All plan steps finished successfully. Ready to submit.
           </p>
         </div>
 
         {/* Ready for review 카드 */}
         <div className="border-border bg-card rounded-xl border">
           <div className="border-border flex items-center justify-between border-b px-4 py-3">
-            <span className="text-sm font-semibold">리뷰 준비 완료 🎉</span>
+            <span className="text-sm font-semibold">Ready for review 🎉</span>
             <span className="flex items-center gap-1.5 font-mono text-xs">
               <span className="text-emerald-400">+{session.code.additions}</span>
               {session.code.deletions > 0 && (
@@ -97,7 +97,7 @@ export function ReviewPanel({
           {/* 카드 푸터 */}
           <div className="border-border flex items-center justify-between border-t px-4 py-2.5">
             <div className="text-muted-foreground flex items-center gap-2 text-xs">
-              <span>이 결과 어땠나요?</span>
+              <span>How was this result?</span>
               <button type="button" className="hover:text-foreground">
                 <ThumbsUp className="size-3.5" />
               </button>
@@ -111,7 +111,7 @@ export function ReviewPanel({
                 type="button"
                 className="bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium"
               >
-                PR 생성
+                Create PR
                 <ChevronDown className="size-3.5" />
               </button>
             </div>

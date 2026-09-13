@@ -4,9 +4,9 @@ import type { RecommendationPriority, TestRecommendation } from "@/lib/projects/
 import { GenerateTestButton } from "./generate-test-button";
 
 const PRIORITY_LABEL: Record<RecommendationPriority, string> = {
-  high: "높음",
-  medium: "보통",
-  low: "낮음",
+  high: "High",
+  medium: "Medium",
+  low: "Low",
 };
 
 const PRIORITY_VARIANT: Record<RecommendationPriority, "destructive" | "secondary" | "outline"> = {

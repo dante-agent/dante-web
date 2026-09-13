@@ -35,13 +35,13 @@ export default async function RecommendPage({
           <SuggestedSection projectRef={projectRef} initial={recommendations} />
         ) : (
           <p className="text-muted-foreground py-12 text-center text-sm">
-            테스트가 없는 파일을 찾지 못했습니다.
+            No files without tests were found.
           </p>
         ))}
       {activeTab === "sessions" && <SessionList projectRef={projectRef} sessions={sessions} />}
       {activeTab === "scheduled" && (
         <p className="text-muted-foreground py-12 text-center text-sm">
-          예약된 테스트 생성 작업이 아직 없습니다.
+          No scheduled test generation jobs yet.
         </p>
       )}
     </div>

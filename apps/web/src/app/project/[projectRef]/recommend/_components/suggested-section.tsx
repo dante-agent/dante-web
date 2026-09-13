@@ -15,11 +15,11 @@ import { SuggestedList } from "./suggested-list";
 type Status = "initial" | RecommendationOutcome | "failed";
 
 const MESSAGE: Record<Status, { text: string; tone: "muted" | "ok" | "warn" | "error" }> = {
-  initial: { text: "경로 이름으로 정렬된 목록입니다.", tone: "muted" },
-  ranked: { text: "AI 가 우선순위를 다시 매겼습니다.", tone: "ok" },
-  budget: { text: "이번 달 AI 예산을 초과해 정렬을 건너뛰었습니다.", tone: "warn" },
-  error: { text: "AI 정렬에 실패했습니다. API 키·설정을 확인해주세요.", tone: "error" },
-  failed: { text: "AI 정렬을 실행하지 못했습니다. 잠시 후 다시 시도해주세요.", tone: "error" },
+  initial: { text: "Sorted by path name.", tone: "muted" },
+  ranked: { text: "AI re-prioritized the list.", tone: "ok" },
+  budget: { text: "Exceeded this month's AI budget, so sorting was skipped.", tone: "warn" },
+  error: { text: "AI sorting failed. Check your API key and settings.", tone: "error" },
+  failed: { text: "Couldn't run AI sorting. Please try again in a moment.", tone: "error" },
 };
 
 const TONE_CLASS: Record<"muted" | "ok" | "warn" | "error", string> = {
@@ -77,7 +77,7 @@ export function SuggestedSection({
           className="border-border hover:bg-muted flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
         >
           <Sparkles className="size-3.5" />
-          {pending ? "정렬 중..." : "AI 로 정렬"}
+          {pending ? "Sorting..." : "Sort with AI"}
         </button>
       </div>
       <SuggestedList projectRef={projectRef} recommendations={recommendations} />
