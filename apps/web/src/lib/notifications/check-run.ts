@@ -15,11 +15,13 @@ export const CHECK_RUN_NAME = "dante";
 /**
  * 러너가 결과를 되돌려주는가.
  *
- * 스캔·테스트 생성·실행이 붙고 그 콜백이 `deliverRunSummary` 를 부르게 되면
- * true 로 바꾼다. 그때부터 중간 상태가 in_progress 로 나가고, 끝나면 같은
- * 체크에 결론이 채워진다. 그 전에는 끝나지 않는 체크를 만들지 않는다.
+ * PR 작업(pull-request-job.ts)이 생성·실행 단계마다 `deliverRunSummary` 를 부르고,
+ * 끝나면 결론을 채운다. 그래서 중간 상태를 in_progress 로 내보낸다.
+ *
+ * 전제: 끝나지 않은 상태(queued 등)를 넘기는 쪽은 반드시 뒤에 결론을 이어서 보내야 한다.
+ * 그렇지 않으면 체크가 영원히 돈다.
  */
-export const RUNNER_REPORTS_BACK = false;
+export const RUNNER_REPORTS_BACK = true;
 
 export type CheckConclusion = "success" | "failure" | "neutral" | "skipped" | "cancelled";
 

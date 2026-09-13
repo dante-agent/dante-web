@@ -21,6 +21,7 @@ export type RunnerResult = {
   report: {
     totals: { total: number; passed: number; failed: number };
     failures: { file: string; name: string; message: string | null }[];
+    files: { file: string; total: number; passed: number; failed: number }[];
   } | null;
   startedAt: string;
   finishedAt: string;

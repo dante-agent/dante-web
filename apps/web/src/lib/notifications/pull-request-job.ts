@@ -23,7 +23,8 @@ import {
   type PullRequestSource,
 } from "@/lib/notifications/pr-test-generation";
 import { runPullRequestTests } from "@/lib/notifications/pr-test-run";
-import { queuedRun, type ComponentChange, type RunSummary } from "@/lib/notifications/run-summary";
+import { finalRun, type LocatedComponent } from "@/lib/notifications/run-result";
+import { queuedRun, type RunSummary } from "@/lib/notifications/run-summary";
 
 // ⚠️ 서버 전용.
 //
@@ -80,8 +81,15 @@ async function runPullRequestJob(jobId: string, project: JobProject, pr: PullReq
     data: { status: "running", startedAt: new Date(), attempts: { increment: 1 } },
   });
 
+  // 생성·실행은 분 단위라 단계마다 같은 코멘트·체크를 고쳐 쓴다(generating → running).
+  // 그사이 새 커밋이 왔으면 옛 작업의 진행 상태로 새 작업의 코멘트를 덮지 않는다.
+  const progress = async (run: RunSummary) => {
+    if (await isSuperseded(jobId, project.id, pr.number)) return;
+    await deliverRunSummary(project, pr, run);
+  };
+
   try {
-    const run = await pullRequestRun(jobId, project, pr);
+    const run = await pullRequestRun(jobId, project, pr, progress);
 
     // 처리하는 사이에 새 커밋이 푸시됐으면 옛 결과로 코멘트를 덮지 않는다.
     // sticky 코멘트는 PR 에 하나라, 늦게 끝난 옛 작업이 새 결과를 지워버린다.
@@ -120,16 +128,17 @@ async function isSuperseded(jobId: string, projectId: string, prNumber: number) 
 }
 
 /**
- * 이 PR 의 첫 상태. 바뀐 컴포넌트가 없으면 여기서 바로 끝난다(unchanged).
+ * 이 PR 의 최종 결과. 바뀐 컴포넌트가 없으면 여기서 바로 끝난다(unchanged).
  *
- * 파일 목록을 못 읽으면 unchanged 로 접지 않고 평소대로 Queued 로 둔다.
+ * 파일 목록을 못 읽으면 unchanged 로 접지 않고 failed 로 둔다.
  * 모르는데 "바뀐 게 없다"고 적으면 실제로 컴포넌트를 고친 PR 에서 코멘트가
- * 빠지고, 체크도 통과처럼 보인다.
+ * 빠지고, 체크도 통과처럼 보인다. queued 로 두면 체크가 끝나지 않는다.
  */
 async function pullRequestRun(
   jobId: string,
   project: JobProject,
-  pr: PullRequestContext
+  pr: PullRequestContext,
+  progress: (run: RunSummary) => Promise<void>
 ): Promise<RunSummary> {
   const { number: prNumber, headSha } = pr;
   const run = queuedRun(danteLinks(project.ref, prNumber));
@@ -142,14 +151,19 @@ async function pullRequestRun(
     files = changedComponentFiles(await fetchPullRequestFiles(octokit, ref, prNumber));
   } catch (error) {
     console.error(`[pull-request-job] changed files lookup failed for #${prNumber}`, error);
-    return run;
+    return {
+      ...run,
+      status: "failed",
+      error: "Dante could not read the files changed in this pull request.",
+    };
   }
 
   // 경로로 먼저 거른다. 여기서 비면 파일 내용을 한 번도 받지 않고 끝난다.
   if (files.length === 0) return { ...run, status: "unchanged" };
 
-  const { components, sources } = await componentsIn(octokit, ref, headSha, files);
-  if (components.length === 0) return { ...run, status: "unchanged" };
+  const { components: located, sources } = await componentsIn(octokit, ref, headSha, files);
+  if (located.length === 0) return { ...run, status: "unchanged" };
+  const components = located.map(({ name, change, tests }) => ({ name, change, tests }));
 
   // 할 일이 있을 때만 작성자를 본다. README PR 에 "작성자가 멤버가 아님"을 적을 이유가 없다.
   const author = await checkPullRequestAuthor(project.teamId, pr.author);
@@ -157,6 +171,8 @@ async function pullRequestRun(
     const skipReason = authorSkipReason(author) ?? undefined;
     return { ...run, status: "skipped", components, skipReason };
   }
+
+  await progress({ ...run, status: "generating", components });
 
   const generation = await generatePullRequestTests({
     userId: author.userId,
@@ -177,7 +193,8 @@ async function pullRequestRun(
     tests: generation.tests,
   });
 
-  // TODO(파이프라인): 실행 결과를 RunSummary 로 바꿔 코멘트·체크에 반영한다.
+  if (generation.tests.length > 0) await progress({ ...run, status: "running", components });
+
   const testRun = await runPullRequestTests({ project, headSha, tests: generation.tests });
   console.info(
     `[pull-request-job] test run for #${prNumber}`,
@@ -190,7 +207,7 @@ async function pullRequestRun(
       : { notRun: testRun.reason }
   );
 
-  return { ...run, components };
+  return finalRun(run, { components: located, generation, testRun });
 }
 
 /**
@@ -213,15 +230,22 @@ async function componentsIn(
   ref: RepoRef,
   headSha: string,
   files: ChangedFile[]
-): Promise<{ components: ComponentChange[]; sources: PullRequestSource[] }> {
+): Promise<{ components: LocatedComponent[]; sources: PullRequestSource[] }> {
   const perFile = await Promise.all(
     files.map(
       async (
         file,
         index
-      ): Promise<{ components: ComponentChange[]; source?: PullRequestSource }> => {
+      ): Promise<{ components: LocatedComponent[]; source?: PullRequestSource }> => {
         const fallback = {
-          components: [{ name: fileComponentName(file.filePath), change: file.change, tests: 0 }],
+          components: [
+            {
+              name: fileComponentName(file.filePath),
+              change: file.change,
+              tests: 0,
+              filePath: file.filePath,
+            },
+          ],
         };
         if (file.change === "removed" || index >= MAX_FILES_TO_READ) return fallback;
 
@@ -232,6 +256,7 @@ async function componentsIn(
           name: component.name ?? fileComponentName(file.filePath),
           change: file.change,
           tests: 0,
+          filePath: file.filePath,
         }));
         if (components.length === 0) return { components };
         return { components, source: { filePath: file.filePath, source } };
