@@ -80,7 +80,7 @@ export function SuggestedSection({
           {pending ? "정렬 중..." : "AI 로 정렬"}
         </button>
       </div>
-      <SuggestedList recommendations={recommendations} />
+      <SuggestedList projectRef={projectRef} recommendations={recommendations} />
     </div>
   );
 }

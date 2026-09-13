@@ -1,6 +1,7 @@
-import { FileCode2, Sparkles } from "lucide-react";
+import { FileCode2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { RecommendationPriority, TestRecommendation } from "@/lib/projects/recommendations";
+import { GenerateTestButton } from "./generate-test-button";
 
 const PRIORITY_LABEL: Record<RecommendationPriority, string> = {
   high: "높음",
@@ -14,7 +15,13 @@ const PRIORITY_VARIANT: Record<RecommendationPriority, "destructive" | "secondar
   low: "outline",
 };
 
-export function SuggestedList({ recommendations }: { recommendations: TestRecommendation[] }) {
+export function SuggestedList({
+  projectRef,
+  recommendations,
+}: {
+  projectRef: string;
+  recommendations: TestRecommendation[];
+}) {
   return (
     <ul className="flex flex-col gap-3">
       {recommendations.map((rec) => (
@@ -35,13 +42,11 @@ export function SuggestedList({ recommendations }: { recommendations: TestRecomm
             </p>
             <p className="text-foreground mt-1.5 text-sm">{rec.reason}</p>
           </div>
-          <button
-            type="button"
-            className="border-border hover:bg-muted flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium"
-          >
-            <Sparkles className="size-3.5" />
-            테스트 생성
-          </button>
+          <GenerateTestButton
+            projectRef={projectRef}
+            filePath={rec.filePath}
+            componentName={rec.componentName}
+          />
         </li>
       ))}
     </ul>
