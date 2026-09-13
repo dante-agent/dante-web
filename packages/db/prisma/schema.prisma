@@ -658,6 +658,10 @@ model ChatConversation {
   /// 목록에 보이는 제목(첫 질문을 한 줄로 접은 것). 질문 내용 그대로라 본문처럼 암호문으로 둔다.
   title String
 
+  /// 마지막 답에서 모델이 알려준 입력+출력 토큰. 다음 질문이 이만큼을 들고 간다.
+  /// 화면의 "컨텍스트 %"와 서버의 대화 상한(409)이 이 값을 본다.
+  contextTokens Int @default(0) @map("context_tokens")
+
   createdAt DateTime @default(now()) @map("created_at")
   /// 목록 정렬 기준. 메시지를 저장할 때 같이 갱신된다.
   updatedAt DateTime @updatedAt @map("updated_at")
