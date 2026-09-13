@@ -23,11 +23,18 @@ function plural(count: number, word: string): string {
  */
 export function formatUsageCost(usage: MonthlyAiUsage): string {
   if (usage.calls > 0 && usage.unknownCostCalls === usage.calls) return "Unknown";
+  return formatUsd(usage.costUsd);
+}
 
+/**
+ * 달러 금액. 사용량과 한도가 같은 규칙으로 찍혀야 "$0.00 / $5.00" 옆에 "$0.0031"
+ * 같은 어긋난 모양이 나오지 않는다.
+ */
+export function formatUsd(usd: number): string {
   // 한 번 부르고 $0.003 인 일이 흔하다. 소수 두 자리에서 자르면 쓴 기록이
   // 있는데도 $0.00 이 되어 0 과 구분이 안 된다 — 1센트 미만은 자릿수를 늘린다.
-  const digits = usage.costUsd > 0 && usage.costUsd < 0.01 ? 4 : 2;
-  return `$${usage.costUsd.toLocaleString("en-US", {
+  const digits = usd > 0 && usd < 0.01 ? 4 : 2;
+  return `$${usd.toLocaleString("en-US", {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   })}`;

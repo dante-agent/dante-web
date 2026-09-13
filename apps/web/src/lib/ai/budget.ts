@@ -1,5 +1,5 @@
-import { prisma } from "@dante/db";
-import { currentBillingPeriod } from "./billing-period";
+import { Prisma, prisma } from "@dante/db";
+import { currentBillingPeriod, type BillingPeriod } from "./billing-period";
 
 // ⚠️ 서버 전용. "이 사용자가 이번 달 쓴 원가가 한도를 넘었나"를 판정한다.
 //
@@ -14,7 +14,11 @@ import { currentBillingPeriod } from "./billing-period";
 // 여러 개 연결하는 것만으로 한도를 곱절로 쓸 수 있다 — 프로젝트 만들기는 공짜다.
 
 /**
- * 월 한도를 환경변수(`AI_MONTHLY_BUDGET_USD`)로 둔 이유.
+ * 한도는 두 곳에서 온다. 사용자에게 플랜(AiPlan)이 붙어 있으면 플랜 값, 없으면 아래
+ * 환경변수가 기본 한도다. 플랜을 둔 이유는 schema.prisma 의 AiPlan 주석에 적었다.
+ * 어느 쪽이든 값을 알 수 없으면 막는다(fail closed).
+ *
+ * 기본 한도를 환경변수(`AI_MONTHLY_BUDGET_USD`)로 둔 이유.
  *
  * 상수로 코드에 박는 안도 괜찮다 — git 에 남아 리뷰를 거치고, 환경마다 어긋날 일이
  * 없다. 그럼에도 환경변수를 고른 건 이 숫자가 "코드"가 아니라 "운영 판단"이기
@@ -53,6 +57,8 @@ const LIMIT_ENV = "AI_MONTHLY_BUDGET_USD";
 const UNKNOWN_CALL_COST_USD = 0.05;
 
 export type BudgetStatus = {
+  /** 한도를 정한 플랜 이름. null 이면 플랜이 없어 기본 한도(환경변수)를 쓴다. */
+  planName: string | null;
   /** 이번 달 한도(USD). */
   limitUsd: number;
   /** 한도 판정에 쓰는 금액 = 원가를 아는 건의 합 + 모르는 건의 추정치. */
@@ -63,10 +69,12 @@ export type BudgetStatus = {
   unknownCalls: number;
   /** 한도를 넘었나. 넘었으면 새 호출을 막는다(경고만 하고 통과시키지 않는다). */
   exceeded: boolean;
+  /** 판정에 쓴 구간. 화면은 리셋 시각을 이 값으로 말한다 — 다시 계산하면 월 경계에서 갈라질 수 있다. */
+  period: BillingPeriod;
 };
 
-/** 월 한도(USD). 설정이 없거나 숫자가 아니면 던진다 — 조용히 무제한이 되지 않게. */
-function monthlyLimitUsd(): number {
+/** 플랜이 없는 사용자의 월 한도(USD). 설정이 없거나 숫자가 아니면 던진다 — 조용히 무제한이 되지 않게. */
+function defaultLimitUsd(): Prisma.Decimal {
   const raw = process.env[LIMIT_ENV];
   if (!raw) {
     throw new Error(`${LIMIT_ENV} 가 설정되지 않았습니다. .env.example 참고.`);
@@ -78,7 +86,30 @@ function monthlyLimitUsd(): number {
   if (!Number.isFinite(limit) || limit < 0) {
     throw new Error(`${LIMIT_ENV} 값이 올바르지 않습니다: ${raw}`);
   }
-  return limit;
+  return new Prisma.Decimal(raw);
+}
+
+/**
+ * 이 사용자의 월 한도. 플랜이 있으면 플랜 값, 없으면 환경변수 기본값.
+ *
+ * 플랜 값이 음수면 던진다. DB 의 CHECK 제약이 막고 있지만, 제약이 빠진 환경에서
+ * 음수가 "항상 초과"로 조용히 굳는 것보다 배포한 사람에게 보이는 편이 낫다.
+ */
+async function monthlyLimit(
+  userId: string
+): Promise<{ planName: string | null; limit: Prisma.Decimal }> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { aiPlan: { select: { name: true, monthlyLimitUsd: true } } },
+  });
+
+  const plan = user?.aiPlan;
+  if (!plan) return { planName: null, limit: defaultLimitUsd() };
+
+  if (plan.monthlyLimitUsd.isNegative()) {
+    throw new Error(`AI 플랜 "${plan.name}" 의 한도가 음수입니다: ${plan.monthlyLimitUsd}`);
+  }
+  return { planName: plan.name, limit: plan.monthlyLimitUsd };
 }
 
 /**
@@ -98,19 +129,21 @@ function monthlyLimitUsd(): number {
  * 합계"가 달랐다. 사용자가 왜 막혔는지 설명할 수 없는 상태다.
  */
 export async function getMonthlyBudgetStatus(userId: string): Promise<BudgetStatus> {
-  const limitUsd = monthlyLimitUsd();
   const period = currentBillingPeriod();
 
-  const agg = await prisma.aiUsage.aggregate({
-    where: { userId, createdAt: { gte: period.start, lt: period.end } },
-    _sum: { costUsd: true },
-    _count: { _all: true, costUsd: true },
-  });
+  const [{ planName, limit }, agg] = await Promise.all([
+    monthlyLimit(userId),
+    prisma.aiUsage.aggregate({
+      where: { userId, createdAt: { gte: period.start, lt: period.end } },
+      _sum: { costUsd: true },
+      _count: { _all: true, costUsd: true },
+    }),
+  ]);
 
-  const knownUsd = agg._sum.costUsd?.toNumber() ?? 0;
+  const known = agg._sum.costUsd ?? new Prisma.Decimal(0);
   const unknownCalls = agg._count._all - agg._count.costUsd;
-  // Decimal(12,6) 과 같은 자리에서 끊는다 — 화면에 보이는 합계와 판정 기준이 어긋나지 않게.
-  const usedUsd = Number((knownUsd + unknownCalls * UNKNOWN_CALL_COST_USD).toFixed(6));
+  // 넘었는지는 Decimal 로 가린다. 한도와 합계가 둘 다 Decimal(12,6) 이라 반올림이 끼지 않는다.
+  const used = known.plus(new Prisma.Decimal(UNKNOWN_CALL_COST_USD).times(unknownCalls));
 
   if (unknownCalls > 0) {
     // 단가표가 모델을 못 따라간 것이면 여기가 유일한 신호다. 사용자에게 보일 일은
@@ -123,11 +156,13 @@ export async function getMonthlyBudgetStatus(userId: string): Promise<BudgetStat
   }
 
   return {
-    limitUsd,
-    usedUsd,
-    knownUsd,
+    planName,
+    limitUsd: limit.toNumber(),
+    usedUsd: used.toNumber(),
+    knownUsd: known.toNumber(),
     unknownCalls,
-    exceeded: usedUsd >= limitUsd,
+    exceeded: used.gte(limit),
+    period,
   };
 }
 
