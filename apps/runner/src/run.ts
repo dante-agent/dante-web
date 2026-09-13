@@ -105,6 +105,9 @@ export async function runTest(req: RunRequest, signal?: AbortSignal): Promise<Ru
     finishedAt: new Date().toISOString(),
   });
 
+  // 앞 실행을 기다리는 사이에 web 이 끊었으면 샌드박스를 만들지도 않는다.
+  if (signal?.aborted) return done("error", null, "요청이 끊겨 실행하지 않았습니다");
+
   let sandbox: Sandbox | undefined;
   try {
     sandbox = await Sandbox.create({
