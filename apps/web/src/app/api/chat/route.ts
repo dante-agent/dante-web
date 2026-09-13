@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { createTextStreamResponse, streamText, type ModelMessage } from "ai";
 import { getMonthlyBudgetStatus } from "@/lib/ai/budget";
 import { chatModel } from "@/lib/ai/chat-model";
@@ -176,22 +176,28 @@ export async function POST(request: Request) {
     }
   }
 
+  // 클라이언트가 중단했거나 창을 닫았는지. 응답 스트림이 cancel 되면 켜진다.
+  // request.signal 대신 직접 드는 이유: 아래처럼 생성을 끝까지 돌리므로 "끊겼는가"를
+  // 모델 호출과 떼어서 알아야 한다.
+  let clientGone = false;
+
   const result = streamText({
     model: chatModel(),
     system: systemPrompt(runner) + context,
     messages: [...history, { role: "user", content: message }],
-    // 사용자가 중단하거나 창을 닫으면 생성도 멈춘다 — 받을 사람이 없는 답에 돈을 쓰지 않는다.
-    abortSignal: request.signal,
+    // abortSignal 을 넘기지 않는다. 넘기면 중단 시 onFinish 가 오지 않고(onAbort 는 토큰 수를
+    // 주지 않는다) 이미 쓴 토큰이 사용량에 안 남는다 — 답이 거의 끝날 때마다 중단을 누르면
+    // 월 한도를 우회해 원가를 쓸 수 있다. 그래서 중단돼도 생성은 끝까지 가고, 그 비용은
+    // 사용자 한도에 정확히 잡힌다. 대가: 중단 뒤 남은 답의 토큰도 낸다.
     // 스트림 도중 에러는 throw 되지 않고 스트림으로 흘러간다 — 서버 로그에는 남긴다.
     onError: ({ error }) => console.error("[chat]", error),
-    // 정상으로 끝났을 때만 온다(중단되면 onAbort). 사용량과 대화를 여기서 남긴다.
+    // 생성이 끝나면 (클라이언트가 끊었어도) 온다. 사용량은 항상, 대화는 끝까지 받았을 때만 남긴다.
     // projectId 는 위 권한 확인을 통과한 프로젝트다 — 클라이언트가 보낸 projectRef 를
     // 그대로 믿으면 남의 프로젝트에 사용량을 붙일 수 있다.
-    // ponytail: 중단된 요청은 이미 쓴 토큰도 사용량에 안 남는다(onAbort 는 토큰 수를 주지 않는다).
     onFinish: async ({ usage, text }) => {
       await recordAiUsage({ userId: user.id, projectId: project.id, surface: "chat", usage });
-      // 빈 답이나 끝난 직후 끊긴 요청은 저장하지 않는다(중단 시 질문도 남기지 않는다).
-      if (!text || request.signal.aborted) return;
+      // 빈 답이나 중단된 요청은 저장하지 않는다(중단 시 질문도 남기지 않는다).
+      if (!text || clientGone) return;
       try {
         await saveExchange({
           conversationId: id,
@@ -210,8 +216,26 @@ export async function POST(request: Request) {
     },
   });
 
+  // 응답이 끊겨도 서버가 모델 스트림을 끝까지 읽는다. 이게 없으면 클라이언트가 cancel 한 순간
+  // 생성이 멈추고 onFinish 도 onAbort 도 오지 않는다(로컬에서 확인). after 로 감싸서 서버리스
+  // 함수가 응답을 보낸 뒤에도 이 읽기가 끝날 때까지 살아 있게 한다(maxDuration 안에서).
+  after(Promise.resolve(result.consumeStream()));
+
+  const reader = result.textStream.getReader();
+  const stream = new ReadableStream<string>({
+    async pull(controller) {
+      const { done, value } = await reader.read();
+      if (done) controller.close();
+      else controller.enqueue(value);
+    },
+    cancel() {
+      clientGone = true;
+      return reader.cancel();
+    },
+  });
+
   return createTextStreamResponse({
-    stream: result.textStream,
+    stream,
     // 새 대화면 서버가 정한 id 를 클라이언트가 다음 질문에 실어 보낸다.
     headers: { ...NO_STORE, "x-conversation-id": id },
   });
