@@ -1,5 +1,6 @@
 import { prisma } from "@dante/db";
 import { authenticateExtension, unauthorized } from "@/lib/extension/auth";
+import { accessibleProjectWhere } from "@/lib/teams/access";
 
 // 익스텐션이 워크스페이스에 맞는 프로젝트를 고르는 목록 (dante-extension 기능 3).
 // 응답 모양은 dante-extension 의 src/api/types.ts `Project` 와 맞춘다.
@@ -11,7 +12,7 @@ export async function GET(request: Request) {
   if (!token) return unauthorized();
 
   const projects = await prisma.project.findMany({
-    where: { userId: token.userId },
+    where: accessibleProjectWhere(token.userId),
     select: { ref: true, name: true, repoOwner: true, repoName: true, defaultBranch: true },
     orderBy: { createdAt: "desc" },
   });

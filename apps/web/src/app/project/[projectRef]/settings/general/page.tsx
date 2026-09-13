@@ -3,6 +3,7 @@ import { prisma } from "@dante/db";
 import { DeleteProjectForm } from "@/components/settings/general/delete-project-form";
 import { SettingsHeader } from "@/components/settings/settings-section";
 import { requireUser } from "@/lib/auth/user";
+import { accessibleProjectWhere } from "@/lib/teams/access";
 
 // 프로젝트 일반. 읽기 전용 요약 + 맨 아래 삭제.
 //
@@ -18,7 +19,7 @@ export default async function ProjectGeneralPage({
   // 레이아웃에서 이미 소유를 확인했지만, 페이지가 레이아웃의 검사에 기대면
   // 나중에 레이아웃이 바뀔 때 조용히 뚫린다. 각자 확인한다 (AGENTS.md).
   const project = await prisma.project.findFirst({
-    where: { ref: projectRef, userId: user.id },
+    where: { ref: projectRef, ...accessibleProjectWhere(user.id) },
     select: {
       name: true,
       ref: true,

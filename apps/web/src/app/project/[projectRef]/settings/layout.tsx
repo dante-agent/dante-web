@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@dante/db";
 import { SettingsShell } from "@/components/settings/settings-shell";
 import { requireUser } from "@/lib/auth/user";
+import { accessibleProjectWhere } from "@/lib/teams/access";
 
 // 프로젝트 설정 셸.
 //
@@ -25,7 +26,7 @@ export default async function ProjectSettingsLayout({
 
   // 권한 검사는 앱 코드에서 (AGENTS.md).
   const project = await prisma.project.findFirst({
-    where: { ref: projectRef, userId: user.id },
+    where: { ref: projectRef, ...accessibleProjectWhere(user.id) },
     select: { name: true },
   });
   if (!project) notFound();

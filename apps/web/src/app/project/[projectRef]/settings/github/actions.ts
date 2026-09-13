@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@dante/db";
 import { requireUser } from "@/lib/auth/user";
+import { accessibleProjectWhere } from "@/lib/teams/access";
 import { invalidateRepoLookups } from "@/lib/github/lookup-cache";
 import { listInstallationRepos } from "@/lib/github/repos";
 
@@ -37,7 +38,7 @@ export async function recheckConnection(
   // 서버 액션은 UI 를 거치지 않고 POST 로 직접 부를 수 있다. 폼에서 온 ref 를
   // 그대로 믿지 않고 이 사용자 것인지 여기서 다시 거른다.
   const project = await prisma.project.findFirst({
-    where: { ref: projectRef, userId: user.id },
+    where: { ref: projectRef, ...accessibleProjectWhere(user.id) },
     select: { id: true, repoId: true, installationId: true },
   });
   if (!project) {

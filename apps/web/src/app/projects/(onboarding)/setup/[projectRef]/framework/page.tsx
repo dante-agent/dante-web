@@ -4,6 +4,7 @@ import { selectFramework } from "@/app/projects/(onboarding)/setup/[projectRef]/
 import { StepHeader } from "@/components/projects/step-header";
 import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth/user";
+import { accessibleProjectWhere } from "@/lib/teams/access";
 import { TEST_FRAMEWORKS } from "@/lib/projects/frameworks";
 
 // 온보딩 3단계 — 테스트 러너 고르기.
@@ -18,7 +19,7 @@ export default async function FrameworkPage({
   const { projectRef } = await params;
 
   const project = await prisma.project.findFirst({
-    where: { ref: projectRef, userId: user.id },
+    where: { ref: projectRef, ...accessibleProjectWhere(user.id) },
     select: { name: true, repoOwner: true, repoName: true, testFramework: true },
   });
   if (!project) notFound();

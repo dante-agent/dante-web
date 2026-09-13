@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@dante/db";
 import { requireUser } from "@/lib/auth/user";
+import { accessibleProjectWhere, getTeamRole } from "@/lib/teams/access";
 
 /**
  * 프로젝트 삭제. 되살리기는 없다(hard delete).
@@ -37,11 +38,18 @@ export async function deleteProject(
   // 설치 ID 도 지우기 전에 읽어 둔다. 지우고 나면 이 프로젝트가 어느 설치에
   // 붙어 있었는지 알 길이 없어서, 목록 화면이 GitHub 안내를 띄울 수 없다.
   const project = await prisma.project.findFirst({
-    where: { ref: projectRef, userId: user.id },
-    select: { id: true, repoOwner: true, repoName: true, installationId: true },
+    where: { ref: projectRef, ...accessibleProjectWhere(user.id) },
+    select: { id: true, repoOwner: true, repoName: true, installationId: true, teamId: true },
   });
   if (!project) {
     return { message: "Project not found." };
+  }
+
+  // 프로젝트 삭제는 owner 만 한다. member 에게는 이미 프로젝트가 보이므로 "없음"으로
+  // 가리지 않고 이유를 말한다.
+  const role = project.teamId ? await getTeamRole(project.teamId, user.id) : null;
+  if (role !== "owner") {
+    return { message: "Only team owners can delete a project." };
   }
 
   // 버튼은 입력이 맞을 때만 눌리지만 그건 화면 사정이다. 같은 이유로 여기서 다시 본다.
@@ -51,7 +59,10 @@ export async function deleteProject(
 
   // delete 가 아니라 deleteMany 인 이유: 다른 탭에서 먼저 지웠으면 delete 는 예외를
   // 던진다. 어느 쪽이든 결과는 "없음"이라 그대로 목록으로 보내면 된다.
-  await prisma.project.deleteMany({ where: { id: project.id, userId: user.id } });
+  // 지우는 순간에도 owner 조건을 다시 건다. 위 확인과 이 사이에 역할이 바뀌었을 수 있다.
+  await prisma.project.deleteMany({
+    where: { id: project.id, ...accessibleProjectWhere(user.id, "owner") },
+  });
 
   // 설치 ID 만 넘기고 계정 이름·URL 은 넘기지 않는다. 목록 화면이 이 ID 로 DB 를
   // 다시 읽어 그린다 — 쿼리 문자열을 화면에 그대로 찍지 않는다(src/app/page.tsx).
