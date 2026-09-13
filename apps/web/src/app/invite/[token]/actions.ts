@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser, syncUser } from "@/lib/auth/user";
+import { rememberCurrentTeam } from "@/lib/teams/current";
 import { acceptInvite as accept } from "@/lib/teams/invites";
 
 export type AcceptInviteState = { message: string } | null;
@@ -21,6 +22,8 @@ export async function acceptInvite(
   const result = await accept(user.id, String(formData.get("token") ?? ""));
   if (!result.ok) return { message: result.message };
 
-  revalidatePath("/projects");
+  // 들어간 팀을 지금 팀으로. 수락하고 프로젝트 목록으로 가면 그 팀 프로젝트가 보여야 한다.
+  await rememberCurrentTeam(result.teamId);
+  revalidatePath("/", "layout");
   redirect(`/team/${result.teamId}/settings/general`);
 }
