@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@dante/db";
 import { LOGIN_PATH } from "@/lib/auth/redirect";
-import { githubIdentity, syncUser } from "@/lib/auth/user";
+import { getAuthUser, githubIdentity, syncUser } from "@/lib/auth/user";
 import { fetchInstallation } from "@/lib/github/app";
-import { listInstallationRepos } from "@/lib/github/repos";
+import { cachedInstallationRepos, invalidateInstallationRepos } from "@/lib/github/repos";
 import { INSTALL_STATE_COOKIE, matchesState } from "@/lib/github/state";
-import { createClient } from "@/lib/supabase/server";
 import { getTeamRole } from "@/lib/teams/access";
-import { getCurrentTeamId } from "@/lib/teams/current";
+import { chosenTeamId } from "@/lib/teams/current";
 
 // GitHub App 설치가 끝나면 GitHub 이 여기로 돌려보낸다 (App 설정의 Setup URL).
 // 쿼리로 installation_id, setup_action, state 가 온다.
@@ -31,10 +30,7 @@ export async function GET(request: Request) {
     return response;
   };
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
 
   if (!user) {
     return NextResponse.redirect(new URL(LOGIN_PATH, request.url));
@@ -84,7 +80,7 @@ export async function GET(request: Request) {
   }
 
   // 설치 행이 public.users 를 참조한다(userId). 새 설치의 팀을 고르기 전에 미러해 둔다.
-  await syncUser(user);
+  const { personalTeamId } = await syncUser(user);
 
   // 5) 이미 다른 팀이 가진 설치면 가져가지 않는다.
   //    설치 1건은 팀 1개만 가진다(설치 ID 가 PK). 조직 설치는 위에서 본인 것인지
@@ -102,7 +98,8 @@ export async function GET(request: Request) {
   // 이미 있으면 그 팀에 그대로 둔다(멤버가 레포를 추가하러 GitHub 에 다녀온 경우).
   // 새 설치는 지금 팀에 붙인다. 쿠키는 current.ts 가 멤버십으로 다시 거르므로, 빠진 팀을
   // 가리키고 있으면 개인 팀으로 떨어진다. member 도 연결할 수 있다(프로젝트 생성과 같다).
-  const teamId = existing?.teamId ?? (await getCurrentTeamId(user));
+  // getCurrentTeamId 와 같은 규칙이지만, 위에서 이미 syncUser 를 불렀으니 그 결과를 쓴다.
+  const teamId = existing?.teamId ?? (await chosenTeamId(user.id)) ?? personalTeamId;
 
   const fields = {
     accountLogin: account.login,
@@ -141,9 +138,13 @@ export async function GET(request: Request) {
  * 이 팀 설치에 묶인다. 팀이 다르면 건드리지 않는다.
  */
 async function relinkProjects(teamId: string, installationId: number) {
+  // 방금 GitHub 에서 레포를 넣고 뺐을 수 있다. 캐시를 비우고 새로 받아 두면
+  // 바로 이어지는 레포 고르기 화면은 GitHub 에 다시 묻지 않고 이 결과를 쓴다.
+  invalidateInstallationRepos(installationId);
+
   let repos;
   try {
-    repos = await listInstallationRepos(installationId);
+    repos = await cachedInstallationRepos(installationId);
   } catch {
     // 설치 자체는 이미 저장했다. 목록 조회가 실패했다고 설치까지 실패로
     // 돌려보내면 사용자는 방금 끝낸 설치를 처음부터 다시 하게 된다. 레포를

@@ -5,8 +5,10 @@ import {
   fetchPullRequest,
   installationClient,
 } from "@/lib/github/pull-request";
+import { invalidateInstallationRepos } from "@/lib/github/repos";
 import type { PullRequestContext } from "@/lib/notifications/deliver";
 import { enqueuePullRequestJob } from "@/lib/notifications/pull-request-job";
+import { invalidateInstallationPermissions } from "@/lib/notifications/status";
 
 // ⚠️ 서버 전용. 웹훅 시크릿을 읽는다.
 //
@@ -44,6 +46,9 @@ type WebhookPayload = InstallationRepositoriesEvent & {
 };
 
 const WEBHOOK_RETENTION_DAYS = 30;
+
+/** 배달 몇 건에 한 번 옛 기록을 지울지. 1/50 이면 활발한 레포에서도 하루 여러 번은 돈다. */
+const RETENTION_CLEANUP_RATE = 1 / 50;
 
 const webhookRetentionCutoff = (now = new Date()) =>
   new Date(now.getTime() - WEBHOOK_RETENTION_DAYS * 24 * 60 * 60 * 1000);
@@ -159,9 +164,13 @@ async function recordWebhookDelivery(event: string, payload: WebhookPayload) {
     await prisma.webhookDelivery.createMany({
       data: projectIds.map((projectId) => ({ projectId, event })),
     });
-    await prisma.webhookDelivery.deleteMany({
-      where: { projectId: { in: projectIds }, createdAt: { lt: webhookRetentionCutoff() } },
-    });
+    // 보존 기간 정리는 가끔만 한다. 웹훅은 가장 자주 불리는 경로라 배달마다 지우면
+    // 쓰기가 한 번씩 는다. 옛 행이 조금 더 남아도 차트는 기간으로 걸러 읽는다.
+    if (Math.random() < RETENTION_CLEANUP_RATE) {
+      await prisma.webhookDelivery.deleteMany({
+        where: { projectId: { in: projectIds }, createdAt: { lt: webhookRetentionCutoff() } },
+      });
+    }
   } catch (error) {
     console.error("[github-webhook] delivery log failed", error);
   }
@@ -187,6 +196,10 @@ async function handleInstallation(payload: InstallationEvent) {
     case "unsuspend":
       await write({ suspendedAt: null });
       return `installation ${id} unsuspended`;
+    // 사용자가 GitHub 에서 새 권한을 승인했다. 알림 화면의 권한 배지 캐시를 버린다.
+    case "new_permissions_accepted":
+      invalidateInstallationPermissions(id);
+      return `installation ${id} permissions accepted`;
     // "created" 는 일부러 무시한다. 여기서는 이 설치가 우리 쪽 어느 사용자 것인지
     // 알 수 없다 — 그 연결은 로그인한 상태로 돌아오는 /api/github/setup 이 만든다.
     default:
@@ -201,6 +214,9 @@ async function handleInstallationRepositories(payload: InstallationRepositoriesE
 
   const added = repoIds(payload.repositories_added);
   const removed = repoIds(payload.repositories_removed);
+
+  // 레포 고르기 화면이 캐시해 둔 목록은 이제 틀렸다(lib/github/repos.ts).
+  invalidateInstallationRepos(id);
 
   if (removed.length > 0) {
     await prisma.project.updateMany({

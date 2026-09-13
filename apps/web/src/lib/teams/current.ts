@@ -11,9 +11,8 @@
 
 import { cache } from "react";
 import { cookies } from "next/headers";
-import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { prisma } from "@dante/db";
-import { requireUser, syncUser } from "@/lib/auth/user";
+import { requireUser, syncUser, type AuthUser } from "@/lib/auth/user";
 import { getTeamRole, isTeamId } from "@/lib/teams/access";
 
 export const CURRENT_TEAM_COOKIE = "dante_team";
@@ -21,10 +20,22 @@ export const CURRENT_TEAM_COOKIE = "dante_team";
 /** 헤더 스위처와 목록에 넘기는 모양. 클라이언트로 가도 되는 값만 둔다. */
 export type TeamOption = { id: string; name: string };
 
-/** 지금 팀 id. 쿠키가 없거나 더는 멤버가 아닌 팀이면 개인 팀. */
-export const getCurrentTeamId = cache(async (user: SupabaseUser) => {
+/** 쿠키가 가리키는 팀. 쿠키가 없거나 더는 멤버가 아니면 null. */
+export async function chosenTeamId(userId: string) {
   const chosen = (await cookies()).get(CURRENT_TEAM_COOKIE)?.value;
-  if (chosen && isTeamId(chosen) && (await getTeamRole(chosen, user.id))) return chosen;
+  if (chosen && isTeamId(chosen) && (await getTeamRole(chosen, userId))) return chosen;
+  return null;
+}
+
+/**
+ * 지금 팀 id. 쿠키가 없거나 더는 멤버가 아닌 팀이면 개인 팀.
+ *
+ * 로그인 콜백이 쿠키를 개인 팀으로 심어 두므로(auth/callback) 보통은 쿠키에서 끝난다.
+ * syncUser 까지 내려오는 건 쿠키가 지워졌거나 팀에서 빠진 경우뿐이다.
+ */
+export const getCurrentTeamId = cache(async (user: AuthUser) => {
+  const chosen = await chosenTeamId(user.id);
+  if (chosen) return chosen;
 
   // syncUser 를 거쳐야 아직 미러되지 않은 사용자도 개인 팀을 가진 채로 돌아온다.
   const { personalTeamId } = await syncUser(user);

@@ -1,3 +1,4 @@
+import { revalidateTag, unstable_cache } from "next/cache";
 import { fetchInstallation, installationSettingsUrl } from "@/lib/github/app";
 import { projectConnection, type ProjectConnection } from "@/lib/github/connection";
 import { deliveriesFailing } from "@/lib/notifications/store";
@@ -28,7 +29,14 @@ type BadgeInput = ProjectConnection & {
   installation: { id: bigint; accountLogin: string; accountType: string };
 };
 
-export async function notificationBadges(project: BadgeInput): Promise<NotificationBadge[]> {
+/**
+ * `deliveries` 는 화면이 이미 읽은 최근 전달 로그다. 실패 배지를 그걸로 판단해
+ * 같은 표를 한 번 더 읽지 않는다(store.ts 의 deliveriesFailing).
+ */
+export async function notificationBadges(
+  project: BadgeInput,
+  deliveries: { status: string }[]
+): Promise<NotificationBadge[]> {
   // 연결이 끊긴 상태의 문구는 여기서 쓰지 않는다. `lib/github/connection.ts` 의
   // connectionNotice 가 상태별 문구와 다음 행동(재설치·레포 다시 열기…)까지
   // 들고 있고, 화면은 그걸 ConnectionBanner 로 그린다. 같은 상태에 문구가 두 벌
@@ -56,7 +64,7 @@ export async function notificationBadges(project: BadgeInput): Promise<Notificat
     });
   }
 
-  if (await deliveriesFailing(project.id)) {
+  if (await deliveriesFailing(project.id, deliveries)) {
     badges.push({
       tone: "warn",
       title: "Recent notifications were not delivered",
@@ -76,13 +84,35 @@ export async function notificationBadges(project: BadgeInput): Promise<Notificat
  */
 async function missingPermissions(installationId: bigint) {
   try {
-    const installation = await fetchInstallation(Number(installationId));
-    const permissions = installation.permissions as Record<string, string | undefined>;
-
-    return (["pull_requests", "checks"] as const).filter(
-      (permission) => permissions[permission] !== "write"
-    );
+    return await unstable_cache(fetchMissingPermissions, ["github-installation-permissions"], {
+      tags: [permissionsTag(installationId)],
+      revalidate: PERMISSIONS_TTL_SECONDS,
+    })(String(installationId));
   } catch {
     return [];
   }
+}
+
+/**
+ * 권한 캐시 수명(초). 권한은 사용자가 GitHub 에서 승인할 때만 바뀌고, 그때는 웹훅
+ * (installation.new_permissions_accepted)과 Recheck 가 바로 비운다.
+ */
+const PERMISSIONS_TTL_SECONDS = 600;
+
+const permissionsTag = (installationId: bigint | number) =>
+  `installation:${installationId}:permissions`;
+
+// 캐시 키가 JSON 이라 bigint 대신 문자열로 받는다. 던지면 캐시되지 않는다.
+async function fetchMissingPermissions(installationId: string) {
+  const installation = await fetchInstallation(Number(installationId));
+  const permissions = installation.permissions as Record<string, string | undefined>;
+
+  return (["pull_requests", "checks"] as const).filter(
+    (permission) => permissions[permission] !== "write"
+  );
+}
+
+/** 권한 배지 캐시를 바로 버린다. 웹훅(라우트 핸들러)에서도 부르므로 revalidateTag 다. */
+export function invalidateInstallationPermissions(installationId: bigint | number) {
+  revalidateTag(permissionsTag(installationId), { expire: 0 });
 }

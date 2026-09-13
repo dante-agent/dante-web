@@ -71,9 +71,12 @@ export default async function ProjectNotificationsPage({
     projectRef: project.ref,
   });
 
+  // 배지가 전달 로그를 같이 쓰므로 한 번만 읽어 나눠 준다. Prisma 쿼리는 await 할 때
+  // 실행되는 지연 객체라 Promise.resolve 로 한 번만 돌게 묶는다.
+  const deliveriesQuery = Promise.resolve(recentDeliveries(project.id));
   const [badges, deliveries, requiredCheck] = await Promise.all([
-    notificationBadges(project),
-    recentDeliveries(project.id),
+    deliveriesQuery.then((rows) => notificationBadges(project, rows)),
+    deliveriesQuery,
     requiredCheckStatus(project),
   ]);
 

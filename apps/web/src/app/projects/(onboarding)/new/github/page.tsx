@@ -8,7 +8,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { accessibleInstallationWhere, accessibleProjectWhere } from "@/lib/teams/access";
 import { requireCurrentTeam } from "@/lib/teams/current";
 import { installationSettingsUrl } from "@/lib/github/app";
-import { listInstallationRepos, type InstallationRepo } from "@/lib/github/repos";
+import { cachedInstallationRepos, type InstallationRepo } from "@/lib/github/repos";
 
 // 온보딩 2단계 — GitHub 레포 고르기.
 //
@@ -38,6 +38,7 @@ export default async function GitHubConnectPage({
       deletedAt: null,
     },
     orderBy: { createdAt: "asc" },
+    select: { id: true, accountLogin: true, accountType: true },
   });
 
   // 이미 프로젝트로 만든 레포는 다시 고를 수 없게 표시한다.
@@ -48,8 +49,9 @@ export default async function GitHubConnectPage({
   const refByRepoId = new Map(projects.map((p) => [p.repoId.toString(), p.ref]));
 
   // 설치별로 GitHub 에 물어본다. 하나가 실패해도(설치 취소·권한 변경) 나머지는 보여준다.
+  // 결과는 잠깐 캐시한다(lib/github/repos.ts) — 레포가 바뀌면 웹훅·setup 이 비운다.
   const results = await Promise.allSettled(
-    connected.map((installation) => listInstallationRepos(Number(installation.id)))
+    connected.map((installation) => cachedInstallationRepos(Number(installation.id)))
   );
 
   const repos: InstallationRepo[] = [];

@@ -69,16 +69,19 @@ export const DELIVERY_RETENTION_DAYS = 30;
 const retentionCutoff = (now = new Date()) =>
   new Date(now.getTime() - DELIVERY_RETENTION_DAYS * 24 * 60 * 60 * 1000);
 
+/** 기록 몇 건에 한 번 옛 행을 지울지. */
+const RETENTION_CLEANUP_RATE = 1 / 50;
+
 /**
  * 전달 로그를 남긴다.
  *
  * 로그 쓰기가 실패해도 알림 자체를 실패로 만들지 않는다 — 기록하려다 본 일을
  * 망치는 건 순서가 뒤바뀐 것이다.
  *
- * 보존 기간이 지난 행은 여기서 같이 지운다. 크론을 따로 두면 스케줄러와 시크릿이
- * 하나씩 늘어나는데, 이 프로젝트의 행만 보는 삭제라 (projectId, createdAt)
- * 인덱스로 끝난다. 새 전달이 없는 프로젝트에는 옛 행이 남지만, 화면이
- * 기간 밖을 거르므로(recentDeliveries) 보이지 않는다.
+ * 보존 기간이 지난 행은 여기서 가끔(RETENTION_CLEANUP_RATE) 같이 지운다. 크론을 따로
+ * 두면 스케줄러와 시크릿이 하나씩 늘어나는데, 이 프로젝트의 행만 보는 삭제라
+ * (projectId, createdAt) 인덱스로 끝난다. 매번 지우지 않는 건 쓰기 한 번을 아끼려는
+ * 것이다. 옛 행이 조금 더 남아도 화면이 기간 밖을 거르므로(recentDeliveries) 보이지 않는다.
  */
 export async function recordDelivery(entry: {
   projectId: string;
@@ -98,9 +101,11 @@ export async function recordDelivery(entry: {
         detail: entry.detail?.slice(0, 500) ?? null,
       },
     });
-    await prisma.notificationDelivery.deleteMany({
-      where: { projectId: entry.projectId, createdAt: { lt: retentionCutoff() } },
-    });
+    if (Math.random() < RETENTION_CLEANUP_RATE) {
+      await prisma.notificationDelivery.deleteMany({
+        where: { projectId: entry.projectId, createdAt: { lt: retentionCutoff() } },
+      });
+    }
   } catch (error) {
     console.error("[notifications] delivery log failed", error);
   }
@@ -120,14 +125,21 @@ export function recentDeliveries(projectId: string, take = 20) {
  *
  * skipped 는 실패가 아니라 의도된 침묵이라 세지 않는다. 그래서 ok/failed 만
  * 추려서 본다 — 안 그러면 드래프트 PR 몇 개로 배지가 켜진다.
+ *
+ * `loaded` 는 화면이 이미 읽은 recentDeliveries 결과(최신순)다. 그 안에 ok/failed 가
+ * 3건 있으면 그게 곧 최근 3건이라 다시 읽지 않는다. 모자랄 때만 DB 에 묻는다.
  */
-export async function deliveriesFailing(projectId: string) {
-  const recent = await prisma.notificationDelivery.findMany({
-    where: { projectId, status: { in: ["ok", "failed"] } },
-    orderBy: { createdAt: "desc" },
-    take: 3,
-    select: { status: true },
-  });
+export async function deliveriesFailing(projectId: string, loaded: { status: string }[] = []) {
+  const fromLoaded = loaded.filter((row) => row.status === "ok" || row.status === "failed");
+  const recent =
+    fromLoaded.length >= 3
+      ? fromLoaded.slice(0, 3)
+      : await prisma.notificationDelivery.findMany({
+          where: { projectId, status: { in: ["ok", "failed"] } },
+          orderBy: { createdAt: "desc" },
+          take: 3,
+          select: { status: true },
+        });
 
   return recent.length === 3 && recent.every((row) => row.status === "failed");
 }
