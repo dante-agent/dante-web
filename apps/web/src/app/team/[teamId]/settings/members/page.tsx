@@ -78,6 +78,9 @@ export default async function TeamMembersPage({
                 role={memberRole}
                 isSelf={isSelf}
                 canManage={viewerIsOwner && !personalOwner}
+                canChangeRole={
+                  viewerIsOwner && !personalOwner && !(memberRole === "owner" && owners === 1)
+                }
                 canLeave={isSelf && !personalOwner && !(memberRole === "owner" && owners === 1)}
               />
             </li>
