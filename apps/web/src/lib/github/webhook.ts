@@ -360,6 +360,9 @@ function notifiableProjects(installationIdValue: bigint, repoId: number) {
       installationId: true,
       teamId: true,
       testFramework: true,
+      installCommand: true,
+      testCommand: true,
+      testTimeoutMs: true,
     },
   });
 }

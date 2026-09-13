@@ -22,6 +22,7 @@ import {
   savePullRequestTests,
   type PullRequestSource,
 } from "@/lib/notifications/pr-test-generation";
+import { runPullRequestTests } from "@/lib/notifications/pr-test-run";
 import { queuedRun, type ComponentChange, type RunSummary } from "@/lib/notifications/run-summary";
 
 // ⚠️ 서버 전용.
@@ -49,6 +50,10 @@ export type JobProject = {
   teamId: string;
   /** 생성 프롬프트의 러너 지시. 고르지 않았으면 null */
   testFramework: string | null;
+  /** Runtime 탭에 저장한 값. null 이면 레포에서 기본값을 정한다(pr-test-run.ts) */
+  installCommand: string | null;
+  testCommand: string | null;
+  testTimeoutMs: number | null;
 };
 
 /**
@@ -165,13 +170,25 @@ async function pullRequestRun(
     stopped: generation.stopped,
   });
 
-  // TODO(파이프라인): 저장한 테스트를 러너로 돌린다.
   await savePullRequestTests({
     jobId,
     projectId: project.id,
     framework: project.testFramework,
     tests: generation.tests,
   });
+
+  // TODO(파이프라인): 실행 결과를 RunSummary 로 바꿔 코멘트·체크에 반영한다.
+  const testRun = await runPullRequestTests({ project, headSha, tests: generation.tests });
+  console.info(
+    `[pull-request-job] test run for #${prNumber}`,
+    testRun.kind === "ran"
+      ? {
+          status: testRun.result.status,
+          totals: testRun.result.report?.totals ?? null,
+          errorMessage: testRun.result.errorMessage ?? null,
+        }
+      : { notRun: testRun.reason }
+  );
 
   return { ...run, components };
 }

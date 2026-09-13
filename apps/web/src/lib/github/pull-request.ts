@@ -18,6 +18,20 @@ export function installationClient(installationId: bigint | number) {
   return githubApp().getInstallationOctokit(Number(installationId));
 }
 
+/**
+ * 설치 토큰 원문. runner 가 private 레포를 클론할 때 넘긴다.
+ *
+ * Octokit 클라이언트가 아니라 문자열이 필요한 자리는 여기뿐이다. 1시간 뒤 만료되고,
+ * 권한은 설치에 준 것 그대로다.
+ */
+export async function installationToken(installationId: bigint | number) {
+  const { data } = await githubApp().octokit.request(
+    "POST /app/installations/{installation_id}/access_tokens",
+    { installation_id: Number(installationId) }
+  );
+  return data.token;
+}
+
 export type RepoRef = { owner: string; repo: string };
 
 /**
