@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/auth/user";
 import { fetchFileText, installationClient } from "@/lib/github/pull-request";
 import { getPullRequestPreview, parsePrNumber } from "@/lib/notifications/pull-request-preview";
 import { readStoredRun, type StoredRun } from "@/lib/notifications/stored-run";
+import { rerunPullRequest } from "./actions";
 
 // PR preview. PR 코멘트의 "Open in Dante" 가 여기로 온다(lib/notifications/links.ts).
 //
@@ -87,6 +88,14 @@ export default async function PullRequestPreviewPage({
           )}
         </header>
 
+        {sp.rerun === "1" && (
+          <RerunPanel
+            projectRef={projectRef}
+            prNumber={prNumber}
+            inFlight={job?.status === "queued" || job?.status === "running"}
+          />
+        )}
+
         {!job ? (
           <Panel>
             <p className="text-muted-foreground">Dante has not processed this pull request yet.</p>
@@ -137,6 +146,41 @@ export default async function PullRequestPreviewPage({
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * 코멘트의 Re-run 링크(?rerun=1)로 왔을 때만 보인다. 링크를 연 것만으로는 돌리지 않고,
+ * 버튼을 눌러야 돈다(actions.ts). 이미 도는 중이면 겹쳐 돌리지 않게 버튼을 막는다.
+ */
+function RerunPanel({
+  projectRef,
+  prNumber,
+  inFlight,
+}: {
+  projectRef: string;
+  prNumber: number;
+  inFlight: boolean;
+}) {
+  return (
+    <Panel title="Re-run">
+      <form action={rerunPullRequest} className="flex items-center gap-3">
+        <input type="hidden" name="projectRef" value={projectRef} />
+        <input type="hidden" name="prNumber" value={prNumber} />
+        <p className="text-muted-foreground flex-1">
+          {inFlight
+            ? "Dante is already working on this pull request."
+            : "Generate and run tests again for the latest commit of this pull request. AI usage is billed to the pull request author."}
+        </p>
+        <button
+          type="submit"
+          disabled={inFlight}
+          className="bg-brand-orange shrink-0 rounded-md px-3 py-1.5 text-xs font-medium text-black disabled:opacity-40"
+        >
+          Re-run
+        </button>
+      </form>
+    </Panel>
   );
 }
 
