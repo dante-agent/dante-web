@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { inviteMember, revokeInvite } from "@/app/team/[teamId]/settings/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,11 +41,42 @@ export function InviteForm({ teamId }: { teamId: string }) {
       <p
         role="status"
         aria-live="polite"
-        className={`mt-2 min-h-5 text-[13px] ${state?.ok ? "text-muted-foreground" : "text-destructive"}`}
+        className={`mt-2 min-h-5 text-[13px] ${state?.ok && !state.link ? "text-muted-foreground" : "text-destructive"}`}
       >
         {pending ? "" : (state?.message ?? "")}
       </p>
+
+      {/* 메일이 실패했을 때만 온다. 한 번만 보이는 값이라(DB 에는 해시만 있다) 바로 복사하게 한다. */}
+      {!pending && state?.link && <InviteLink link={state.link} />}
     </form>
+  );
+}
+
+function InviteLink({ link }: { link: string }) {
+  const [copied, setCopied] = useState(false);
+
+  return (
+    <div className="mt-2 flex gap-2">
+      <Input
+        readOnly
+        value={link}
+        aria-label="Invite link"
+        onFocus={(event) => event.currentTarget.select()}
+        className="rounded-[4px] font-mono text-[12px]"
+      />
+      <Button
+        type="button"
+        size="sm"
+        variant="secondary"
+        className="shrink-0 rounded-[4px]"
+        onClick={async () => {
+          await navigator.clipboard.writeText(link);
+          setCopied(true);
+        }}
+      >
+        {copied ? "Copied" : "Copy link"}
+      </Button>
+    </div>
   );
 }
 
@@ -53,14 +84,18 @@ export function RevokeInviteButton({ teamId, inviteId }: { teamId: string; invit
   const [state, action, pending] = useActionState(revokeInvite, null);
 
   return (
-    <form action={action} className="flex shrink-0 flex-col items-end gap-1">
+    // 실패 문구는 버튼 아래에 띄운다(MemberControls 와 같은 이유 — 버튼이 위로 밀리지 않게).
+    <form action={action} className="relative shrink-0">
       <input type="hidden" name="teamId" value={teamId} />
       <input type="hidden" name="inviteId" value={inviteId} />
       <Button type="submit" variant="ghost" size="sm" disabled={pending} className="rounded-[4px]">
         {pending ? "Revoking…" : "Revoke"}
       </Button>
       {state && !state.ok && (
-        <p role="status" className="text-destructive text-[12px]">
+        <p
+          role="status"
+          className="text-destructive absolute top-full right-0 mt-0.5 text-[12px] whitespace-nowrap"
+        >
           {state.message}
         </p>
       )}

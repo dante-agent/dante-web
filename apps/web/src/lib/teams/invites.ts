@@ -23,8 +23,11 @@ const INVALID = fail("This invite has expired or was already used.");
  * 초대 보내기. owner 만. 같은 주소로 다시 보내면 토큰과 만료를 새로 갈고 옛 링크는 죽는다.
  *
  * 메일은 트랜잭션이 끝난 뒤에 보낸다. 트랜잭션 안에서 외부 API 를 기다리면 Serializable
- * 잠금을 오래 쥔다. 보내기에 실패하면 방금 만든 초대를 지운다 — 받지 못한 링크가
- * "대기 중"으로 남아 있으면 owner 는 보냈다고 믿는다.
+ * 잠금을 오래 쥔다.
+ *
+ * 메일이 실패해도 초대는 남긴다. 대신 링크를 돌려줘서 owner 가 직접 전하게 한다.
+ * 지워 버리면 목록에 아무것도 남지 않아 초대를 했는지조차 보이지 않고, 메일 설정이
+ * 고쳐질 때까지 팀원을 들일 방법이 없다. "보냈다고 믿는" 문제는 화면 문구가 막는다.
  */
 export async function createInvite(
   actor: { id: string; name: string },
@@ -68,19 +71,16 @@ export async function createInvite(
   });
   if (!result.ok) return result;
 
+  const url = await inviteUrl(token);
   const sent = await sendInviteEmail({
     to: email,
     teamName: result.teamName,
     inviterName: actor.name,
-    url: await inviteUrl(token),
+    url,
   });
-  if (!sent) {
-    // tokenHash 까지 맞춰 지운다. 그사이 다른 owner 가 같은 주소로 다시 보냈으면 그 초대는 남긴다.
-    await prisma.teamInvite.deleteMany({ where: { id: result.inviteId, tokenHash } });
-    return fail("The invite email couldn't be sent. Try again in a moment.");
-  }
 
-  return { ok: true as const, email };
+  // 링크는 메일이 실패했을 때만 돌려준다. 성공했으면 받는 사람 메일함에만 있으면 된다.
+  return { ok: true as const, email, sent, link: sent ? null : url };
 }
 
 /** 초대 거두기. owner 만. 이미 없으면(수락됐거나 다른 탭에서 거뒀으면) 그대로 성공이다. */

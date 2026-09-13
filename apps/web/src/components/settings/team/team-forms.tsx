@@ -82,14 +82,20 @@ export function MemberControls({
   role,
   isSelf,
   canManage,
+  canChangeRole,
   canLeave,
 }: {
   teamId: string;
   userId: string;
   role: "owner" | "member";
   isSelf: boolean;
-  /** 이 줄의 역할을 바꾸거나 내보낼 수 있는가. 보는 사람이 owner 이고 대상이 개인 팀 주인이 아닐 때. */
+  /** 이 줄을 내보낼 수 있는가. 보는 사람이 owner 이고 대상이 개인 팀 주인이 아닐 때. */
   canManage: boolean;
+  /**
+   * 이 줄의 역할을 바꿀 수 있는가. canManage 에 더해, 마지막 owner 를 member 로 내리는
+   * 경우는 뺀다. 눌러 봐야 서버가 "owner 는 한 명 이상" 으로 막는 버튼이라 아예 그리지 않는다.
+   */
+  canChangeRole: boolean;
   /** 이 줄이 나 자신이고 나갈 수 있는가. */
   canLeave: boolean;
 }) {
@@ -107,12 +113,14 @@ export function MemberControls({
   const nextRole = role === "owner" ? "member" : "owner";
   const canRemove = isSelf ? canLeave : canManage;
 
-  if (!canManage && !canRemove) return null;
+  if (!canChangeRole && !canRemove) return null;
 
+  // 실패 문구는 버튼 줄 아래에 띄워 둔다(absolute). 흐름 안에 두면 문구가 생길 때 줄
+  // 높이가 늘고, 가운데 정렬된 버튼이 위로 밀려 올라간다.
   return (
-    <div className="flex shrink-0 flex-col items-end gap-1">
+    <div className="relative flex shrink-0 items-center gap-1">
       <div className="flex items-center gap-1">
-        {canManage && (
+        {canChangeRole && (
           <form action={roleAction}>
             <input type="hidden" name="teamId" value={teamId} />
             <input type="hidden" name="userId" value={userId} />
@@ -171,7 +179,11 @@ export function MemberControls({
       </div>
 
       {failure && !pending && (
-        <p role="status" aria-live="polite" className="text-destructive text-[12px]">
+        <p
+          role="status"
+          aria-live="polite"
+          className="text-destructive absolute top-full right-0 mt-0.5 text-[12px] whitespace-nowrap"
+        >
           {failure.message}
         </p>
       )}

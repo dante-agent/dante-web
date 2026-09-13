@@ -12,7 +12,8 @@ import * as manage from "@/lib/teams/manage";
 // teamId·userId 는 폼에서 온다. 믿지 않는다 — manage 의 모든 함수가 트랜잭션 안에서
 // 부른 사람이 그 팀 멤버인지, owner 인지 다시 본다. 사람은 폼이 아니라 세션에서 읽는다.
 
-export type TeamFormState = { ok: boolean; message: string } | null;
+/** link: 초대 메일이 실패했을 때 owner 가 직접 전할 초대 링크. 그 외에는 없다. */
+export type TeamFormState = { ok: boolean; message: string; link?: string } | null;
 
 const NOT_FOUND: TeamFormState = { ok: false, message: "Team not found." };
 
@@ -66,7 +67,17 @@ export async function inviteMember(_prev: TeamFormState, formData: FormData) {
 
   const actor = { id: user.id, name: displayName(user) };
   const result = await invites.createInvite(actor, teamId, field(formData, "email"));
-  return settle(teamId, result, result.ok ? `Invite sent to ${result.email}.` : "");
+  if (!result.ok || result.sent) {
+    return settle(teamId, result, result.ok ? `Invite sent to ${result.email}.` : "");
+  }
+
+  // 초대는 만들어졌고 목록에도 뜬다. 메일만 못 보냈으니 링크를 직접 전하게 한다.
+  const state = settle(
+    teamId,
+    result,
+    `Invite created for ${result.email}, but the email couldn't be sent. Copy the link below and send it to them.`
+  );
+  return state && { ...state, link: result.link ?? undefined };
 }
 
 export async function revokeInvite(_prev: TeamFormState, formData: FormData) {
