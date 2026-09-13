@@ -1,3 +1,4 @@
+import { prisma } from "@dante/db";
 import { getMonthlyBudgetStatus } from "@/lib/ai/budget";
 import { generateTestCode } from "@/lib/projects/test-generation";
 
@@ -65,4 +66,32 @@ export async function generatePullRequestTests(args: {
   }
 
   return result;
+}
+
+/**
+ * 이 작업에서 만든 테스트를 저장한다.
+ *
+ * 같은 커밋을 Re-run 하면 같은 작업 행을 다시 쓰므로(pull-request-job.ts), 전에 저장한
+ * 테스트를 지우고 새로 넣는다. 이번에 만들지 않은 파일의 옛 테스트가 남으면 preview 와
+ * 실행 결과가 어긋난다.
+ */
+export async function savePullRequestTests(args: {
+  jobId: string;
+  projectId: string;
+  framework: string | null;
+  tests: GeneratedPullRequestTest[];
+}) {
+  await prisma.$transaction([
+    prisma.pullRequestTest.deleteMany({ where: { jobId: args.jobId } }),
+    prisma.pullRequestTest.createMany({
+      data: args.tests.map((test) => ({
+        jobId: args.jobId,
+        projectId: args.projectId,
+        filePath: test.filePath,
+        testPath: test.testPath,
+        code: test.code,
+        framework: args.framework,
+      })),
+    }),
+  ]);
 }

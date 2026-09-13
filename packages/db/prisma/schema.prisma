@@ -287,6 +287,7 @@ model Project {
   notificationSetting ProjectNotificationSetting?
   pullRequestSurfaces PullRequestSurface[]
   pullRequestJobs     PullRequestJob[]
+  pullRequestTests    PullRequestTest[]
   deliveries          NotificationDelivery[]
   webhookDeliveries   WebhookDelivery[]
   aiUsage             AiUsage[]
@@ -560,11 +561,36 @@ model PullRequestJob {
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tests   PullRequestTest[]
 
   @@unique([projectId, prNumber, headSha])
   @@index([projectId, prNumber, createdAt])
   @@map("pull_request_jobs")
+}
+
+/// PR 작업에서 만든 테스트 파일 하나 (apps/web/src/lib/notifications/pr-test-generation.ts).
+///
+/// TestFile 과 섞지 않는 이유: 대시보드·추천은 TestFile 을 기본 브랜치의 테스트로 읽는다.
+/// PR 에서 만든 테스트는 머지 전 커밋 기준이라 거기 섞이면 아직 없는 테스트가 집계된다.
+model PullRequestTest {
+  id        String   @id @default(uuid()) @db.Uuid
+  jobId     String   @map("job_id") @db.Uuid
+  projectId String   @map("project_id") @db.Uuid
+  /// 테스트를 만든 원본 컴포넌트 파일
+  filePath  String   @map("file_path")
+  testPath  String   @map("test_path")
+  code      String
+  /// 만들 때 쓴 러너. 프로젝트가 고르지 않았으면 null
+  framework String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  job     PullRequestJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  project Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, testPath])
+  @@index([projectId])
+  @@map("pull_request_tests")
 }
 
 /// 전달 로그. "왜 코멘트가 안 달렸지"를 우리 서버 로그를 뒤지지 않고 답하려고 남긴다.

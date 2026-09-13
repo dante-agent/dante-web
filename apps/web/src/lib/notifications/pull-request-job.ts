@@ -19,6 +19,7 @@ import { checkPullRequestAuthor } from "@/lib/notifications/pr-author";
 import { authorSkipReason } from "@/lib/notifications/pr-author-rules";
 import {
   generatePullRequestTests,
+  savePullRequestTests,
   type PullRequestSource,
 } from "@/lib/notifications/pr-test-generation";
 import { queuedRun, type ComponentChange, type RunSummary } from "@/lib/notifications/run-summary";
@@ -75,7 +76,7 @@ async function runPullRequestJob(jobId: string, project: JobProject, pr: PullReq
   });
 
   try {
-    const run = await pullRequestRun(project, pr);
+    const run = await pullRequestRun(jobId, project, pr);
 
     // 처리하는 사이에 새 커밋이 푸시됐으면 옛 결과로 코멘트를 덮지 않는다.
     // sticky 코멘트는 PR 에 하나라, 늦게 끝난 옛 작업이 새 결과를 지워버린다.
@@ -120,7 +121,11 @@ async function isSuperseded(jobId: string, projectId: string, prNumber: number) 
  * 모르는데 "바뀐 게 없다"고 적으면 실제로 컴포넌트를 고친 PR 에서 코멘트가
  * 빠지고, 체크도 통과처럼 보인다.
  */
-async function pullRequestRun(project: JobProject, pr: PullRequestContext): Promise<RunSummary> {
+async function pullRequestRun(
+  jobId: string,
+  project: JobProject,
+  pr: PullRequestContext
+): Promise<RunSummary> {
   const { number: prNumber, headSha } = pr;
   const run = queuedRun(danteLinks(project.ref, prNumber));
   const ref = { owner: project.repoOwner, repo: project.repoName };
@@ -148,7 +153,6 @@ async function pullRequestRun(project: JobProject, pr: PullRequestContext): Prom
     return { ...run, status: "skipped", components, skipReason };
   }
 
-  // TODO(파이프라인): 만든 테스트를 PR 전용 테이블에 저장하고 러너로 돌린다.
   const generation = await generatePullRequestTests({
     userId: author.userId,
     projectId: project.id,
@@ -159,6 +163,14 @@ async function pullRequestRun(project: JobProject, pr: PullRequestContext): Prom
     tests: generation.tests.length,
     failedFiles: generation.failedFiles,
     stopped: generation.stopped,
+  });
+
+  // TODO(파이프라인): 저장한 테스트를 러너로 돌린다.
+  await savePullRequestTests({
+    jobId,
+    projectId: project.id,
+    framework: project.testFramework,
+    tests: generation.tests,
   });
 
   return { ...run, components };
