@@ -146,6 +146,27 @@ async function isSuperseded(jobId: string, projectId: string, prNumber: number) 
   return latest !== null && latest.id !== jobId;
 }
 
+/** 실행 중 새 커밋을 확인하는 주기. 끊기까지 최대 이만큼 늦는다. */
+const SUPERSEDED_POLL_MS = 5_000;
+
+/**
+ * 실행하는 동안 새 작업이 들어왔는지 주기적으로 보고, 들어오면 signal 을 끊는다.
+ *
+ * runner 실행은 분 단위라 끝날 때까지 기다리면 옛 커밋의 샌드박스 요금이 그대로 나간다.
+ * 확인이 실패하면 끊지 않는다. 모르는데 끊으면 최신 커밋의 실행을 버리게 된다.
+ */
+function watchSuperseded(jobId: string, projectId: string, prNumber: number) {
+  const controller = new AbortController();
+  const timer = setInterval(() => {
+    isSuperseded(jobId, projectId, prNumber)
+      .then((superseded) => {
+        if (superseded) controller.abort();
+      })
+      .catch(() => {});
+  }, SUPERSEDED_POLL_MS);
+  return { signal: controller.signal, stop: () => clearInterval(timer) };
+}
+
 /**
  * 이 PR 의 최종 결과. 바뀐 컴포넌트가 없으면 여기서 바로 끝난다(unchanged).
  *
@@ -210,6 +231,9 @@ async function pullRequestRun(
     stopped: generation.stopped,
   });
 
+  // 생성하는 사이에 새 커밋이 왔으면 실행하지 않는다. 호출자가 superseded 로 닫는다.
+  if (await isSuperseded(jobId, project.id, prNumber)) return run;
+
   await savePullRequestTests({
     jobId,
     projectId: project.id,
@@ -219,7 +243,20 @@ async function pullRequestRun(
 
   if (generation.tests.length > 0) await progress({ ...run, status: "running", components });
 
-  const testRun = await runPullRequestTests({ project, headSha, tests: generation.tests });
+  const watch = watchSuperseded(jobId, project.id, prNumber);
+  const testRun = await runPullRequestTests({
+    project,
+    headSha,
+    tests: generation.tests,
+    signal: watch.signal,
+  }).finally(watch.stop);
+
+  // 실행 중에 새 커밋이 와서 끊었다. 끊긴 결과(error)를 저장하거나 코멘트로 보내지 않는다.
+  if (watch.signal.aborted) {
+    console.info(`[pull-request-job] test run for #${prNumber} stopped by a newer commit`);
+    return run;
+  }
+
   console.info(
     `[pull-request-job] test run for #${prNumber}`,
     testRun.kind === "ran"

@@ -30,6 +30,8 @@ export async function runPullRequestTests(args: {
   };
   headSha: string;
   tests: GeneratedPullRequestTest[];
+  /** 끊으면 runner 요청을 닫는다. 결과는 error 로 접히니 호출자가 signal 을 보고 버린다 */
+  signal?: AbortSignal;
 }): Promise<PullRequestTestRun> {
   const { project } = args;
   if (args.tests.length === 0) return { kind: "not-run", reason: "no-tests" };
@@ -44,21 +46,24 @@ export async function runPullRequestTests(args: {
   const settings = resolveRuntimeSettings(project, defaults);
 
   try {
-    const result = await callRunner({
-      repo: {
-        url: `https://github.com/${project.repoOwner}/${project.repoName}.git`,
-        revision: args.headSha,
-        // private 레포 클론용. 1시간짜리라 runner 가 쓰고 버린다.
-        token: await installationToken(project.installationId),
+    const result = await callRunner(
+      {
+        repo: {
+          url: `https://github.com/${project.repoOwner}/${project.repoName}.git`,
+          revision: args.headSha,
+          // private 레포 클론용. 1시간짜리라 runner 가 쓰고 버린다.
+          token: await installationToken(project.installationId),
+        },
+        testFiles: args.tests.map((test) => ({ path: test.testPath, content: test.code })),
+        framework,
+        commands: {
+          install: settings.installCommand,
+          test: withPassThroughArgs(settings.testCommand),
+        },
+        timeoutMs: settings.timeoutMs,
       },
-      testFiles: args.tests.map((test) => ({ path: test.testPath, content: test.code })),
-      framework,
-      commands: {
-        install: settings.installCommand,
-        test: withPassThroughArgs(settings.testCommand),
-      },
-      timeoutMs: settings.timeoutMs,
-    });
+      args.signal
+    );
     return { kind: "ran", result };
   } catch (error) {
     // runner 에 닿지 못한 것도 "우리 쪽이 못 돌렸다"다. runner 가 돌려주는 error 와 같은 모양으로 접는다.

@@ -81,7 +81,11 @@ export interface RunResult {
   finishedAt: string;
 }
 
-export async function runTest(req: RunRequest): Promise<RunResult> {
+/**
+ * signal 이 끊기면(web 이 요청을 끊으면) 진행 중인 단계를 멈추고 error 로 끝낸다.
+ * 샌드박스는 finally 에서 내린다. PR 에 새 커밋이 와서 옛 실행이 필요 없어졌을 때 쓴다.
+ */
+export async function runTest(req: RunRequest, signal?: AbortSignal): Promise<RunResult> {
   const startedAt = new Date();
   const timeoutMs = Math.min(req.timeoutMs ?? DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS);
   const logs: string[] = [];
@@ -110,6 +114,7 @@ export async function runTest(req: RunRequest): Promise<RunResult> {
       // 죽으면 로그도 같이 사라진다.
       timeout: timeoutMs + 60_000,
       resources: { vcpus: 2 },
+      signal,
       ...accessTokenCredentials(),
     });
 
@@ -120,7 +125,8 @@ export async function runTest(req: RunRequest): Promise<RunResult> {
 
     // 아직 커밋되지 않은 버전을 돌리는 게 목적이라 항상 덮어쓴다.
     await sandbox.writeFiles(
-      req.testFiles.map((file) => ({ path: `${repoDir}/${file.path}`, content: file.content }))
+      req.testFiles.map((file) => ({ path: `${repoDir}/${file.path}`, content: file.content })),
+      { signal }
     );
 
     const install = await sandbox.runCommand({
@@ -128,6 +134,7 @@ export async function runTest(req: RunRequest): Promise<RunResult> {
       args: ["-c", req.commands.install],
       cwd: repoDir,
       timeoutMs,
+      signal,
     });
     logs.push(await section(req.commands.install, install));
     if (install.exitCode !== 0) {
@@ -145,6 +152,7 @@ export async function runTest(req: RunRequest): Promise<RunResult> {
       args: ["-c", command],
       cwd: repoDir,
       timeoutMs,
+      signal,
     });
     logs.push(await section(command, test));
 
