@@ -8,7 +8,7 @@ import { startOfDay, subDays } from "date-fns";
 /** 최근 N일. 하루 = 막대 하나. */
 export const ACTIVITY_DAYS = 7;
 
-/** UsageSection 카드 하나의 형태 (mock-data 의 UsageSeries 와 동일 구조). */
+/** UsageSection 카드 하나의 공용 형태. */
 export interface ActivitySeries {
   key: string;
   label: string;

@@ -1,6 +1,6 @@
 import { format } from "date-fns";
+import type { ActivitySeries } from "@/lib/projects/window";
 import { Section } from "./section";
-import type { UsageSeries } from "../mock-data";
 
 /**
  * 지표 줄 — 합계 한 줄 + 표면별 카드.
@@ -14,7 +14,7 @@ export function UsageSection({
   to,
   passRate,
 }: {
-  series: UsageSeries[];
+  series: ActivitySeries[];
   from: string;
   to: string;
   /** null = 판정된 실행이 없음(러너 미연결) → "—". */
@@ -60,7 +60,7 @@ function UsageCard({
   fromLabel,
   toLabel,
 }: {
-  series: UsageSeries;
+  series: ActivitySeries;
   fromLabel: string;
   toLabel: string;
 }) {
