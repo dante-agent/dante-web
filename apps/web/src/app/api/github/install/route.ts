@@ -6,17 +6,14 @@ import {
   createInstallState,
 } from "@/lib/github/state";
 import { LOGIN_PATH, safeNext } from "@/lib/auth/redirect";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/auth/user";
 
 // GitHub App 설치 시작. "GitHub 연결" 버튼이 여기로 온다.
 //
 // 하는 일은 두 가지뿐이다: state 를 만들어 쿠키에 심고, GitHub 설치 화면으로 보낸다.
 // 실제 "어떤 레포를 열어줄지"는 GitHub 화면에서 사용자가 고른다.
 export async function GET(request: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser();
 
   // 비로그인이면 로그인 화면으로 보내되 여기로 돌아올 주소를 ?next 로 넘긴다.
   // 그냥 "/" 로 보내면 로그인 후 /projects 로 떨어져, 사용자가 "GitHub 연결" 을
