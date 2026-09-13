@@ -1,6 +1,7 @@
 import { prisma } from "@dante/db";
 import { getMonthlyBudgetStatus } from "@/lib/ai/budget";
 import { generateTestCode } from "@/lib/projects/test-generation";
+import { pullRequestTestPathFor } from "@/lib/projects/test-generation-prompt";
 
 // ⚠️ 서버 전용. PR 에서 바뀐 컴포넌트 파일마다 테스트를 만든다.
 //
@@ -61,6 +62,8 @@ export async function generatePullRequestTests(args: {
         source,
         testFramework: args.testFramework,
         dependencies: args.dependencies,
+        // 레포에 이미 있는 foo.test.tsx 를 덮어쓰지 않게 따로 이름 붙인다.
+        testPath: pullRequestTestPathFor(filePath),
       });
       if (!generated) return { ...result, stopped: "budget-exceeded" };
       result.tests.push({ filePath, ...generated });

@@ -81,8 +81,10 @@ export async function generateTestCode(args: {
   testFramework?: string | null;
   /** 넘기면 이 패키지만 import 하라는 지시가 붙는다. 추천 화면은 넘기지 않는다 */
   dependencies?: string[] | null;
+  /** 만들 테스트 경로. 생략하면 `foo.test.tsx`(testPathFor). PR 은 겹치지 않는 경로를 넘긴다 */
+  testPath?: string;
 }): Promise<{ testPath: string; code: string } | null> {
-  const testPath = testPathFor(args.filePath);
+  const testPath = args.testPath ?? testPathFor(args.filePath);
   const prompt = buildTestPrompt({
     filePath: args.filePath,
     testPath,

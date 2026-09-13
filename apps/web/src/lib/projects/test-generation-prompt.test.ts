@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { buildTestPrompt, packageDependencies, testPathFor } from "./test-generation-prompt.ts";
+import {
+  buildTestPrompt,
+  packageDependencies,
+  pullRequestTestPathFor,
+  testPathFor,
+} from "./test-generation-prompt.ts";
 
 const base = { filePath: "src/Button.tsx", testPath: "src/Button.test.tsx", source: "export {}" };
 
@@ -69,5 +74,16 @@ describe("packageDependencies", () => {
     assert.equal(packageDependencies(null), null);
     assert.equal(packageDependencies("{"), null);
     assert.deepEqual(packageDependencies("{}"), []);
+  });
+});
+
+describe("pullRequestTestPathFor", () => {
+  it("사람이 쓴 foo.test.tsx 와 겹치지 않게 .dante.test 를 넣는다", () => {
+    assert.equal(pullRequestTestPathFor("src/Button.tsx"), "src/Button.dante.test.tsx");
+    assert.notEqual(pullRequestTestPathFor("src/Button.tsx"), testPathFor("src/Button.tsx"));
+  });
+
+  it("vitest·jest 기본 규칙(*.test.*)에 잡힌다", () => {
+    assert.match(pullRequestTestPathFor("a/b.jsx"), /\.test\.jsx$/);
   });
 });
