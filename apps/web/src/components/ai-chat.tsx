@@ -56,27 +56,83 @@ class ResponseError extends Error {
   }
 }
 
+/** 끌어서 줄일 수 있는 최소 폭(px). 헤더 버튼 셋과 입력창이 깨지지 않는 선. */
+const MIN_WIDTH = 288;
+/** 최대 폭(dock 폭 대비). 본문 에디터가 쓸 자리를 남긴다. */
+const MAX_RATIO = 0.6;
+
 export function AiChatDock({ projectRef, children }: { projectRef: string; children: ReactNode }) {
   const [open, setOpen] = useState(false);
 
+  // null = 아직 끌지 않음 → 기본 폭(22rem / xl 26rem) 클래스를 쓴다. 끈 뒤에는 px.
+  // 저장하지 않는다 — 새로고침하면 기본 폭으로 돌아간다.
+  const [width, setWidth] = useState<number | null>(null);
+  // 끄는 동안에는 폭 transition 을 끈다. 켜두면 선이 커서를 300ms 늦게 따라온다.
+  const [dragging, setDragging] = useState(false);
+  const dockRef = useRef<HTMLDivElement>(null);
+
+  // file-view.tsx 의 DragDivider 와 같은 방식: pointer capture 로 커서가 선 밖으로
+  // 나가도(에디터 위를 지나가도) move 이벤트를 계속 받는다.
+  const onDividerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setDragging(true);
+  };
+  const onDividerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragging || !dockRef.current) return;
+    const r = dockRef.current.getBoundingClientRect();
+    const max = Math.max(MIN_WIDTH, r.width * MAX_RATIO);
+    setWidth(Math.min(max, Math.max(MIN_WIDTH, r.right - e.clientX)));
+  };
+  const onDividerUp = () => setDragging(false);
+
   return (
-    <div className="flex">
+    <div ref={dockRef} className="flex">
       <div className="min-w-0 flex-1">{children}</div>
 
-      {/* 패널은 계속 붙어 있고 폭만 0 ↔ 22rem 으로 움직인다. 그래야 본문이 같이
+      {/* 패널은 계속 붙어 있고 폭만 0 ↔ 기본 폭으로 움직인다. 그래야 본문이 같이
           부드럽게 줄고(늘고), 닫았다 열어도 대화가 남는다. 본문과는 border-l 한 줄로만
           나눈다 — 여백을 두면 에디터가 화면 끝까지 못 간다. */}
       <aside
         // 닫혀 있을 때 폭 0 짜리 안쪽 버튼·입력창으로 탭 이동이 들어가지 않게.
         inert={!open}
+        style={open && width !== null ? { width } : undefined}
         className={cn(
-          "shrink-0 overflow-hidden transition-[width] duration-300 ease-out",
-          open ? "w-[22rem] xl:w-[26rem]" : "w-0"
+          "relative shrink-0 overflow-hidden",
+          !dragging && "transition-[width] duration-300 ease-out",
+          !open ? "w-0" : width === null && "w-[22rem] xl:w-[26rem]"
         )}
       >
+        {/* 구분선. aside 가 overflow-hidden 이라 바깥으로 걸치지 못하고 패널 안쪽
+            왼쪽 끝 8px 을 잡는 영역으로 쓴다. 선은 border-l 자리에 겹쳐 보인다. */}
+        {open && (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="AI 채팅 너비 조절"
+            onPointerDown={onDividerDown}
+            onPointerMove={onDividerMove}
+            onPointerUp={onDividerUp}
+            onPointerCancel={onDividerUp}
+            className="group absolute inset-y-0 left-0 z-10 w-2 cursor-col-resize touch-none"
+          >
+            <span
+              className={cn(
+                "group-hover:bg-brand-orange/70 block h-full w-0.5 bg-transparent transition-colors",
+                dragging && "bg-brand-orange/70"
+              )}
+            />
+          </div>
+        )}
+
         {/* useSearchParams 를 쓰므로 경계를 둔다(정적 렌더 이탈 방지). */}
         <Suspense fallback={null}>
-          <ChatPanel projectRef={projectRef} open={open} onClose={() => setOpen(false)} />
+          <ChatPanel
+            projectRef={projectRef}
+            open={open}
+            width={width}
+            onClose={() => setOpen(false)}
+          />
         </Suspense>
       </aside>
 
@@ -97,10 +153,13 @@ export function AiChatDock({ projectRef, children }: { projectRef: string; child
 function ChatPanel({
   projectRef,
   open,
+  width,
   onClose,
 }: {
   projectRef: string;
   open: boolean;
+  /** 사용자가 끌어서 정한 폭(px). null 이면 기본 폭 클래스. */
+  width: number | null;
   onClose: () => void;
 }) {
   const file = useSearchParams().get("file");
@@ -223,10 +282,12 @@ function ChatPanel({
 
   return (
     <div
+      // 폭은 바깥 aside 와 같은 값으로 고정 — aside 가 접히는 동안 내용이 찌그러지지
+      // 않게. 내용은 폭이 어느 정도 열린 뒤에 따라 들어온다(delay).
+      style={width !== null ? { width } : undefined}
       className={cn(
-        // 폭은 바깥 aside 와 같은 값으로 고정 — aside 가 접히는 동안 내용이 찌그러지지
-        // 않게. 내용은 폭이 어느 정도 열린 뒤에 따라 들어온다(delay).
-        "border-border bg-sidebar flex w-[22rem] flex-col overflow-hidden border-l transition-opacity duration-200 xl:w-[26rem]",
+        "border-border bg-sidebar flex flex-col overflow-hidden border-l transition-opacity duration-200",
+        width === null && "w-[22rem] xl:w-[26rem]",
         open ? "opacity-100 delay-150" : "opacity-0",
         PANE_HEIGHT
       )}
