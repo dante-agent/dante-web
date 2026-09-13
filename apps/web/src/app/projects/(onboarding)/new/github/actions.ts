@@ -49,8 +49,8 @@ export async function importRepo(formData: FormData) {
         repoName: repo.name,
         defaultBranch: repo.default_branch,
         isPrivate: repo.private,
-        userId: user.id,
-        // 프로젝트는 레포를 열어준 설치와 같은 팀에 속한다.
+        // 만든 사람은 기록일 뿐이다. 프로젝트는 레포를 열어준 설치와 같은 팀에 속한다.
+        createdById: user.id,
         teamId: installation.teamId,
         installationId,
       },

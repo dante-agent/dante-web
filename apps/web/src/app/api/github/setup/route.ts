@@ -113,8 +113,8 @@ export async function GET(request: Request) {
 
   await prisma.githubInstallation.upsert({
     where: { id: BigInt(installationId) },
-    create: { id: BigInt(installationId), userId: user.id, teamId, ...fields },
-    // 주인(teamId)과 처음 연결한 사람(userId)은 덮지 않는다. 두 사람이 같은 새 설치로
+    create: { id: BigInt(installationId), createdById: user.id, teamId, ...fields },
+    // 주인(teamId)과 처음 연결한 사람(createdById)은 덮지 않는다. 두 사람이 같은 새 설치로
     // 동시에 들어와도, 먼저 만든 쪽의 팀이 남는다.
     update: fields,
   });
