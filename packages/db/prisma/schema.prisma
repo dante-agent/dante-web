@@ -287,10 +287,11 @@ model Project {
   aiUsage             AiUsage[]
   chatConversations   ChatConversation[]
 
-  /// 같은 레포를 같은 사용자가 두 번 연결하지 못하게 막는다.
-  /// TODO(팀 PR): 소유 주체가 User → Team 으로 바뀌면 이 제약도 teamId 기준으로 옮긴다.
-  /// 레포당 전역 하나(@@unique([repoId]))로 바꾸는 건 기존 중복을 정리한 뒤에 한다.
-  @@unique([userId, repoId])
+  /// 레포 하나는 Dante 전체에서 프로젝트 하나다(팀 모델 결정 5).
+  ///
+  /// 팀 단위(teamId, repoId)가 아니라 전역인 이유: 같은 레포를 두 팀이 각자 연결하면
+  /// 한 PR 에 두 팀의 코멘트·체크가 따로 달린다. 함께 쓰려면 그 팀에 초대받는다.
+  @@unique([repoId])
   @@index([installationId])
   @@index([teamId])
   @@map("projects")

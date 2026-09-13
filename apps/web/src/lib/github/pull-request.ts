@@ -1,5 +1,5 @@
 import { githubApp } from "@/lib/github/app";
-import { commentMarker } from "@/lib/notifications/comment";
+import { COMMENT_MARKER_PREFIX } from "@/lib/notifications/comment";
 import { CHECK_RUN_NAME, type CheckRunResult } from "@/lib/notifications/check-run";
 
 // ⚠️ 서버 전용 (app.ts 참고).
@@ -54,7 +54,7 @@ export async function upsertSummaryComment(
   ref: RepoRef,
   prNumber: number,
   body: string,
-  options: { mode: "sticky" | "append"; cachedCommentId: number | null; projectRef: string }
+  options: { mode: "sticky" | "append"; cachedCommentId: number | null }
 ): Promise<number> {
   // append 모드는 이력이 남는 걸 선호하는 팀을 위한 옵션이다. 찾지 않고 그냥 단다.
   if (options.mode === "append") return createComment(octokit, ref, prNumber, body);
@@ -74,7 +74,7 @@ export async function upsertSummaryComment(
     }
   }
 
-  const found = await findSummaryComment(octokit, ref, prNumber, options.projectRef);
+  const found = await findSummaryComment(octokit, ref, prNumber);
   if (found !== null) {
     await octokit.request("PATCH /repos/{owner}/{repo}/issues/comments/{comment_id}", {
       ...ref,
@@ -104,14 +104,11 @@ async function createComment(octokit: Octokit, ref: RepoRef, prNumber: number, b
  * 문자열이라 누구나 복사해 붙일 수 있는데, 그걸 우리 코멘트로 착각하면 남의
  * 글을 덮어쓴다.
  */
-export async function findSummaryComment(
-  octokit: Octokit,
-  ref: RepoRef,
-  prNumber: number,
-  projectRef: string
-) {
+export async function findSummaryComment(octokit: Octokit, ref: RepoRef, prNumber: number) {
   const slug = process.env.GITHUB_APP_SLUG;
-  const marker = commentMarker(projectRef);
+  // 접두사로 본다. ref 가 붙은 옛 마커 코멘트도 우리 것으로 찾아 이어서 고쳐 쓴다.
+  // 레포당 프로젝트가 하나라 다른 프로젝트의 코멘트와 헷갈릴 일이 없다.
+  const marker = COMMENT_MARKER_PREFIX;
 
   // 페이지를 직접 넘긴다. octokit 의 paginate 헬퍼는 설치 토큰용 클라이언트
   // 타입에 노출되지 않아서, repos.ts 와 같은 방식으로 훑는다.

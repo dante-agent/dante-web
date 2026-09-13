@@ -18,16 +18,18 @@ import type { CommentFields, NotificationSettings } from "@/lib/notifications/se
  * 지웠다) 코멘트 목록에서 이 마커를 가진 우리 봇의 글을 찾는다. 마커를 본문
  * 안쪽이 아니라 맨 앞에 두는 이유는 잘린 응답에서도 찾을 수 있게 하려는 것이다.
  *
- * 프로젝트 ref 를 뒤에 붙인다. 같은 레포를 두 사용자가 각자 연결할 수 있는데
- * (@@unique([userId, repoId])) 마커가 같으면 서로의 코멘트를 덮어쓴다.
- * TODO(팀 PR): 소유 주체가 Team 으로 바뀌어 레포당 프로젝트가 하나가 되면
- * 접미사를 떼도 된다.
+ * 예전에는 뒤에 프로젝트 ref 를 붙였다(`<!-- dante:pr-summary:<ref> -->`). 같은 레포를
+ * 여러 프로젝트가 연결할 수 있던 때라 서로의 코멘트를 덮어쓰지 않으려고. 레포당
+ * 프로젝트가 하나가 되면서(@@unique([repoId])) 뗐다.
  */
-export const COMMENT_MARKER = "<!-- dante:pr-summary";
+export const COMMENT_MARKER = "<!-- dante:pr-summary -->";
 
-export function commentMarker(projectRef: string) {
-  return `${COMMENT_MARKER}:${projectRef} -->`;
-}
+/**
+ * 옛 마커와 새 마커가 함께 갖는 앞부분. 찾을 때는 이걸 본다.
+ * 이미 열려 있는 PR 에는 옛 마커 코멘트가 달려 있다. 새 마커로만 찾으면 그 PR 에
+ * 코멘트가 하나 더 생긴다.
+ */
+export const COMMENT_MARKER_PREFIX = "<!-- dante:pr-summary";
 
 /** 진행 중 상태의 제목 줄. 하나의 코멘트가 이 문구들을 거쳐 간다. */
 const PROGRESS_LABEL: Record<Exclude<RunStatus, "completed" | "failed" | "unchanged">, string> = {
@@ -37,11 +39,7 @@ const PROGRESS_LABEL: Record<Exclude<RunStatus, "completed" | "failed" | "unchan
   running: "Running tests",
 };
 
-export function renderPrComment(
-  run: RunSummary,
-  settings: NotificationSettings,
-  projectRef: string
-): string {
+export function renderPrComment(run: RunSummary, settings: NotificationSettings): string {
   const body = isTerminal(run.status)
     ? renderTerminal(run, settings)
     : renderProgress(run, settings);
@@ -49,10 +47,7 @@ export function renderPrComment(
   const links = renderLinks(run, settings.prCommentFields);
 
   return (
-    [commentMarker(projectRef), "", body, links && `\n${links}`]
-      .filter(Boolean)
-      .join("\n")
-      .trimEnd() + "\n"
+    [COMMENT_MARKER, "", body, links && `\n${links}`].filter(Boolean).join("\n").trimEnd() + "\n"
   );
 }
 
