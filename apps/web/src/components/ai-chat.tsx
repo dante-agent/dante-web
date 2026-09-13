@@ -191,7 +191,7 @@ export function AiChatDock({ projectRef, children }: { projectRef: string; child
           className="animate-in fade-in zoom-in-95 fixed right-8 bottom-8 z-30 h-11 gap-2 rounded-full px-4 shadow-lg duration-200"
         >
           <Sparkles />
-          AI 채팅
+          AI Chat
         </Button>
       )}
     </div>
@@ -547,7 +547,8 @@ function ChatPanel({
             <div className="text-muted-foreground mb-2 flex items-center justify-between gap-2 text-xs">
               <span>대화가 가득 찼어요. 새 대화에서 이어가 주세요.</span>
               <Button type="button" size="sm" variant="outline" onClick={newChat}>
-                <SquarePen />새 대화
+                <SquarePen />
+                New Chat
               </Button>
             </div>
           )}
