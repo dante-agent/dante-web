@@ -46,7 +46,7 @@ type ChatError = { kind: "error" | "limit"; message: string };
 /** 대화 하나에 담을 수 있는 메시지 수(질문·답 합계). 서버도 같은 값으로 막는다(409). */
 const MAX_MESSAGES = 50;
 /**
- * 대화 하나의 컨텍스트 토큰 상한. 입력창 옆 % 가 이 값 대비 비율이다.
+ * 대화 하나의 컨텍스트 토큰 상한. 입력창 위 상태 바의 % 가 이 값 대비 비율이다.
  * 서버(lib/chat/conversations.ts)와 같은 값 — 왜 5만인지는 거기 적었다.
  */
 const MAX_CONTEXT_TOKENS = 50_000;
@@ -551,6 +551,7 @@ function ChatPanel({
               </Button>
             </div>
           )}
+          <ContextBar tokens={full ? MAX_CONTEXT_TOKENS : tokens} />
           <div className="border-input bg-muted focus-within:border-ring flex items-end gap-1.5 rounded-xl border p-2 shadow-lg shadow-black/40 transition-colors">
             <textarea
               ref={inputRef}
@@ -568,7 +569,6 @@ function ChatPanel({
               placeholder="Ask anything — Enter to send"
               className="text-foreground placeholder:text-muted-foreground block max-h-42 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent px-0.5 text-sm leading-7 outline-none disabled:cursor-not-allowed disabled:opacity-50"
             />
-            <ContextGauge tokens={full ? MAX_CONTEXT_TOKENS : tokens} />
             {pending ? (
               <Button
                 type="button"
@@ -637,24 +637,24 @@ function CollapsibleText({ text }: { text: string }) {
 }
 
 /**
- * 입력창 옆 컨텍스트 게이지: 마지막 답의 실제 토큰(모델이 알려준 입력+출력)이 상한의 몇 % 인지.
+ * 입력창 위 한 줄 "Context N%": 마지막 답의 실제 토큰(모델이 알려준 입력+출력)이 상한의 몇 % 인지.
  * 답이 끝날 때만 바뀐다 — 보내기 전에는 실제 값을 알 수 없어 추정치를 섞지 않는다.
+ * 입력창 안에 두면 버튼과 자리를 다퉈서 따로 한 줄을 준다.
  * 경고 톤부터는 "곧 새 대화를 시작해야 한다"를 먼저 알린다.
  */
-function ContextGauge({ tokens }: { tokens: number }) {
+function ContextBar({ tokens }: { tokens: number }) {
   const ratio = Math.min(tokens / MAX_CONTEXT_TOKENS, 1);
-  const label = `컨텍스트 ${tokens.toLocaleString()} / ${MAX_CONTEXT_TOKENS.toLocaleString()} 토큰`;
+  const warn = ratio >= WARN_RATIO;
   return (
-    <span
-      title={label}
+    <div
+      title={`${tokens.toLocaleString()} / ${MAX_CONTEXT_TOKENS.toLocaleString()} 토큰`}
       className={cn(
-        "flex h-7 shrink-0 items-center text-[11px] tabular-nums",
-        ratio >= WARN_RATIO ? "text-brand-orange font-semibold" : "text-muted-foreground"
+        "mb-1.5 px-1 text-[11px] tabular-nums",
+        warn ? "text-brand-orange font-semibold" : "text-muted-foreground"
       )}
     >
-      <span aria-hidden>{Math.round(ratio * 100)}%</span>
-      <span className="sr-only">{label}</span>
-    </span>
+      Context {Math.round(ratio * 100)}%
+    </div>
   );
 }
 
