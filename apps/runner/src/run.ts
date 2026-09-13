@@ -110,6 +110,7 @@ export async function runTest(req: RunRequest): Promise<RunResult> {
       // 죽으면 로그도 같이 사라진다.
       timeout: timeoutMs + 60_000,
       resources: { vcpus: 2 },
+      ...accessTokenCredentials(),
     });
 
     // 클론은 세션 기본 경로(/vercel) 바로 아래가 아니라 그 안의 레포 이름 폴더로
@@ -226,4 +227,20 @@ function joinLogs(parts: string[]) {
   const joined = parts.join("\n\n");
   if (joined.length <= MAX_LOG_CHARS) return joined;
   return `… (앞부분 ${joined.length - MAX_LOG_CHARS}자 잘림)\n` + joined.slice(-MAX_LOG_CHARS);
+}
+
+/**
+ * Vercel Access Token 으로 인증할 때의 값. 셋 다 있을 때만 쓰고, 없으면 SDK 가
+ * VERCEL_OIDC_TOKEN 을 읽는다(배포 환경·`vercel env pull`).
+ *
+ * 따로 둔 이유: Vercel 팀 멤버가 아니면 OIDC 토큰을 받을 수 없다. 팀 주인이 발급한
+ * 팀 범위 토큰으로도 로컬 runner 를 띄울 수 있게 한다. 하나라도 빠지면 SDK 가 셋을
+ * 다 요구하며 던지므로, 부분 설정은 조용히 OIDC 로 떨어뜨리지 않고 그대로 넘겨 드러낸다.
+ */
+function accessTokenCredentials() {
+  const token = process.env.VERCEL_TOKEN;
+  const teamId = process.env.VERCEL_TEAM_ID;
+  const projectId = process.env.VERCEL_PROJECT_ID;
+  if (!token && !teamId && !projectId) return {};
+  return { token, teamId, projectId };
 }

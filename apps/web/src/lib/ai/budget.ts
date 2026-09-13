@@ -1,5 +1,7 @@
 import { Prisma, prisma } from "@dante/db";
 import { currentBillingPeriod, type BillingPeriod } from "./billing-period";
+import { MODEL } from "./chat-model";
+import type { AiReservation, UsageSurface } from "./usage";
 
 // ⚠️ 서버 전용. "이 사용자가 이번 달 쓴 원가가 한도를 넘었나"를 판정한다.
 //
@@ -94,9 +96,10 @@ function defaultLimitUsd(): Prisma.Decimal {
  * 음수가 "항상 초과"로 조용히 굳는 것보다 배포한 사람에게 보이는 편이 낫다.
  */
 async function monthlyLimit(
+  db: Prisma.TransactionClient,
   userId: string
 ): Promise<{ planName: string | null; limit: Prisma.Decimal }> {
-  const user = await prisma.user.findUnique({
+  const user = await db.user.findUnique({
     where: { id: userId },
     select: { aiPlan: { select: { name: true, monthlyLimitUsd: true } } },
   });
@@ -118,20 +121,27 @@ async function monthlyLimit(
  * 건"의 수다. `_sum` 은 null 을 알아서 건너뛴다. AiUsage 의 `[userId, createdAt]`
  * 인덱스가 그대로 쓰인다.
  *
- * 이 함수는 throw 할 수 있다(설정 누락). recordAiUsage() 와 반대다 — 그쪽은 응답이 이미
+ * 이 함수는 throw 할 수 있다(설정 누락). settleAiUsage() 와 반대다 — 그쪽은 응답이 이미
  * 나간 뒤라 삼켜야 하고, 이쪽은 호출 전이라 막아야 한다.
  *
  * 구간은 billing-period.ts 에서 받는다. 직접 계산하지 않는 이유: 사용량 화면
  * (usage-queries.ts)이 같은 구간을 보여줘야 한다. 예전에 여기는 UTC 월, 화면은
  * Asia/Seoul 월로 각자 계산해서 월초 9시간 동안 "화면에 뜬 합계"와 "차단을 결정한
  * 합계"가 달랐다. 사용자가 왜 막혔는지 설명할 수 없는 상태다.
+ *
+ * 예약 중인 행(settledAt null)도 합계에 들어간다 — costUsd 에 원가 상한이 들어 있다.
+ * 이 값은 화면·사전 검사용이고, 호출을 실제로 통과시키는 판정은 reserveAiBudget 이 한다.
  */
-export async function getMonthlyBudgetStatus(userId: string): Promise<BudgetStatus> {
+export function getMonthlyBudgetStatus(userId: string): Promise<BudgetStatus> {
+  return budgetStatus(prisma, userId);
+}
+
+async function budgetStatus(db: Prisma.TransactionClient, userId: string): Promise<BudgetStatus> {
   const period = currentBillingPeriod();
 
   const [{ planName, limit }, agg] = await Promise.all([
-    monthlyLimit(userId),
-    prisma.aiUsage.aggregate({
+    monthlyLimit(db, userId),
+    db.aiUsage.aggregate({
       where: { userId, createdAt: { gte: period.start, lt: period.end } },
       _sum: { costUsd: true },
       _count: { _all: true, costUsd: true },
@@ -164,21 +174,71 @@ export async function getMonthlyBudgetStatus(userId: string): Promise<BudgetStat
   };
 }
 
+export type ReserveResult =
+  { ok: true; reservation: AiReservation } | { ok: false; budget: BudgetStatus };
+
+/**
+ * 모델을 부르기 **직전에** 한도를 확인하고, 통과하면 그 호출의 원가 상한을 먼저 기록한다.
+ * 호출이 끝나면 usage.ts 의 settleAiUsage 로 실제 사용량으로 바꾼다.
+ *
+ * 왜 예약인가: 검사는 호출 전, 기록은 호출 후라면 같은 사용자가 요청 10개를 동시에 보낼 때
+ * 10개 모두 "아직 $0 썼음"을 보고 통과한다(창 10개 + 스크립트면 쉽게 된다). 상한을 먼저
+ * 적어두면 뒤따르는 요청이 앞 요청의 몫을 합계에서 본다.
+ *
+ * 왜 락인가: 예약만으로는 부족하다. 10개가 거의 같은 순간에 합계를 읽으면 서로의 예약이
+ * 적히기 전이라 여전히 다 통과한다. 그래서 "합계 읽기 + 예약 쓰기"를 사용자별 advisory
+ * lock 안에서 한 줄로 세운다.
+ *   - pg_advisory_xact_lock: Postgres 내장. 트랜잭션이 끝나면 저절로 풀려서 푸는 걸 잊을
+ *     수 없다. 키는 userId 해시라 다른 사용자끼리는 서로 기다리지 않는다.
+ *   - DB 락이라 서버리스 인스턴스가 여러 개여도 같이 막힌다(메모리 락은 인스턴스마다 따로다).
+ *   - 락은 이 짧은 트랜잭션 동안만 잡는다. 모델 호출(수십 초)까지 잡으면 같은 사용자의 다른
+ *     탭이 전부 멈추고, pgbouncer 연결(connection_limit=1)을 그동안 붙들게 된다.
+ *
+ * 한도를 넘었는지는 getMonthlyBudgetStatus 와 같은 기준(합계 ≥ 한도)으로 본다. 그래서 막히는
+ * 사용자에게 보이는 숫자와 판정이 어긋나지 않는다. 대가로 한도 직전의 마지막 호출 1건은
+ * 통과하고, 초과는 그 1건의 원가 상한까지다(아래 "남아 있는 구멍").
+ */
+export async function reserveAiBudget(args: {
+  userId: string;
+  projectId?: string | null;
+  surface: UsageSurface;
+  /** pricing.ts maxCostUsd 로 계산한 이 호출의 원가 상한. */
+  estimateUsd: number;
+}): Promise<ReserveResult> {
+  return prisma.$transaction(
+    async (tx) => {
+      // pg_advisory_xact_lock 은 void 를 돌려주는데 $queryRaw 는 void 컬럼을 읽지 못한다.
+      // 결과가 필요 없으니 $executeRaw 로 부른다.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${args.userId}, 0))`;
+
+      const budget = await budgetStatus(tx, args.userId);
+      if (budget.exceeded) return { ok: false, budget };
+
+      const row = await tx.aiUsage.create({
+        data: {
+          userId: args.userId,
+          projectId: args.projectId ?? null,
+          surface: args.surface,
+          model: MODEL,
+          costUsd: args.estimateUsd,
+        },
+        select: { id: true },
+      });
+      return { ok: true, reservation: { id: row.id } };
+    },
+    // 기본값(연결 대기 2초·실행 5초)은 같은 인스턴스에 요청이 몰려 연결 하나를 줄 서서 쓸 때
+    // 모자랄 수 있다. 여기서 실패하면 호출이 에러로 끝나므로 조금 넉넉히 둔다.
+    { maxWait: 10_000, timeout: 10_000 }
+  );
+}
+
 // ── 남아 있는 구멍 (해결한 척하지 않기) ──────────────────────────────────
 //
-// 1. 경합(race). 검사는 호출 **전**이고 기록은 호출 **후**(onFinish)다. 같은 사용자가
-//    요청 N 개를 동시에 보내면 N 개 모두 검사를 통과한 뒤 함께 기록된다. 즉 이 코드가
-//    보장하는 건 "한도 이하로 유지"가 아니라 "한도 + 동시에 날아간 호출들의 원가" 까지만
-//    이다. 실제로는 채팅 UI 가 한 번에 한 요청만 보내므로(pending 중 전송 막음) 한 사람이
-//    탭을 여러 개 열거나 스크립트로 부를 때만 벌어진다.
+// 1. 마지막 호출 1건의 overshoot. 합계가 한도 바로 아래면 그 호출은 통과하고, 한도를 그 호출의
+//    원가 상한만큼 넘을 수 있다. 상한은 호출마다 건 maxOutputTokens 로 묶여 있다.
+//    "합계 + 상한 > 한도면 거절"로 바꾸면 없어지지만, 그러면 한도가 남아 있는데 막히는
+//    사용자가 생기고 화면 숫자로 이유를 설명할 수 없다.
 //
-// 2. 단일 호출의 overshoot. 호출 원가는 스트림이 끝나야 확정되므로, 한도에 $0.01 남은
-//    사용자가 아주 비싼 한 번의 호출을 끝까지 하는 걸 막지 못한다. 검사 시점에는 그
-//    호출이 얼마일지 알 수 없다.
-//
-// 둘 다 제대로 막으려면 호출 전에 비관적 금액을 "예약"해두고(추정 원가로 행을 먼저 쓰고
-// onFinish 에서 실제값으로 갱신) 사용자별 락을 걸어야 한다. 그건 이 PR 범위를 넘고,
-// 실패한 예약을 되돌리는 문제(스트림이 끊기면 예약이 남는다)를 새로 만든다.
-// 지금 한도는 "청구서 폭주를 막는 상한"으로는 충분하고, "정확히 $N 에서 멈추는 미터"는
-// 아니다.
-// ponytail: 정확한 차단이 필요해지면 사전 예약 + 사용자별 advisory lock.
+// 2. 정산되지 않는 예약. 호출 도중 서버가 죽으면 행이 상한 그대로 남는다. 한도가 느슨해지는
+//    쪽이 아니라 빡빡해지는 쪽으로 틀리고, 다음 달이면 구간에서 빠지므로 치우지 않는다.
+// ponytail: 남은 예약이 문제가 되면 created_at 이 오래된 미정산 행을 UNKNOWN_CALL_COST_USD 로 센다.

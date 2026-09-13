@@ -24,7 +24,7 @@ export function SessionNavList({
   return (
     <div className="flex flex-col gap-1 overflow-y-auto pt-10">
       <p className="text-muted-foreground px-2 text-[11px] font-medium tracking-wide uppercase">
-        최근 세션
+        Recent sessions
       </p>
       {sessions.map((session) => {
         const Icon = STATUS_ICON[session.status];

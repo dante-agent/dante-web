@@ -2,9 +2,9 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 const TABS = [
-  { key: "suggested", label: "추천" },
-  { key: "sessions", label: "세션" },
-  { key: "scheduled", label: "예약됨" },
+  { key: "suggested", label: "Suggested" },
+  { key: "sessions", label: "Sessions" },
+  { key: "scheduled", label: "Scheduled" },
 ] as const;
 
 export type RecommendTab = (typeof TABS)[number]["key"];

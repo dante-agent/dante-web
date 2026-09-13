@@ -21,6 +21,8 @@ export type TestReport = {
   /** skipped·todo 는 세지 않는다. 코멘트가 "N 개 중 M 개 실패" 로 읽히는 숫자다 */
   totals: { total: number; passed: number; failed: number };
   failures: FailedTest[];
+  /** 테스트 파일별 개수. PR 코멘트가 컴포넌트마다 테스트 수를 적는 데 쓴다 */
+  files: { file: string; total: number; passed: number; failed: number }[];
 };
 
 /** 샌드박스 안에서 리포트를 쓸 자리. 레포 밖에 둬서 사용자 파일과 섞이지 않게 한다. */
@@ -63,6 +65,7 @@ export function parseReport(raw: string, repoDir: string): TestReport | null {
   let passed = 0;
   let failed = 0;
   const failures: FailedTest[] = [];
+  const files: TestReport["files"] = [];
 
   for (const suite of data.testResults) {
     if (!isRecord(suite)) continue;
@@ -74,15 +77,20 @@ export function parseReport(raw: string, repoDir: string): TestReport | null {
     if (assertions.length === 0 && suite.status === "failed") {
       failed += 1;
       failures.push({ file, name: "(file failed to run)", message: firstLine(suite.message) });
+      files.push({ file, total: 1, passed: 0, failed: 1 });
       continue;
     }
 
+    let suitePassed = 0;
+    let suiteFailed = 0;
     for (const assertion of assertions) {
       if (!isRecord(assertion)) continue;
       if (assertion.status === "passed") {
         passed += 1;
+        suitePassed += 1;
       } else if (assertion.status === "failed") {
         failed += 1;
+        suiteFailed += 1;
         const messages = Array.isArray(assertion.failureMessages) ? assertion.failureMessages : [];
         failures.push({
           file,
@@ -91,9 +99,15 @@ export function parseReport(raw: string, repoDir: string): TestReport | null {
         });
       }
     }
+    files.push({
+      file,
+      total: suitePassed + suiteFailed,
+      passed: suitePassed,
+      failed: suiteFailed,
+    });
   }
 
-  return { totals: { total: passed + failed, passed, failed }, failures };
+  return { totals: { total: passed + failed, passed, failed }, failures, files };
 }
 
 function testName(assertion: Record<string, unknown>) {

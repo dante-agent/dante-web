@@ -69,8 +69,13 @@ async function summarize(
     }),
     // 토큰 쪽은 같은 방법이 안 통한다. 입력만 없는 행과 출력만 없는 행이
     // 따로 있을 수 있어 두 컬럼의 non-null 개수로는 합집합을 구할 수 없다.
+    // 예약 중인 행(settledAt null)은 아직 토큰이 없을 뿐 "프로바이더가 안 줬다"가 아니라 뺀다.
     prisma.aiUsage.count({
-      where: { ...where, OR: [{ inputTokens: null }, { outputTokens: null }] },
+      where: {
+        ...where,
+        settledAt: { not: null },
+        OR: [{ inputTokens: null }, { outputTokens: null }],
+      },
     }),
   ]);
 

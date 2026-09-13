@@ -287,6 +287,7 @@ model Project {
   notificationSetting ProjectNotificationSetting?
   pullRequestSurfaces PullRequestSurface[]
   pullRequestJobs     PullRequestJob[]
+  pullRequestTests    PullRequestTest[]
   deliveries          NotificationDelivery[]
   webhookDeliveries   WebhookDelivery[]
   aiUsage             AiUsage[]
@@ -549,22 +550,52 @@ model PullRequestJob {
 
   /// "queued" | "running" | "done" | "failed" | "superseded"(처리 중 새 커밋이 옴).
   /// 문자열인 이유는 Project.testFramework 와 같다.
-  status   String
+  status    String
   /// failed 일 때의 에러 원문.
-  error    String?
+  error     String?
   /// 같은 커밋을 몇 번 돌렸는지. 배달 재시도·Re-run 이 올릴 때마다 는다.
-  attempts Int     @default(0)
+  attempts  Int     @default(0)
+  /// 마지막 실행의 runner 응답 중 로그를 뺀 부분(status·report·errorMessage·시각).
+  /// PR preview 화면이 읽는다. 실행 전에 끝났으면 null.
+  runResult Json?   @map("run_result")
+  /// 마지막 실행 로그. runner 가 200k 자로 자른 원문이다.
+  runLogs   String? @map("run_logs")
 
   startedAt  DateTime? @map("started_at")
   finishedAt DateTime? @map("finished_at")
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tests   PullRequestTest[]
 
   @@unique([projectId, prNumber, headSha])
   @@index([projectId, prNumber, createdAt])
   @@map("pull_request_jobs")
+}
+
+/// PR 작업에서 만든 테스트 파일 하나 (apps/web/src/lib/notifications/pr-test-generation.ts).
+///
+/// TestFile 과 섞지 않는 이유: 대시보드·추천은 TestFile 을 기본 브랜치의 테스트로 읽는다.
+/// PR 에서 만든 테스트는 머지 전 커밋 기준이라 거기 섞이면 아직 없는 테스트가 집계된다.
+model PullRequestTest {
+  id        String   @id @default(uuid()) @db.Uuid
+  jobId     String   @map("job_id") @db.Uuid
+  projectId String   @map("project_id") @db.Uuid
+  /// 테스트를 만든 원본 컴포넌트 파일
+  filePath  String   @map("file_path")
+  testPath  String   @map("test_path")
+  code      String
+  /// 만들 때 쓴 러너. 프로젝트가 고르지 않았으면 null
+  framework String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  job     PullRequestJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  project Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, testPath])
+  @@index([projectId])
+  @@map("pull_request_tests")
 }
 
 /// 전달 로그. "왜 코멘트가 안 달렸지"를 우리 서버 로그를 뒤지지 않고 답하려고 남긴다.
@@ -636,6 +667,11 @@ model AiUsage {
   /// Decimal 인 이유: 달러를 Float 로 누적하면 틀린다. 한도 판정에 쓰는 값이라
   /// 반올림 오차가 "막혔는데 왜 막혔는지 설명이 안 되는" 상황을 만든다.
   costUsd Decimal? @map("cost_usd") @db.Decimal(12, 6)
+
+  /// 호출이 끝나 실제 사용량으로 바뀐 시각. null 이면 아직 예약 중이다 — 행은 호출 전에
+  /// 만들어지고(budget.ts reserveAiBudget) 그동안 costUsd 에는 그 호출의 원가 상한이 들어
+  /// 있다. 끝내 채워지지 않으면(서버가 도중에 죽음) 상한 그대로 한도에 남는다.
+  settledAt DateTime? @map("settled_at")
 
   createdAt DateTime @default(now()) @map("created_at")
 

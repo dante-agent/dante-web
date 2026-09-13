@@ -1,5 +1,5 @@
 import { after } from "next/server";
-import { prisma } from "@dante/db";
+import { Prisma, prisma } from "@dante/db";
 import {
   fetchFileText,
   fetchPullRequestFiles,
@@ -17,7 +17,15 @@ import { extractComponents } from "@/lib/notifications/extract-components";
 import { danteLinks } from "@/lib/notifications/links";
 import { checkPullRequestAuthor } from "@/lib/notifications/pr-author";
 import { authorSkipReason } from "@/lib/notifications/pr-author-rules";
-import { queuedRun, type ComponentChange, type RunSummary } from "@/lib/notifications/run-summary";
+import {
+  generatePullRequestTests,
+  savePullRequestTests,
+  type PullRequestSource,
+} from "@/lib/notifications/pr-test-generation";
+import { runPullRequestTests } from "@/lib/notifications/pr-test-run";
+import { finalRun, type LocatedComponent } from "@/lib/notifications/run-result";
+import { packageDependencies } from "@/lib/projects/test-generation-prompt";
+import { queuedRun, type RunSummary } from "@/lib/notifications/run-summary";
 
 // ⚠️ 서버 전용.
 //
@@ -42,6 +50,12 @@ export type JobProject = {
   installationId: bigint;
   /** PR 작성자가 이 팀의 멤버인지 볼 때 쓴다 */
   teamId: string;
+  /** 생성 프롬프트의 러너 지시. 고르지 않았으면 null */
+  testFramework: string | null;
+  /** Runtime 탭에 저장한 값. null 이면 레포에서 기본값을 정한다(pr-test-run.ts) */
+  installCommand: string | null;
+  testCommand: string | null;
+  testTimeoutMs: number | null;
 };
 
 /**
@@ -68,8 +82,15 @@ async function runPullRequestJob(jobId: string, project: JobProject, pr: PullReq
     data: { status: "running", startedAt: new Date(), attempts: { increment: 1 } },
   });
 
+  // 생성·실행은 분 단위라 단계마다 같은 코멘트·체크를 고쳐 쓴다(generating → running).
+  // 그사이 새 커밋이 왔으면 옛 작업의 진행 상태로 새 작업의 코멘트를 덮지 않는다.
+  const progress = async (run: RunSummary) => {
+    if (await isSuperseded(jobId, project.id, pr.number)) return;
+    await deliverRunSummary(project, pr, run);
+  };
+
   try {
-    const run = await pullRequestRun(project, pr);
+    const run = await pullRequestRun(jobId, project, pr, progress);
 
     // 처리하는 사이에 새 커밋이 푸시됐으면 옛 결과로 코멘트를 덮지 않는다.
     // sticky 코멘트는 PR 에 하나라, 늦게 끝난 옛 작업이 새 결과를 지워버린다.
@@ -87,6 +108,13 @@ async function runPullRequestJob(jobId: string, project: JobProject, pr: PullReq
     await finish(jobId, "failed", error instanceof Error ? error.message : String(error)).catch(
       () => {}
     );
+    // 진행 상태(generating·running)를 이미 보냈으면 체크가 in_progress 로 남아 영원히 돈다.
+    // 결론을 채워 닫는다. 이것마저 실패하면 할 수 있는 게 없다.
+    await progress({
+      ...queuedRun(danteLinks(project.ref, pr.number)),
+      status: "failed",
+      error: "Dante stopped before it could finish this run. Re-run to try again.",
+    }).catch(() => {});
   }
 }
 
@@ -108,13 +136,18 @@ async function isSuperseded(jobId: string, projectId: string, prNumber: number) 
 }
 
 /**
- * 이 PR 의 첫 상태. 바뀐 컴포넌트가 없으면 여기서 바로 끝난다(unchanged).
+ * 이 PR 의 최종 결과. 바뀐 컴포넌트가 없으면 여기서 바로 끝난다(unchanged).
  *
- * 파일 목록을 못 읽으면 unchanged 로 접지 않고 평소대로 Queued 로 둔다.
+ * 파일 목록을 못 읽으면 unchanged 로 접지 않고 failed 로 둔다.
  * 모르는데 "바뀐 게 없다"고 적으면 실제로 컴포넌트를 고친 PR 에서 코멘트가
- * 빠지고, 체크도 통과처럼 보인다.
+ * 빠지고, 체크도 통과처럼 보인다. queued 로 두면 체크가 끝나지 않는다.
  */
-async function pullRequestRun(project: JobProject, pr: PullRequestContext): Promise<RunSummary> {
+async function pullRequestRun(
+  jobId: string,
+  project: JobProject,
+  pr: PullRequestContext,
+  progress: (run: RunSummary) => Promise<void>
+): Promise<RunSummary> {
   const { number: prNumber, headSha } = pr;
   const run = queuedRun(danteLinks(project.ref, prNumber));
   const ref = { owner: project.repoOwner, repo: project.repoName };
@@ -126,21 +159,86 @@ async function pullRequestRun(project: JobProject, pr: PullRequestContext): Prom
     files = changedComponentFiles(await fetchPullRequestFiles(octokit, ref, prNumber));
   } catch (error) {
     console.error(`[pull-request-job] changed files lookup failed for #${prNumber}`, error);
-    return run;
+    return {
+      ...run,
+      status: "failed",
+      error: "Dante could not read the files changed in this pull request.",
+    };
   }
 
   // 경로로 먼저 거른다. 여기서 비면 파일 내용을 한 번도 받지 않고 끝난다.
   if (files.length === 0) return { ...run, status: "unchanged" };
 
-  const components = await componentsIn(octokit, ref, headSha, files);
-  if (components.length === 0) return { ...run, status: "unchanged" };
+  const { components: located, sources } = await componentsIn(octokit, ref, headSha, files);
+  if (located.length === 0) return { ...run, status: "unchanged" };
+  const components = located.map(({ name, change, tests }) => ({ name, change, tests }));
 
   // 할 일이 있을 때만 작성자를 본다. README PR 에 "작성자가 멤버가 아님"을 적을 이유가 없다.
-  // TODO(파이프라인): 테스트 생성이 붙으면 ok 일 때의 userId 로 AiUsage 를 기록한다.
-  const reason = authorSkipReason(await checkPullRequestAuthor(project.teamId, pr.author));
-  if (reason) return { ...run, status: "skipped", components, skipReason: reason };
+  const author = await checkPullRequestAuthor(project.teamId, pr.author);
+  if (author.kind !== "ok") {
+    const skipReason = authorSkipReason(author) ?? undefined;
+    return { ...run, status: "skipped", components, skipReason };
+  }
 
-  return { ...run, components };
+  await progress({ ...run, status: "generating", components });
+
+  // 테스트가 레포에 없는 패키지를 import 하면 파일째 실행이 깨진다. head 커밋의 package.json 을
+  // 한 번 읽어 프롬프트에 넣는다. 루트만 본다(Runtime 설정도 루트 기준이다).
+  const dependencies = packageDependencies(
+    await fetchFileText(octokit, ref, "package.json", headSha)
+  );
+
+  const generation = await generatePullRequestTests({
+    userId: author.userId,
+    projectId: project.id,
+    testFramework: project.testFramework,
+    dependencies,
+    sources,
+  });
+  console.info(`[pull-request-job] generated tests for #${prNumber}`, {
+    tests: generation.tests.length,
+    failedFiles: generation.failedFiles,
+    stopped: generation.stopped,
+  });
+
+  await savePullRequestTests({
+    jobId,
+    projectId: project.id,
+    framework: project.testFramework,
+    tests: generation.tests,
+  });
+
+  if (generation.tests.length > 0) await progress({ ...run, status: "running", components });
+
+  const testRun = await runPullRequestTests({ project, headSha, tests: generation.tests });
+  console.info(
+    `[pull-request-job] test run for #${prNumber}`,
+    testRun.kind === "ran"
+      ? {
+          status: testRun.result.status,
+          totals: testRun.result.report?.totals ?? null,
+          errorMessage: testRun.result.errorMessage ?? null,
+        }
+      : { notRun: testRun.reason }
+  );
+
+  // preview 화면이 읽는다. 로그는 크니 따로 둔다. 실행하지 않았으면 이전 결과를 지운다 —
+  // Re-run 한 같은 커밋에 옛 결과가 남으면 지금 코멘트와 화면이 어긋난다.
+  // 저장이 실패해도 PR 에는 결과를 보낸다. 화면 하나 때문에 코멘트·체크가 멈추면 안 된다.
+  const { logs, ...runResult } = testRun.kind === "ran" ? testRun.result : { logs: null };
+  await prisma.pullRequestJob
+    .update({
+      where: { id: jobId },
+      data: {
+        runResult: testRun.kind === "ran" ? runResult : Prisma.DbNull,
+        runLogs: logs,
+      },
+    })
+    .catch((error) => {
+      console.error(`[pull-request-job] saving run result failed for #${prNumber}`, error);
+    });
+
+  return finalRun(run, { components: located, generation, testRun });
 }
 
 /**
@@ -155,28 +253,50 @@ const MAX_FILES_TO_READ = 100;
  * 모르면 남긴다. 지워진 파일(읽을 내용이 없다), 못 읽은 파일, 상한을 넘은 파일은
  * 파일 이름 하나로 센다 — 여기서 빼면 컴포넌트를 고친 PR 이 unchanged 로 끝난다.
  * 읽었는데 컴포넌트가 없는 파일만 뺀다.
+ *
+ * 컴포넌트가 확인된 파일의 본문도 같이 돌려준다. 테스트 생성이 같은 파일을 다시 받지 않게.
  */
 async function componentsIn(
   octokit: Octokit,
   ref: RepoRef,
   headSha: string,
   files: ChangedFile[]
-): Promise<ComponentChange[]> {
+): Promise<{ components: LocatedComponent[]; sources: PullRequestSource[] }> {
   const perFile = await Promise.all(
-    files.map(async (file, index): Promise<ComponentChange[]> => {
-      const fallback = [{ name: fileComponentName(file.filePath), change: file.change, tests: 0 }];
-      if (file.change === "removed" || index >= MAX_FILES_TO_READ) return fallback;
+    files.map(
+      async (
+        file,
+        index
+      ): Promise<{ components: LocatedComponent[]; source?: PullRequestSource }> => {
+        const fallback = {
+          components: [
+            {
+              name: fileComponentName(file.filePath),
+              change: file.change,
+              tests: 0,
+              filePath: file.filePath,
+            },
+          ],
+        };
+        if (file.change === "removed" || index >= MAX_FILES_TO_READ) return fallback;
 
-      const source = await fetchFileText(octokit, ref, file.filePath, headSha);
-      if (source === null) return fallback;
+        const source = await fetchFileText(octokit, ref, file.filePath, headSha);
+        if (source === null) return fallback;
 
-      return extractComponents(file.filePath, source).map((component) => ({
-        name: component.name ?? fileComponentName(file.filePath),
-        change: file.change,
-        tests: 0,
-      }));
-    })
+        const components = extractComponents(file.filePath, source).map((component) => ({
+          name: component.name ?? fileComponentName(file.filePath),
+          change: file.change,
+          tests: 0,
+          filePath: file.filePath,
+        }));
+        if (components.length === 0) return { components };
+        return { components, source: { filePath: file.filePath, source } };
+      }
+    )
   );
 
-  return perFile.flat();
+  return {
+    components: perFile.flatMap((file) => file.components),
+    sources: perFile.flatMap((file) => (file.source ? [file.source] : [])),
+  };
 }

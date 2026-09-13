@@ -11,7 +11,7 @@ interface Message {
 }
 
 const MOCK_REPLY =
-  "요청을 반영했습니다. 해당 케이스에 대한 테스트를 추가하고 우측 diff 를 업데이트했어요. 추가로 검증할 시나리오가 있으면 알려주세요.";
+  "Applied your request. I added tests for that case and updated the diff on the right. Let me know if there are more scenarios to verify.";
 
 export function FollowUp() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -50,7 +50,7 @@ export function FollowUp() {
           {pending && (
             <div className="text-muted-foreground flex items-center gap-2 text-sm">
               <Sparkles className="text-brand-cobalt size-4 shrink-0 animate-pulse" />
-              생성 중…
+              Generating…
             </div>
           )}
         </div>
@@ -64,7 +64,7 @@ export function FollowUp() {
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.nativeEvent.isComposing) send();
             }}
-            placeholder="후속 요청을 입력하세요 (예: 에러 케이스도 추가해줘)"
+            placeholder="Enter a follow-up request (e.g. add error cases too)"
             className="text-foreground placeholder:text-muted-foreground flex-1 bg-transparent text-sm outline-none"
           />
           <button
@@ -72,13 +72,13 @@ export function FollowUp() {
             onClick={send}
             disabled={!draft.trim() || pending}
             className="bg-primary text-primary-foreground disabled:bg-muted disabled:text-muted-foreground grid size-7 place-items-center rounded-md transition-colors"
-            aria-label="보내기"
+            aria-label="Send"
           >
             <ArrowRight className="size-4" />
           </button>
         </div>
         <p className="text-muted-foreground/70 mt-2 text-center text-[11px]">
-          AI는 실수할 수 있으니 생성된 코드는 반드시 검토하세요.
+          AI can make mistakes, so be sure to review the generated code.
         </p>
       </div>
     </div>
