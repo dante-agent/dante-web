@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { buildTestPrompt, testPathFor } from "./test-generation-prompt.ts";
+import { buildTestPrompt, packageDependencies, testPathFor } from "./test-generation-prompt.ts";
 
 const base = { filePath: "src/Button.tsx", testPath: "src/Button.test.tsx", source: "export {}" };
 
@@ -40,5 +40,34 @@ describe("buildTestPrompt", () => {
 
   it("모르는 러너면 덧붙이지 않는다", () => {
     assert.equal(buildTestPrompt({ ...base, testFramework: "mocha" }), buildTestPrompt(base));
+  });
+});
+
+describe("buildTestPrompt dependencies", () => {
+  it("설치된 패키지를 넘기면 그 목록만 import 하라는 줄이 붙는다", () => {
+    const prompt = buildTestPrompt({ ...base, dependencies: ["react", "vitest"] });
+    assert.match(prompt, /설치된 패키지: react, vitest/);
+  });
+
+  it("비었거나 없으면 붙이지 않는다 (추천 화면 프롬프트 그대로)", () => {
+    assert.equal(buildTestPrompt({ ...base, dependencies: [] }), buildTestPrompt(base));
+    assert.equal(buildTestPrompt({ ...base, dependencies: null }), buildTestPrompt(base));
+  });
+});
+
+describe("packageDependencies", () => {
+  it("세 의존성 필드를 합쳐 정렬한다", () => {
+    const json = JSON.stringify({
+      dependencies: { react: "^18" },
+      devDependencies: { vitest: "^2", "@testing-library/react": "^16" },
+      peerDependencies: { react: "^18" },
+    });
+    assert.deepEqual(packageDependencies(json), ["@testing-library/react", "react", "vitest"]);
+  });
+
+  it("읽지 못했거나 JSON 이 아니면 null 이다", () => {
+    assert.equal(packageDependencies(null), null);
+    assert.equal(packageDependencies("{"), null);
+    assert.deepEqual(packageDependencies("{}"), []);
   });
 });

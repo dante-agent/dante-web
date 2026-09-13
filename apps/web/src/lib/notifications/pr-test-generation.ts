@@ -38,6 +38,8 @@ export async function generatePullRequestTests(args: {
   userId: string;
   projectId: string;
   testFramework: string | null;
+  /** PR head 커밋의 package.json 에 적힌 패키지. 못 읽었으면 null */
+  dependencies: string[] | null;
   sources: PullRequestSource[];
 }): Promise<PullRequestGeneration> {
   const result: PullRequestGeneration = { tests: [], failedFiles: [], stopped: null };
@@ -58,6 +60,7 @@ export async function generatePullRequestTests(args: {
         filePath,
         source,
         testFramework: args.testFramework,
+        dependencies: args.dependencies,
       });
       if (!generated) return { ...result, stopped: "budget-exceeded" };
       result.tests.push({ filePath, ...generated });

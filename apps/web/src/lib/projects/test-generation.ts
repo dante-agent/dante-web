@@ -79,6 +79,8 @@ export async function generateTestCode(args: {
   source: string;
   /** 넘기면 프롬프트에 러너 지시가 붙는다. 추천 화면은 넘기지 않는다 */
   testFramework?: string | null;
+  /** 넘기면 이 패키지만 import 하라는 지시가 붙는다. 추천 화면은 넘기지 않는다 */
+  dependencies?: string[] | null;
 }): Promise<{ testPath: string; code: string } | null> {
   const testPath = testPathFor(args.filePath);
   const prompt = buildTestPrompt({
@@ -86,6 +88,7 @@ export async function generateTestCode(args: {
     testPath,
     source: args.source,
     testFramework: args.testFramework,
+    dependencies: args.dependencies,
   });
   // 키가 없어 던지면 예약이 남으므로 예약 전에 불러 둔다.
   const model = chatModel();
