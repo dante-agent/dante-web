@@ -50,6 +50,7 @@ model User {
   extensionTokens    ExtensionToken[]
   aiUsage            AiUsage[]
   teamMemberships    TeamMember[]
+  sentTeamInvites    TeamInvite[]
   /// 가입할 때 자동으로 만든 "내 팀". 사용자당 하나다(Team.personalForUserId 가 unique).
   personalTeam       Team?                @relation("PersonalTeam")
   /// Restrict: 쓰는 사람이 있는 플랜을 지우면 그 사람들 한도가 조용히 기본값으로
@@ -105,6 +106,7 @@ model Team {
   /// 지워지면서 팀과 프로젝트가 조용히 cascade 되지 않게 DB 가 먼저 막는다.
   personalFor   User?                @relation("PersonalTeam", fields: [personalForUserId], references: [id], onDelete: Restrict)
   members       TeamMember[]
+  invites       TeamInvite[]
   projects      Project[]
   installations GithubInstallation[]
 
@@ -139,6 +141,31 @@ model TeamMember {
   /// "이 사용자가 속한 팀" 이 가장 잦은 질문이다(PK 는 teamId 가 앞이라 못 쓴다).
   @@index([userId])
   @@map("team_members")
+}
+
+/// 팀 초대. owner 가 이메일로 보내고, 링크를 연 사람이 로그인한 계정으로 수락한다.
+///
+/// 받는 주소와 수락하는 계정이 달라도 된다. GitHub 로 가입한 사람의 이메일이 회사 주소와
+/// 다른 경우가 흔하다. 대신 링크는 1회용이고(수락하면 행을 지운다) 7일 뒤 죽는다.
+/// 규칙은 lib/teams/invites.ts.
+model TeamInvite {
+  id          String   @id @default(uuid()) @db.Uuid
+  teamId      String   @map("team_id") @db.Uuid
+  /// 소문자로 접은 주소(invite-rules.ts 의 normalizeEmail).
+  email       String
+  /// 링크 토큰의 sha256. 원문은 메일에만 있다.
+  tokenHash   String   @unique @map("token_hash")
+  /// 보낸 owner. 그 사람이 계정을 지워도 초대는 살아 있게 SetNull.
+  invitedById String?  @map("invited_by_id") @db.Uuid
+  expiresAt   DateTime @map("expires_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  team      Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  invitedBy User? @relation(fields: [invitedById], references: [id], onDelete: SetNull)
+
+  /// 같은 주소를 다시 보내면 새 행이 아니라 토큰과 만료가 갱신된다. 옛 링크는 그때 죽는다.
+  @@unique([teamId, email])
+  @@map("team_invites")
 }
 
 /// GitHub App 설치 1건. 사용자가 "이 계정의 이 레포들을 열어줄게" 한 단위다.

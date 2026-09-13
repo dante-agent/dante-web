@@ -1,11 +1,12 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@dante/db";
+import { InviteForm, RevokeInviteButton } from "@/components/settings/team/invite-forms";
 import { MemberControls } from "@/components/settings/team/team-forms";
-import { ComingSoon, SettingsHeader } from "@/components/settings/settings-section";
+import { SettingsHeader } from "@/components/settings/settings-section";
 import { UserAvatar } from "@/components/user-avatar";
 import { requireTeamMember } from "@/lib/teams/access";
 
-// 팀 멤버. 목록 + 역할 바꾸기·내보내기·나가기. 규칙은 lib/teams/manage.ts.
+// 팀 멤버. 목록 + 역할 바꾸기·내보내기·나가기 + 초대. 규칙은 lib/teams/manage.ts·invites.ts.
 export default async function TeamMembersPage({
   params,
 }: PageProps<"/team/[teamId]/settings/members">) {
@@ -23,6 +24,12 @@ export default async function TeamMembersPage({
           role: true,
           user: { select: { id: true, githubLogin: true, email: true, avatarUrl: true } },
         },
+      },
+      // 만료된 초대는 보여주지 않는다. 행은 다음 초대를 보낼 때 치운다(invites.ts).
+      invites: {
+        where: { expiresAt: { gt: new Date() } },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, email: true, expiresAt: true },
       },
     },
   });
@@ -78,10 +85,35 @@ export default async function TeamMembersPage({
         })}
       </ul>
 
-      <ComingSoon>
-        Inviting people by email — it lands next. Until then a team has only the people already on
-        it.
-      </ComingSoon>
+      {viewerIsOwner && <InviteForm teamId={teamId} />}
+
+      {team.invites.length > 0 && (
+        <section className="mt-8 max-w-2xl">
+          <h2 className="text-muted-foreground/70 font-mono text-[10px] font-bold tracking-[0.12em] uppercase">
+            Open invites
+          </h2>
+          <ul className="border-border divide-border bg-card mt-3 divide-y border">
+            {team.invites.map((invite) => (
+              <li key={invite.id} className="flex items-center gap-3 px-5 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-mono text-[13px]">{invite.email}</p>
+                  <p className="text-muted-foreground text-[11px]">
+                    Expires {EXPIRY_FORMAT.format(invite.expiresAt)}
+                  </p>
+                </div>
+                {viewerIsOwner && <RevokeInviteButton teamId={teamId} inviteId={invite.id} />}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </>
   );
 }
+
+// 서버에서 그리므로 시간대를 못박는다. 날짜만 보여줘서 하루 안쪽의 어긋남은 드러나지 않는다.
+const EXPIRY_FORMAT = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  timeZone: "UTC",
+});

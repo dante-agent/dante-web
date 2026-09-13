@@ -10,21 +10,28 @@ import { Prisma, prisma, type TeamRole } from "@dante/db";
 // 규칙이라, 두 owner 가 동시에 서로를 member 로 내리면 각자 읽은 값으로는 둘 다
 // 통과한다. Serializable 이면 둘 중 하나가 P2034 로 실패한다.
 
-export type TeamChange = { ok: true } | { ok: false; message: string };
+export type TeamChangeFailure = { ok: false; message: string };
+export type TeamChange = { ok: true } | TeamChangeFailure;
 
 /** 팀 이름 길이 상한. 설정 왼쪽 열과 헤더 드롭다운에 한 줄로 들어가야 한다. */
 export const TEAM_NAME_MAX = 48;
 
 const OK: TeamChange = { ok: true };
-const fail = (message: string): TeamChange => ({ ok: false, message });
+export const fail = (message: string): TeamChangeFailure => ({ ok: false, message });
 
 // 멤버가 아니면 팀이 있다는 사실도 드러내지 않는다(access.ts 의 notFound 와 같다).
-const NOT_FOUND = fail("Team not found.");
-const OWNER_ONLY = fail("Only team owners can do this.");
+export const NOT_FOUND = fail("Team not found.");
+export const OWNER_ONLY = fail("Only team owners can do this.");
 
 type Tx = Prisma.TransactionClient;
 
-async function run(change: (tx: Tx) => Promise<TeamChange>): Promise<TeamChange> {
+/**
+ * Serializable 트랜잭션 + 동시 변경 실패를 문구로. 초대(invites.ts)도 같은 규칙으로 쓴다.
+ * 성공 값에 필드를 더 실을 수 있게 제네릭이다(초대 수락은 들어간 팀 id 를 돌려준다).
+ */
+export async function run<T extends { ok: true }>(
+  change: (tx: Tx) => Promise<T | TeamChangeFailure>
+): Promise<T | TeamChangeFailure> {
   try {
     return await prisma.$transaction(change, {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
@@ -38,7 +45,7 @@ async function run(change: (tx: Tx) => Promise<TeamChange>): Promise<TeamChange>
 }
 
 /** 트랜잭션 안에서 팀과 멤버 전부를 읽는다. 부른 사람이 멤버가 아니면 null. */
-async function load(tx: Tx, teamId: string, actorId: string) {
+export async function load(tx: Tx, teamId: string, actorId: string) {
   const team = await tx.team.findUnique({
     where: { id: teamId },
     select: {
