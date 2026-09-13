@@ -17,7 +17,8 @@ export function UsageSection({
   series: UsageSeries[];
   from: string;
   to: string;
-  passRate: number;
+  /** null = 판정된 실행이 없음(러너 미연결) → "—". */
+  passRate: number | null;
 }) {
   const total = series.reduce((sum, s) => sum + s.total, 0);
   const fromLabel = format(new Date(from), "MMM d");
@@ -28,7 +29,7 @@ export function UsageSection({
       title={
         <span className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
           <Headline value={total.toLocaleString()} label="Total events" />
-          <Headline value={`${passRate}%`} label="Pass rate" />
+          <Headline value={passRate === null ? "—" : `${passRate}%`} label="Pass rate" />
         </span>
       }
       action={
