@@ -5,7 +5,12 @@ import { GitHubIcon } from "@/components/brand-icons";
 import { getMonthlyProjectAiUsage } from "@/lib/ai/usage-queries";
 import { requireUser } from "@/lib/auth/user";
 import type { ConnectionStatus } from "@/lib/github/connection";
-import { getDashboardProject, getOwnedProjectId } from "@/lib/projects/queries";
+import type { FileEntry } from "@/lib/file-tree";
+import { getRepoStats, getRepoTree, type RepoStats } from "@/lib/github/tree";
+import { getDeliveryActivity } from "@/lib/projects/activity";
+import { buildAdvisories } from "@/lib/projects/advisories";
+import { getDashboardProject, getOwnedProjectId, getProjectRepo } from "@/lib/projects/queries";
+import { getTestActivity, getTestSummary } from "@/lib/projects/test-metrics";
 import { AdvisorSection } from "./_components/advisor-section";
 import { AiUsageSection } from "./_components/ai-usage-section";
 import { CopyButton } from "./_components/copy-button";
@@ -39,7 +44,7 @@ export default async function DashboardPage({
 }: PageProps<"/project/[projectRef]/dashboard">) {
   const { projectRef } = await params;
   const user = await requireUser();
-  // 사용량은 내부 id 로 집계한다. DashboardProject 에는 id 가 없어서
+  // 지표는 내부 id 로 집계한다. DashboardProject 에는 id 가 없어서
   // (ref 만 화면으로 내보내는 게 그 타입의 뜻이다) 한 번 더 읽는다 —
   // getOwnedProjectId 는 cache 라 같은 요청 안에서는 왕복이 한 번이다.
   const [project, projectId] = await Promise.all([
@@ -50,10 +55,52 @@ export default async function DashboardPage({
   // 그래도 타입을 좁혀야 하고, 사이에 레포가 지워졌다면 404 가 맞는 답이다.
   if (!project || !projectId) notFound();
 
-  const aiUsage = await getMonthlyProjectAiUsage(projectId);
+  // 파일 기반 지표(테스트·컴포넌트 수)와 coverage advisory 는 레포 트리에서 나온다.
+  // 연결이 정상일 때만 — 앱이 지워졌거나 정지된 상태면 설치 토큰 호출이 실패한다.
+  // getRepoStats·getRepoTree 는 같은 캐시(loadTree)를 타서 GitHub 은 한 번만 친다.
+  let stats: RepoStats | null = null;
+  let entries: FileEntry[] | null = null;
+  if (project.connection === "ok") {
+    const repo = await getProjectRepo(projectRef, user.id);
+    if (repo) {
+      try {
+        [stats, entries] = await Promise.all([getRepoStats(repo), getRepoTree(repo)]);
+      } catch {
+        // 조회와 호출 사이에 레포가 사라졌을 수 있다 — 지표만 비우고 페이지는 그린다.
+        stats = null;
+        entries = null;
+      }
+    }
+  }
 
-  const { suite, usage, advisories } = dashboardMock;
+  // 실행 관련 지표는 전부 DB 에서 온다 — 연결 상태와 무관하게 읽는다.
+  // Usage 카드: Test runs·Generations(러너 붙기 전엔 0), PR comments·Check runs.
+  // summary: SuitePanel 의 Runs·pass rate, Hero 의 Last run·Last generated,
+  // Advisor 의 reliability. aiUsage: AI 사용량 섹션. Webhooks 만 아직 목업.
+  const [aiUsage, testActivity, activity, summary] = await Promise.all([
+    getMonthlyProjectAiUsage(projectId),
+    getTestActivity(projectId),
+    getDeliveryActivity(projectId),
+    getTestSummary(projectId),
+  ]);
+
+  const { usage } = dashboardMock;
   const repoPath = `${project.repoOwner}/${project.repoName}`;
+
+  const webhooks = usage.series.find((s) => s.key === "webhooks")!;
+  const usageSeries = [
+    testActivity.testRuns,
+    testActivity.generations,
+    activity.prComments,
+    activity.checkRuns,
+    webhooks,
+  ];
+
+  const advisories = buildAdvisories({
+    testCommand: project.testCommand,
+    entries,
+    failingTests: summary.failingTests,
+  });
 
   // p-8: 프로젝트 셸의 <main> 이 여백을 더 이상 주지 않는다 (폴더 보기가 화면을 꽉 써야 해서)
   return (
@@ -93,11 +140,11 @@ export default async function DashboardPage({
             </HeroStat>
 
             <HeroStat icon={<Clock strokeWidth={1.5} />} label="Last run">
-              {stamp(suite.lastRunAt)}
+              {summary.lastRunAt ? stamp(summary.lastRunAt.toISOString()) : "—"}
             </HeroStat>
 
             <HeroStat icon={<FileCode2 strokeWidth={1.5} />} label="Last generated">
-              {stamp(suite.lastGeneratedAt)}
+              {summary.lastGeneratedAt ? stamp(summary.lastGeneratedAt.toISOString()) : "—"}
             </HeroStat>
           </div>
         </div>
@@ -105,10 +152,10 @@ export default async function DashboardPage({
         <SuitePanel
           framework={project.testFramework ?? "No framework set"}
           branch={project.defaultBranch}
-          testFiles={suite.testFiles}
-          components={suite.components}
-          runs={usage.series[0].total}
-          passRate={suite.passRate}
+          testFiles={stats?.testFiles ?? null}
+          components={stats?.components ?? null}
+          runs={summary.runsTotal}
+          passRate={summary.passRate}
         />
       </div>
 
@@ -117,10 +164,10 @@ export default async function DashboardPage({
       </Section>
 
       <UsageSection
-        series={usage.series}
-        from={usage.from}
-        to={usage.to}
-        passRate={suite.passRate}
+        series={usageSeries}
+        from={activity.from}
+        to={activity.to}
+        passRate={summary.passRate}
       />
 
       <AiUsageSection usage={aiUsage} />
