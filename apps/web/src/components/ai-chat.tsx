@@ -52,13 +52,6 @@ const MAX_MESSAGES = 50;
 const MAX_CONTEXT_TOKENS = 50_000;
 /** 서버가 답 스트림 끝에 붙이는 구분자. 뒤에 실제 컨텍스트 토큰 수가 온다(api/chat/route.ts). */
 const USAGE_MARK = "\u001e";
-/**
- * 입력 중인 질문이 보내고 나면 컨텍스트를 얼마나 늘릴지 = 질문 토큰 × 이 값.
- * 질문 자체보다 답·붙는 파일이 훨씬 커서 넉넉히 잡는다. 답이 끝나면 실제 값으로 바뀐다.
- */
-const INPUT_GROWTH = 5;
-/** ponytail: 글자 2개 ≈ 토큰 1개로 어림한다(한글은 더 무겁고 영어는 더 가볍다). 틀려도 답 뒤엔 실제 값. */
-const estimateTokens = (text: string) => Math.ceil(text.length / 2);
 /** 이 비율부터 게이지를 경고 톤으로. 가득 차기 전에 새 대화를 떠올리게. */
 const WARN_RATIO = 0.8;
 
@@ -575,13 +568,7 @@ function ChatPanel({
               placeholder="Ask anything — Enter to send"
               className="text-foreground placeholder:text-muted-foreground block max-h-42 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent px-0.5 text-sm leading-7 outline-none disabled:cursor-not-allowed disabled:opacity-50"
             />
-            <ContextGauge
-              tokens={full ? MAX_CONTEXT_TOKENS : tokens}
-              // 보내는 중에는 입력창이 비었고 질문은 이미 tail 에 있다 — 답이 끝날 때까지 그 몫을 계속 보인다.
-              estimate={
-                full ? 0 : estimateTokens(pending ? (tail[0]?.content ?? "") : input) * INPUT_GROWTH
-              }
-            />
+            <ContextGauge tokens={full ? MAX_CONTEXT_TOKENS : tokens} />
             {pending ? (
               <Button
                 type="button"
@@ -650,14 +637,13 @@ function CollapsibleText({ text }: { text: string }) {
 }
 
 /**
- * 입력창 옆 컨텍스트 게이지: 이 대화가 토큰 상한의 몇 % 를 쓸지.
- * = (마지막 답의 실제 토큰 + 입력 중인 질문의 예상치) / 상한. 답이 끝나면 예상치는 실제 값에 흡수된다.
+ * 입력창 옆 컨텍스트 게이지: 마지막 답의 실제 토큰(모델이 알려준 입력+출력)이 상한의 몇 % 인지.
+ * 답이 끝날 때만 바뀐다 — 보내기 전에는 실제 값을 알 수 없어 추정치를 섞지 않는다.
  * 경고 톤부터는 "곧 새 대화를 시작해야 한다"를 먼저 알린다.
  */
-function ContextGauge({ tokens, estimate }: { tokens: number; estimate: number }) {
-  const used = tokens + estimate;
-  const ratio = Math.min(used / MAX_CONTEXT_TOKENS, 1);
-  const label = `컨텍스트 약 ${used.toLocaleString()} / ${MAX_CONTEXT_TOKENS.toLocaleString()} 토큰${estimate ? " (보낼 질문 예상 포함)" : ""}`;
+function ContextGauge({ tokens }: { tokens: number }) {
+  const ratio = Math.min(tokens / MAX_CONTEXT_TOKENS, 1);
+  const label = `컨텍스트 ${tokens.toLocaleString()} / ${MAX_CONTEXT_TOKENS.toLocaleString()} 토큰`;
   return (
     <span
       title={label}
