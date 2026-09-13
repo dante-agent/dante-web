@@ -165,6 +165,9 @@ function errorMessage(code: string) {
       return "The GitHub account you installed with is not the one you signed in with.";
     case "account":
       return "Enterprise accounts are not supported yet.";
+    case "taken":
+      // 설치 1건은 팀 1개만 가진다(api/github/setup). 가져가게 두면 남의 프로젝트가 옮겨 온다.
+      return "This GitHub installation is already connected to another team. Ask someone on that team to invite you.";
     case "installation":
       // installation_id 가 없거나 GitHub 에 그 설치가 없다. 설치를 중간에 취소했거나
       // Setup URL 을 직접 열어본 경우다.
