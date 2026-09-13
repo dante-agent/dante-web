@@ -17,6 +17,10 @@ import { extractComponents } from "@/lib/notifications/extract-components";
 import { danteLinks } from "@/lib/notifications/links";
 import { checkPullRequestAuthor } from "@/lib/notifications/pr-author";
 import { authorSkipReason } from "@/lib/notifications/pr-author-rules";
+import {
+  generatePullRequestTests,
+  type PullRequestSource,
+} from "@/lib/notifications/pr-test-generation";
 import { queuedRun, type ComponentChange, type RunSummary } from "@/lib/notifications/run-summary";
 
 // ⚠️ 서버 전용.
@@ -42,6 +46,8 @@ export type JobProject = {
   installationId: bigint;
   /** PR 작성자가 이 팀의 멤버인지 볼 때 쓴다 */
   teamId: string;
+  /** 생성 프롬프트의 러너 지시. 고르지 않았으면 null */
+  testFramework: string | null;
 };
 
 /**
@@ -132,13 +138,28 @@ async function pullRequestRun(project: JobProject, pr: PullRequestContext): Prom
   // 경로로 먼저 거른다. 여기서 비면 파일 내용을 한 번도 받지 않고 끝난다.
   if (files.length === 0) return { ...run, status: "unchanged" };
 
-  const components = await componentsIn(octokit, ref, headSha, files);
+  const { components, sources } = await componentsIn(octokit, ref, headSha, files);
   if (components.length === 0) return { ...run, status: "unchanged" };
 
   // 할 일이 있을 때만 작성자를 본다. README PR 에 "작성자가 멤버가 아님"을 적을 이유가 없다.
-  // TODO(파이프라인): 테스트 생성이 붙으면 ok 일 때의 userId 로 AiUsage 를 기록한다.
-  const reason = authorSkipReason(await checkPullRequestAuthor(project.teamId, pr.author));
-  if (reason) return { ...run, status: "skipped", components, skipReason: reason };
+  const author = await checkPullRequestAuthor(project.teamId, pr.author);
+  if (author.kind !== "ok") {
+    const skipReason = authorSkipReason(author) ?? undefined;
+    return { ...run, status: "skipped", components, skipReason };
+  }
+
+  // TODO(파이프라인): 만든 테스트를 PR 전용 테이블에 저장하고 러너로 돌린다.
+  const generation = await generatePullRequestTests({
+    userId: author.userId,
+    projectId: project.id,
+    testFramework: project.testFramework,
+    sources,
+  });
+  console.info(`[pull-request-job] generated tests for #${prNumber}`, {
+    tests: generation.tests.length,
+    failedFiles: generation.failedFiles,
+    stopped: generation.stopped,
+  });
 
   return { ...run, components };
 }
@@ -155,28 +176,42 @@ const MAX_FILES_TO_READ = 100;
  * 모르면 남긴다. 지워진 파일(읽을 내용이 없다), 못 읽은 파일, 상한을 넘은 파일은
  * 파일 이름 하나로 센다 — 여기서 빼면 컴포넌트를 고친 PR 이 unchanged 로 끝난다.
  * 읽었는데 컴포넌트가 없는 파일만 뺀다.
+ *
+ * 컴포넌트가 확인된 파일의 본문도 같이 돌려준다. 테스트 생성이 같은 파일을 다시 받지 않게.
  */
 async function componentsIn(
   octokit: Octokit,
   ref: RepoRef,
   headSha: string,
   files: ChangedFile[]
-): Promise<ComponentChange[]> {
+): Promise<{ components: ComponentChange[]; sources: PullRequestSource[] }> {
   const perFile = await Promise.all(
-    files.map(async (file, index): Promise<ComponentChange[]> => {
-      const fallback = [{ name: fileComponentName(file.filePath), change: file.change, tests: 0 }];
-      if (file.change === "removed" || index >= MAX_FILES_TO_READ) return fallback;
+    files.map(
+      async (
+        file,
+        index
+      ): Promise<{ components: ComponentChange[]; source?: PullRequestSource }> => {
+        const fallback = {
+          components: [{ name: fileComponentName(file.filePath), change: file.change, tests: 0 }],
+        };
+        if (file.change === "removed" || index >= MAX_FILES_TO_READ) return fallback;
 
-      const source = await fetchFileText(octokit, ref, file.filePath, headSha);
-      if (source === null) return fallback;
+        const source = await fetchFileText(octokit, ref, file.filePath, headSha);
+        if (source === null) return fallback;
 
-      return extractComponents(file.filePath, source).map((component) => ({
-        name: component.name ?? fileComponentName(file.filePath),
-        change: file.change,
-        tests: 0,
-      }));
-    })
+        const components = extractComponents(file.filePath, source).map((component) => ({
+          name: component.name ?? fileComponentName(file.filePath),
+          change: file.change,
+          tests: 0,
+        }));
+        if (components.length === 0) return { components };
+        return { components, source: { filePath: file.filePath, source } };
+      }
+    )
   );
 
-  return perFile.flat();
+  return {
+    components: perFile.flatMap((file) => file.components),
+    sources: perFile.flatMap((file) => (file.source ? [file.source] : [])),
+  };
 }
