@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@dante/db";
 import { requireUser } from "@/lib/auth/user";
+import { accessibleProjectWhere } from "@/lib/teams/access";
 import { invalidateRepoLookups } from "@/lib/github/lookup-cache";
 import { detectRuntimeCommands } from "@/lib/projects/detect-runtime";
 import { DEFAULT_TIMEOUT_MS, validateRuntimeInput } from "@/lib/projects/runtime";
@@ -21,7 +22,7 @@ async function requireProject(projectRef: string) {
   const user = await requireUser();
 
   const project = await prisma.project.findFirst({
-    where: { ref: projectRef, userId: user.id },
+    where: { ref: projectRef, ...accessibleProjectWhere(user.id) },
     select: {
       id: true,
       ref: true,

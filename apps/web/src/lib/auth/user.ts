@@ -4,6 +4,7 @@ import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { prisma } from "@dante/db";
 import { LOGIN_PATH } from "@/lib/auth/redirect";
 import { createClient } from "@/lib/supabase/server";
+import { ensurePersonalTeam } from "@/lib/teams/personal";
 
 // ⚠️ 서버 전용.
 
@@ -71,6 +72,9 @@ export function displayName(user: SupabaseUser) {
  * Prisma 로 FK 를 걸려면 public.users 에 행이 먼저 있어야 한다. auth 스키마는
  * Supabase 가 관리해서 직접 FK 를 걸 수 없기 때문에(AGENTS.md), 로그인 사용자를
  * 처음 쓰는 시점마다 upsert 해둔다.
+ *
+ * 개인 팀도 여기서 같이 챙긴다. 미러 행이 생기는 자리가 곧 가입 시점이라, 이 함수를
+ * 거친 사용자는 모두 팀을 하나 이상 가진다(lib/teams/personal.ts).
  */
 export async function syncUser(user: SupabaseUser) {
   const github = githubIdentity(user);
@@ -81,10 +85,13 @@ export async function syncUser(user: SupabaseUser) {
     avatarUrl: avatarUrl(user),
   };
 
-  return prisma.user.upsert({
+  const row = await prisma.user.upsert({
     where: { id: user.id },
     create: { id: user.id, ...fields },
     // 로그인마다 최신 값으로 덮는다 — GitHub 핸들은 바뀔 수 있다.
     update: fields,
   });
+
+  const personalTeamId = await ensurePersonalTeam(row.id, displayName(user));
+  return { ...row, personalTeamId };
 }

@@ -48,6 +48,18 @@ const MONTH_LABEL = new Intl.DateTimeFormat("en-US", {
   year: "numeric",
 });
 
+/** "October 1, 2026 at 12:00 AM GMT+9" — 한도가 초기화되는 순간. 시간대를 붙여 보는 사람 기기와 헷갈리지 않게 한다. */
+const RESET_LABEL = new Intl.DateTimeFormat("en-US", {
+  timeZone: BILLING_TIME_ZONE,
+  dateStyle: "long",
+  timeStyle: "short",
+});
+
+const ZONE_NAME = new Intl.DateTimeFormat("en-US", {
+  timeZone: BILLING_TIME_ZONE,
+  timeZoneName: "short",
+});
+
 type WallClock = {
   year: number;
   month: number;
@@ -103,6 +115,8 @@ export type BillingPeriod = {
   end: Date;
   /** "September 2026". 문구도 여기서 만들어 화면들이 같은 말을 쓰게 한다. */
   label: string;
+  /** end 를 사람이 읽는 말로. 한도가 다시 열리는 시각이다. */
+  resetsLabel: string;
 };
 
 /**
@@ -117,9 +131,12 @@ export function currentBillingPeriod(now: Date = new Date()): BillingPeriod {
     w.month === 12 ? { year: w.year + 1, month: 1 } : { year: w.year, month: w.month + 1 };
 
   const start = monthStart(w.year, w.month, now);
+  const end = monthStart(next.year, next.month, now);
+  const zone = ZONE_NAME.formatToParts(end).find((part) => part.type === "timeZoneName")?.value;
   return {
     start,
-    end: monthStart(next.year, next.month, now),
+    end,
     label: MONTH_LABEL.format(start),
+    resetsLabel: zone ? `${RESET_LABEL.format(end)} ${zone}` : RESET_LABEL.format(end),
   };
 }

@@ -34,6 +34,13 @@ model User {
   /// 헤더는 로그인 세션의 값을 그대로 쓰지만, 세션 없이 사용자를 그려야 하는
   /// 자리(다른 사람이 보는 화면 등)를 위해 로그인마다 여기에 복사해둔다.
   avatarUrl   String?  @map("avatar_url")
+  /// AI 월 한도를 정하는 플랜. null 이면 환경변수 AI_MONTHLY_BUDGET_USD 가 기본 한도다
+  /// (apps/web/src/lib/ai/budget.ts). 가입할 때 플랜을 고르는 흐름이 없어서 대부분 null 이다.
+  aiPlanId    String?  @map("ai_plan_id") @db.Uuid
+  /// 생성 품질 기본값. "standard" | "deep" (apps/web/src/lib/ai/quality.ts).
+  /// 문자열인 이유는 testFramework 와 같다 — 단계가 늘 때마다 마이그레이션하지 않으려고.
+  /// 권한에 쓰이는 값이 아니라서 모르는 값이 들어와도 standard 로 읽으면 된다.
+  aiQuality   String   @default("standard") @map("ai_quality")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
@@ -42,8 +49,96 @@ model User {
   extensionAuthCodes ExtensionAuthCode[]
   extensionTokens    ExtensionToken[]
   aiUsage            AiUsage[]
+  teamMemberships    TeamMember[]
+  /// 가입할 때 자동으로 만든 "내 팀". 사용자당 하나다(Team.personalForUserId 가 unique).
+  personalTeam       Team?                @relation("PersonalTeam")
+  /// Restrict: 쓰는 사람이 있는 플랜을 지우면 그 사람들 한도가 조용히 기본값으로
+  /// 바뀐다. 한도가 느슨해질 수도 있는 변경이라 DB 가 먼저 막게 한다.
+  aiPlan             AiPlan?              @relation(fields: [aiPlanId], references: [id], onDelete: Restrict)
 
   @@map("users")
+}
+
+/// AI 월 한도를 묶은 플랜.
+///
+/// 한도를 User 컬럼 하나로 두지 않은 이유: 사람마다 숫자를 따로 적으면 "이 사람은 어떤
+/// 조건으로 쓰나"에 이름이 없다. 화면에 플랜 이름을 보여줄 수 있어야 하고, 나중에 결제를
+/// 붙이면 결제 상품이 붙을 자리도 여기다. 결제는 아직 없어서 플랜은 운영자가 직접 배정한다.
+///
+/// 크레딧·이월 개념은 없다. 한도는 매달 billing-period.ts 의 구간마다 새로 센다.
+model AiPlan {
+  id              String   @id @default(uuid()) @db.Uuid
+  /// 화면에 그대로 나가는 이름. 예: "Beta", "Team".
+  name            String   @unique
+  /// 한 달 원가 상한(USD). AiUsage.costUsd 와 같은 자릿수라 합계와 비교할 때 반올림이 끼지 않는다.
+  /// 0 = 이 플랜은 AI 를 쓸 수 없다.
+  monthlyLimitUsd Decimal  @map("monthly_limit_usd") @db.Decimal(12, 6)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  users User[]
+
+  @@map("ai_plans")
+}
+
+/// 데이터의 주인. 프로젝트와 GitHub 설치는 사람이 아니라 팀에 붙는다.
+///
+/// 가입하면 개인 팀이 하나 생긴다(Vercel·Supabase 방식). "항상 팀이 있다"를 전제로
+/// 짜야 조회·권한 검사가 사람 소유/팀 소유 두 갈래로 나뉘지 않는다.
+///
+/// 이관 중이라 Project·GithubInstallation 의 userId 는 아직 남아 있다. 조회를 멤버십
+/// 기준으로 바꾼 뒤(feat/team-access) 지운다.
+model Team {
+  id                String   @id @default(uuid()) @db.Uuid
+  /// 화면에 보이는 이름. 개인 팀은 GitHub 핸들(없으면 이메일 앞부분)로 시작한다.
+  name              String
+  /// 개인 팀이면 그 주인. 일반 팀은 null.
+  ///
+  /// Boolean 이 아니라 사용자 id 를 두는 이유: unique 로 "사용자당 개인 팀 하나"를
+  /// DB 가 보장하고, 로그인마다 upsert 로 멱등하게 만들 수 있다. 계정을 지울 때
+  /// 지워야 할 팀을 찾는 열쇠이기도 하다.
+  personalForUserId String?  @unique @map("personal_for_user_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  /// Restrict: 개인 팀 주인을 지우는 흐름은 계정 삭제가 따로 정한다. 사용자 행이
+  /// 지워지면서 팀과 프로젝트가 조용히 cascade 되지 않게 DB 가 먼저 막는다.
+  personalFor   User?                @relation("PersonalTeam", fields: [personalForUserId], references: [id], onDelete: Restrict)
+  members       TeamMember[]
+  projects      Project[]
+  installations GithubInstallation[]
+
+  @@map("teams")
+}
+
+/// owner 만 할 수 있는 일: 프로젝트 삭제, 멤버 초대·제거·역할 변경, 팀 설정, 팀 삭제.
+/// 프로젝트 생성과 설정은 member 도 한다.
+///
+/// 문자열이 아니라 enum 인 이유: 역할은 권한 검사에 바로 쓰인다. 오타 난 값이 들어가면
+/// 어떤 검사에도 걸리지 않는 역할이 생긴다. 값을 늘릴 때(admin)는 ADD VALUE 한 줄이다.
+enum TeamRole {
+  owner
+  member
+
+  @@map("team_role")
+}
+
+/// 팀 멤버십. 권한 검사는 전부 이 표를 본다(lib/teams/access.ts).
+///
+/// 캐시하지 않는다. 팀에서 빠진 사람의 익스텐션 토큰이 그 즉시 막혀야 한다.
+model TeamMember {
+  teamId    String   @map("team_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  role      TeamRole @default(member)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([teamId, userId])
+  /// "이 사용자가 속한 팀" 이 가장 잦은 질문이다(PK 는 teamId 가 앞이라 못 쓴다).
+  @@index([userId])
+  @@map("team_members")
 }
 
 /// GitHub App 설치 1건. 사용자가 "이 계정의 이 레포들을 열어줄게" 한 단위다.
@@ -53,7 +148,11 @@ model User {
 model GithubInstallation {
   /// GitHub 이 발급한 설치 ID. 우리가 만드는 값이 아니라 GitHub 것이라 그대로 PK.
   id           BigInt    @id
+  /// 설치를 연결한 사람. 이관이 끝나면 teamId 로 대체된다.
   userId       String    @map("user_id") @db.Uuid
+  /// 설치의 주인. 설치 ID 가 PK 라서 설치 1건은 팀 1개만 가진다.
+  /// 한 번 정해지면 다시 연결해도 바뀌지 않는다(api/github/setup).
+  teamId       String    @map("team_id") @db.Uuid
   /// 설치된 계정 (개인 또는 조직)
   accountLogin String    @map("account_login")
   accountId    BigInt    @map("account_id")
@@ -72,9 +171,11 @@ model GithubInstallation {
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team     Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
   projects Project[]
 
   @@index([userId])
+  @@index([teamId])
   @@map("github_installations")
 }
 
@@ -136,13 +237,17 @@ model Project {
   /// 문자열인 이유는 testFramework 와 같다 — 값이 늘 때마다 마이그레이션하지 않으려고.
   disconnectedReason String?   @map("disconnected_reason")
 
-  userId         String @map("user_id") @db.Uuid
-  installationId BigInt @map("installation_id")
+  /// 프로젝트를 만든 사람. 이관이 끝나면 teamId 로 대체된다.
+  userId         String  @map("user_id") @db.Uuid
+  /// 프로젝트의 주인. 레포를 열어준 설치와 같은 팀이다.
+  teamId         String  @map("team_id") @db.Uuid
+  installationId BigInt  @map("installation_id")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team         Team               @relation(fields: [teamId], references: [id], onDelete: Cascade)
   installation GithubInstallation @relation(fields: [installationId], references: [id], onDelete: Cascade)
   components   Component[]
 
@@ -153,8 +258,10 @@ model Project {
 
   /// 같은 레포를 같은 사용자가 두 번 연결하지 못하게 막는다.
   /// TODO(팀 PR): 소유 주체가 User → Team 으로 바뀌면 이 제약도 teamId 기준으로 옮긴다.
+  /// 레포당 전역 하나(@@unique([repoId]))로 바꾸는 건 기존 중복을 정리한 뒤에 한다.
   @@unique([userId, repoId])
   @@index([installationId])
+  @@index([teamId])
   @@map("projects")
 }
 

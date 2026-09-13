@@ -1,4 +1,19 @@
 import type { NextConfig } from "next";
+import { MODEL } from "./src/lib/ai/chat-model";
+import { hasRate } from "./src/lib/ai/pricing";
+
+// 단가표에 없는 모델로는 빌드(과 dev 서버)가 뜨지 않게 한다.
+//
+// MODEL 을 바꾸고 pricing.ts 를 안 고치면 원가가 null 로 기록되고, 한도 판정은
+// 호출마다 추정치(budget.ts 의 UNKNOWN_CALL_COST_USD)로 센다 — 조용히 틀린다.
+// 런타임에 던지면 배포가 끝난 뒤 사용자 요청에서야 드러나므로, 설정 파일이 읽히는
+// 시점(next build / next dev)에 막는다. 테스트 러너가 없는 저장소라 여기가 가장
+// 확실히 매번 도는 자리다.
+if (!hasRate(MODEL)) {
+  throw new Error(
+    `pricing.ts 에 "${MODEL}" 단가가 없습니다. chat-model.ts 의 MODEL 을 바꿨다면 단가표도 같이 고치세요.`
+  );
+}
 
 const nextConfig: NextConfig = {
   images: {

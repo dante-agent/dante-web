@@ -5,7 +5,7 @@ import danteLogo from "@/assets/dante-logo.png";
 import { ExtensionConsent } from "@/components/auth/extension-consent";
 import { LOGIN_PATH } from "@/lib/auth/redirect";
 import { displayName } from "@/lib/auth/user";
-import { parseAuthorizeParams } from "@/lib/extension/auth";
+import { parseAuthorizeParams, toAuthorizeParams } from "@/lib/extension/auth";
 import { createClient } from "@/lib/supabase/server";
 
 // 익스텐션 로그인 동의 화면 (dante-extension 결정 D-6). 익스텐션이 브라우저로 이 주소를 연다.
@@ -47,12 +47,8 @@ export default async function ExtensionAuthPage({ searchParams }: PageProps<"/au
       <ExtensionConsent
         editor={request.editor}
         account={user.email ?? displayName(user)}
-        params={{
-          state: request.state,
-          code_challenge: request.codeChallenge,
-          code_challenge_method: "S256",
-          redirect: request.redirect.toString(),
-        }}
+        manual={request.delivery.kind === "manual"}
+        params={toAuthorizeParams(request)}
       />
     </Frame>
   );
