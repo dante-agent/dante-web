@@ -81,10 +81,12 @@ export async function GET(request: Request) {
     return back({ error: "mismatch" });
   }
 
-  await syncUser(user);
+  const { personalTeamId } = await syncUser(user);
 
   const fields = {
     userId: user.id,
+    // 팀 전환이 붙기 전까지는 설치를 연결한 사람의 개인 팀에 붙인다.
+    teamId: personalTeamId,
     accountLogin: account.login,
     accountId: BigInt(account.id),
     accountType: account.type ?? "User",
