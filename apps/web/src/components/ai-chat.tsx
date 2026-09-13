@@ -3,10 +3,15 @@
 // 폴더 보기 오른쪽에 붙는 AI 채팅. 토글 버튼(닫힘: 우하단 떠 있는 버튼)으로 열고 닫는다.
 //
 // layout 에서 children 을 감싸므로 파일을 옮겨 다녀도 이 컴포넌트는 살아 있다
-// — 대화가 파일 클릭마다 날아가지 않는다. 대화 기록은 lib/chat-history.ts (localStorage).
+// — 대화가 파일 클릭마다 날아가지 않는다.
+//
+// 대화 기록은 서버에 저장한다(본인만 본다). 이 컴포넌트는 지난 대화를 들고 있지 않고
+// react-query 캐시에서 읽는다. 전송할 때도 과거 메시지는 보내지 않는다 — 서버가 DB 에서
+// 읽는다. 클라이언트가 보낸 대화를 믿으면 "AI 가 하지 않은 말"을 끼워 넣을 수 있다.
 
 import { Suspense, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { ko } from "date-fns/locale";
 import {
@@ -21,14 +26,6 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  chatTitle,
-  removeChat,
-  saveChat,
-  useChats,
-  type Chat,
-  type ChatMessage as Msg,
-} from "@/lib/chat-history";
 import { cn } from "@/lib/utils";
 
 /** 본문과 같은 높이(헤더 47px 만 빼면 화면 끝까지). file-view / folder-empty-state 와 같은 값. */
@@ -45,15 +42,62 @@ const shortPath = (path: string) => path.split("/").slice(-2).join("/");
  */
 type ChatError = { kind: "error" | "limit"; message: string };
 
+/**
+ * 대화 하나에 담을 수 있는 메시지 수(질문·답 합계). 서버도 같은 값으로 막는다(409).
+ *
+ * 매 질문마다 대화 전체가 모델에 들어가서, 대화가 길수록 질문 한 번의 원가가 커진다.
+ * 토큰으로 세면 정확하지만 보내기 전에는 알 수 없어 게이지가 늘 한 박자 늦다 — 개수는
+ * 화면이 바로 안다. 입력창 옆 % 가 이 값 대비 비율이다.
+ */
+const MAX_MESSAGES = 50;
+/** 이 비율부터 게이지를 경고 톤으로. 가득 차기 전에 새 대화를 떠올리게. */
+const WARN_RATIO = 0.8;
+
+// ── 서버 계약 (/api/chat, /api/chat/conversations) ─────────────────────────────
+type Role = "user" | "assistant";
+type Msg = { role: Role; content: string };
+type Conversation = {
+  id: string;
+  title: string;
+  updatedAt: string;
+  messages: (Msg & { createdAt: string })[];
+};
+type ConversationSummary = { id: string; title: string; updatedAt: string; messageCount: number };
+type ConversationPage = { items: ConversationSummary[]; nextCursor: string | null };
+
+const conversationsKey = (projectRef: string) => ["chat", "conversations", projectRef] as const;
+const conversationKey = (id: string | null) => ["chat", "conversation", id] as const;
+
 /** 서버 상태코드를 catch 까지 들고 가려고 감싼다. fetch 는 !ok 를 throw 하지 않는다. */
 class ResponseError extends Error {
   constructor(
     message: string,
-    readonly status: number
+    readonly status: number,
+    /** 서버가 준 구분값. 409 는 "conversation_full" 이다. */
+    readonly code?: string
   ) {
     super(message);
     this.name = "ResponseError";
   }
+}
+
+/** !ok 응답을 ResponseError 로. 서버 문구가 있으면 그대로 쓴다(줄바꿈 포함). */
+async function toResponseError(response: Response): Promise<ResponseError> {
+  const body = (await response.json().catch(() => null)) as {
+    error?: string;
+    code?: string;
+  } | null;
+  return new ResponseError(
+    body?.error ?? "응답을 받지 못했습니다.\n잠시 후 다시 시도해주세요.",
+    response.status,
+    body?.code
+  );
+}
+
+async function getJson<T>(url: string): Promise<T> {
+  const response = await fetch(url);
+  if (!response.ok) throw await toResponseError(response);
+  return (await response.json()) as T;
 }
 
 /** 끌어서 줄일 수 있는 최소 폭(px). 헤더 버튼 셋과 입력창이 깨지지 않는 선. */
@@ -164,16 +208,38 @@ function ChatPanel({
 }) {
   const file = useSearchParams().get("file");
 
-  const [messages, setMessages] = useState<Msg[]>([]);
+  const queryClient = useQueryClient();
+
+  // 지금 보고 있는 대화의 서버 id. null = 아직 저장 안 된 새 대화.
+  // 서버가 첫 답을 저장하고 id 를 돌려준 뒤에야 채운다 — 중단된 새 대화는 저장되지 않으므로
+  // id 를 미리 들고 있으면 없는 대화를 가리키게 된다.
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const conversation = useQuery({
+    queryKey: conversationKey(conversationId),
+    queryFn: () => getJson<Conversation>(`/api/chat/conversations/${conversationId}`),
+    enabled: conversationId !== null,
+    // 대화는 내가 보낼 때만 바뀌고, 그때는 캐시에 직접 붙인다. 다시 받아올 이유가 없다.
+    staleTime: Infinity,
+  });
+  const saved = conversation.data?.messages;
+
+  // 서버에 아직 없는 꼬리: 보내는 중인 질문과 스트리밍 중인 답. 끝나면 캐시로 옮기고 비운다.
+  // 중단된 답은 aborted 로 표시해 남긴다(저장되지 않았다고 알려주려고). 다음 전송 때 지운다
+  // — 서버 대화에 없는 턴이라 그 뒤에 새 턴이 붙으면 순서가 거짓말이 된다.
+  const [tail, setTail] = useState<(Msg & { aborted?: boolean })[]>([]);
+  const messages = [...(saved ?? []), ...tail];
+
   const [input, setInput] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<ChatError | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-
-  // 지금 쓰고 있는 대화 + 저장된 목록. 목록 보기로 전환하면 이 패널이 목록을 덮는다.
-  const [chatId, setChatId] = useState(() => crypto.randomUUID());
   const [showHistory, setShowHistory] = useState(false);
-  const chats = useChats(projectRef);
+
+  // 게이지는 서버에 저장된 개수 기준이다 — 서버가 409 로 막는 기준과 같아야 화면이 먼저
+  // 막을 수 있다. 서버가 409 를 주면(다른 탭에서 채웠다든지) 화면 값과 상관없이 가득 참.
+  const [fullFromServer, setFullFromServer] = useState(false);
+  const count = saved?.length ?? 0;
+  const full = fullFromServer || count >= MAX_MESSAGES;
 
   // 입력창 높이를 내용에 맞춘다. CSS field-sizing: content 는 크롬 계열만 돼서 직접 잰다.
   // auto 로 한 번 접어야 줄이 줄었을 때도 줄어든다. 보내서 input 이 비면 한 줄로 돌아가고,
@@ -187,10 +253,11 @@ function ChatPanel({
   }, [input, width, showHistory]);
 
   const listRef = useRef<HTMLDivElement>(null);
+  // messages 는 렌더마다 새 배열이라 의존성으로 쓰면 입력할 때마다 맨 아래로 튄다.
   useEffect(() => {
     const el = listRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages]);
+  }, [saved, tail]);
 
   // 패널을 닫거나(폭 0) 화면을 떠나면 진행 중인 요청도 끊는다.
   useEffect(() => {
@@ -198,96 +265,117 @@ function ChatPanel({
   }, [open]);
   useEffect(() => () => abortRef.current?.abort(), []);
 
-  function resetChat() {
+  /** 다른 대화로 옮긴다(null = 새 대화). 진행 중인 요청은 끊고 화면에만 있던 것은 버린다. */
+  function switchTo(id: string | null) {
     abortRef.current?.abort();
-    setChatId(crypto.randomUUID());
-    setMessages([]);
-    setInput("");
+    setConversationId(id);
+    setTail([]);
     setError(null);
+    setFullFromServer(false);
+    setShowHistory(false);
   }
 
   function newChat() {
-    resetChat();
-    setShowHistory(false);
+    switchTo(null);
+    setInput("");
   }
 
-  function openChat(chat: Chat) {
-    abortRef.current?.abort();
-    setChatId(chat.id);
-    setMessages(chat.messages);
-    setError(null);
-    setShowHistory(false);
+  async function removeConversation(id: string) {
+    const response = await fetch(`/api/chat/conversations/${id}`, { method: "DELETE" });
+    // 실패해도 목록은 다시 받는다 — 지워졌는지는 서버 목록이 말해준다.
+    void queryClient.invalidateQueries({ queryKey: conversationsKey(projectRef) });
+    if (!response.ok) return;
+    queryClient.removeQueries({ queryKey: conversationKey(id) });
+    // 지금 보고 있는 대화를 지웠으면 새 대화로 비운다(목록에는 그대로 머문다).
+    if (id === conversationId) {
+      switchTo(null);
+      setShowHistory(true);
+    }
   }
 
   async function send(text: string) {
     const content = text.trim();
-    if (!content || pending) return;
+    if (!content || pending || full) return;
 
-    const sent: Msg[] = [...messages, { role: "user", content }];
+    const user: Msg = { role: "user", content };
     // 빈 assistant 말풍선을 먼저 놓고 조각이 올 때마다 채운다.
-    setMessages([...sent, { role: "assistant", content: "" }]);
+    // 앞서 중단된 턴(aborted)은 여기서 버린다 — 위 tail 주석 참고.
+    setTail([user, { role: "assistant", content: "" }]);
     setInput("");
     setError(null);
     setPending(true);
 
     const controller = new AbortController();
     abortRef.current = controller;
+    // 요청 시점의 대화. 스트리밍 중에 다른 대화로 옮기면 요청이 끊기므로 이 값이 기준이다.
+    const sentTo = conversationId;
 
-    // 받은 답을 따로 모아둔다 — 저장할 때 state 가 반영되길 기다리지 않으려고.
+    // 받은 답을 따로 모아둔다 — 캐시에 붙일 때 state 가 반영되길 기다리지 않으려고.
     let answer = "";
 
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ projectRef, file, messages: sent }),
+        body: JSON.stringify({ projectRef, conversationId: sentTo, file, message: content }),
         signal: controller.signal,
       });
+      if (!response.ok || !response.body) throw await toResponseError(response);
 
-      if (!response.ok || !response.body) {
-        const body: unknown = await response.json().catch(() => null);
-        const message = (body as { error?: string } | null)?.error;
-        throw new ResponseError(
-          message ?? "응답을 받지 못했습니다.\n잠시 후 다시 시도해주세요.",
-          response.status
-        );
-      }
+      const id = response.headers.get("x-conversation-id") ?? sentTo;
+      if (!id)
+        throw new ResponseError("대화를 저장하지 못했습니다.\n새 대화로 다시 시도해주세요.", 500);
 
       const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
         answer += value;
-        setMessages((prev) =>
+        setTail((prev) =>
           prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: m.content + value } : m))
         );
       }
+
+      // 서버는 스트림이 끝나면 두 메시지를 저장한다. 같은 모양을 캐시에 붙여 다시 받지 않는다.
+      // 캐시를 먼저 채우고 id 를 바꿔야 새 대화일 때 useQuery 가 빈 캐시로 요청을 보내지 않는다.
+      const now = new Date().toISOString();
+      const pair = [
+        { ...user, createdAt: now },
+        { role: "assistant" as const, content: answer, createdAt: now },
+      ];
+      queryClient.setQueryData<Conversation>(conversationKey(id), (old) =>
+        old
+          ? { ...old, updatedAt: now, messages: [...old.messages, ...pair] }
+          : { id, title: "", updatedAt: now, messages: pair }
+      );
+      setConversationId(id);
+      setTail([]);
+      void queryClient.invalidateQueries({ queryKey: conversationsKey(projectRef) });
     } catch (e) {
-      // 사용자가 중단한 것이면 여기까지 받은 답을 그대로 남긴다.
-      if (!(e instanceof Error && e.name === "AbortError")) {
-        setError({
-          kind: e instanceof ResponseError && e.status === 402 ? "limit" : "error",
-          message:
-            e instanceof Error ? e.message : "요청에 실패했습니다.\n잠시 후 다시 시도해주세요.",
-        });
-        // 한 글자도 못 받은 말풍선은 지운다.
-        setMessages((prev) => prev.filter((m, i) => i !== prev.length - 1 || m.content !== ""));
+      if (controller.signal.aborted) {
+        // 서버는 중단된 턴을 저장하지 않는다. 받은 만큼은 보여주되 저장 안 됐다고 표시한다.
+        // 새 대화였다면 conversationId 는 애초에 채우지 않았으니 null 그대로다.
+        setTail((prev) =>
+          prev
+            .filter((m) => m.role === "user" || m.content !== "")
+            .map((m) => (m.role === "assistant" ? { ...m, aborted: true } : m))
+        );
+        return;
       }
+
+      if (e instanceof ResponseError && e.code === "conversation_full") setFullFromServer(true);
+      setError({
+        kind: e instanceof ResponseError && e.status === 402 ? "limit" : "error",
+        message:
+          e instanceof Error ? e.message : "요청에 실패했습니다.\n잠시 후 다시 시도해주세요.",
+      });
+      // 저장되지 않은 턴은 화면에서 걷고 질문은 입력창에 돌려준다 — 다시 보내기 쉽게.
+      // 보낸 것처럼 남겨두면 서버 대화와 화면이 어긋난다.
+      setTail([]);
+      setInput((current) => current || content);
     } finally {
       setPending(false);
       abortRef.current = null;
-
-      // 답이 한 글자라도 왔을 때만 기록에 남긴다(중단해도 남는다). 조각마다 쓰면
-      // 토큰 수만큼 localStorage 쓰기가 일어나므로 끝난 뒤 한 번만.
-      if (answer) {
-        const saved: Msg[] = [...sent, { role: "assistant", content: answer }];
-        saveChat(projectRef, {
-          id: chatId,
-          title: chatTitle(saved),
-          updatedAt: Date.now(),
-          messages: saved,
-        });
-      }
     }
   }
 
@@ -328,7 +416,7 @@ function ChatPanel({
             size="icon-sm"
             variant="ghost"
             onClick={newChat}
-            disabled={messages.length === 0 && !showHistory}
+            disabled={conversationId === null && messages.length === 0 && !showHistory}
             title="새 대화"
             aria-label="새 대화"
           >
@@ -348,20 +436,24 @@ function ChatPanel({
 
       {showHistory ? (
         <HistoryList
-          chats={chats}
-          currentId={chatId}
-          onOpen={openChat}
-          onRemove={(id) => {
-            removeChat(projectRef, id);
-            // 지금 보고 있는 대화를 지웠으면 새 대화로 비운다(목록에는 그대로 머문다).
-            if (id === chatId) resetChat();
-          }}
+          projectRef={projectRef}
+          currentId={conversationId}
+          onOpen={switchTo}
+          onRemove={(id) => void removeConversation(id)}
         />
       ) : (
         // 메시지 영역만 한 단계 어둡게(Mauve 1). 헤더·입력 영역(Mauve 2)이 위아래 틀이 되고
         // 내용은 그 사이에 들어앉은 것으로 읽힌다 — 셋이 같은 색이면 한 덩어리로 보인다.
         <div ref={listRef} className="bg-background flex-1 space-y-3 overflow-y-auto p-3">
-          {messages.length === 0 ? (
+          {conversation.isPending && conversationId !== null ? (
+            <div className="flex h-full items-center justify-center">
+              <Loader2 className="text-muted-foreground size-4 animate-spin" />
+            </div>
+          ) : conversation.isError ? (
+            <p className="text-destructive text-sm leading-relaxed wrap-break-word whitespace-pre-line">
+              {conversation.error.message}
+            </p>
+          ) : messages.length === 0 ? (
             // 안내 문구 한 줄이 전부다. 뭘 물어볼지는 사용자가 안다.
             <p className="text-muted-foreground flex h-full items-center justify-center px-6 text-center text-sm">
               {file ? "이 파일에 대해 물어보세요." : "왼쪽에서 파일을 열면 그 파일을 같이 봅니다."}
@@ -389,6 +481,9 @@ function ChatPanel({
                   ) : (
                     m.content ||
                     (pending && <Loader2 className="text-muted-foreground size-4 animate-spin" />)
+                  )}
+                  {"aborted" in m && m.aborted && (
+                    <p className="text-muted-foreground mt-1 text-xs">중단됨 · 저장되지 않았어요</p>
                   )}
                 </div>
               </div>
@@ -427,10 +522,20 @@ function ChatPanel({
           }}
           className="bg-background shrink-0 px-3 pb-3"
         >
+          {/* 가득 찬 대화에는 더 붙일 수 없다(서버도 409). 이어 쓰려면 새 대화뿐이라 그 버튼을 바로 옆에 둔다. */}
+          {full && (
+            <div className="text-muted-foreground mb-2 flex items-center justify-between gap-2 text-xs">
+              <span>대화가 가득 찼어요 ({MAX_MESSAGES}개). 새 대화에서 이어가 주세요.</span>
+              <Button type="button" size="sm" variant="outline" onClick={newChat}>
+                <SquarePen />새 대화
+              </Button>
+            </div>
+          )}
           <div className="border-input bg-muted focus-within:border-ring flex items-end gap-1.5 rounded-xl border p-2 shadow-lg shadow-black/40 transition-colors">
             <textarea
               ref={inputRef}
               rows={1}
+              disabled={full}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
@@ -441,8 +546,9 @@ function ChatPanel({
                 }
               }}
               placeholder="Ask anything — Enter to send"
-              className="text-foreground placeholder:text-muted-foreground block max-h-42 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent px-0.5 text-sm leading-7 outline-none"
+              className="text-foreground placeholder:text-muted-foreground block max-h-42 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent px-0.5 text-sm leading-7 outline-none disabled:cursor-not-allowed disabled:opacity-50"
             />
+            <ContextGauge count={full ? MAX_MESSAGES : count} />
             {pending ? (
               <Button
                 type="button"
@@ -458,7 +564,7 @@ function ChatPanel({
               <Button
                 type="submit"
                 size="icon-sm"
-                disabled={!input.trim()}
+                disabled={!input.trim() || full}
                 title="보내기"
                 aria-label="보내기"
               >
@@ -510,18 +616,75 @@ function CollapsibleText({ text }: { text: string }) {
   );
 }
 
-/** 저장된 대화 목록. 줄을 누르면 그 대화를 불러온다. */
+/**
+ * 입력창 옆 컨텍스트 게이지: 이 대화가 메시지 상한의 몇 % 를 썼는지.
+ * 경고 톤부터는 "곧 새 대화를 시작해야 한다"를 먼저 알린다.
+ */
+function ContextGauge({ count }: { count: number }) {
+  const ratio = Math.min(count / MAX_MESSAGES, 1);
+  return (
+    <span
+      title={`대화 메시지 ${count}/${MAX_MESSAGES}`}
+      className={cn(
+        "flex h-7 shrink-0 items-center text-[11px] tabular-nums",
+        ratio >= WARN_RATIO ? "text-brand-orange font-semibold" : "text-muted-foreground"
+      )}
+    >
+      <span aria-hidden>{Math.round(ratio * 100)}%</span>
+      <span className="sr-only">
+        대화 메시지 {count}/{MAX_MESSAGES}
+      </span>
+    </span>
+  );
+}
+
+/**
+ * 저장된 대화 목록. 줄을 누르면 그 대화를 불러온다.
+ *
+ * 20개씩 받고 끝에 "더보기" 버튼을 둔다. 무한스크롤이 아닌 이유: 대부분 최근 대화만
+ * 열어서, 스크롤만으로 요청이 나가면 안 볼 페이지까지 받는다. 패널이 좁고 짧아 스크롤
+ * 끝에 금방 닿기도 한다. 목록은 이 화면이 열릴 때 받고(패널 목록을 켤 때마다 마운트),
+ * 전송·삭제 때는 부르는 쪽이 invalidate 한다.
+ */
 function HistoryList({
-  chats,
+  projectRef,
   currentId,
   onOpen,
   onRemove,
 }: {
-  chats: Chat[];
-  currentId: string;
-  onOpen: (chat: Chat) => void;
+  projectRef: string;
+  currentId: string | null;
+  onOpen: (id: string) => void;
   onRemove: (id: string) => void;
 }) {
+  const list = useInfiniteQuery({
+    queryKey: conversationsKey(projectRef),
+    queryFn: ({ pageParam }) =>
+      getJson<ConversationPage>(
+        `/api/chat/conversations?${new URLSearchParams(
+          pageParam ? { projectRef, cursor: pageParam } : { projectRef }
+        )}`
+      ),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
+  });
+
+  if (list.isPending) {
+    return (
+      <div className="bg-background flex flex-1 justify-center pt-10">
+        <Loader2 className="text-muted-foreground size-4 animate-spin" />
+      </div>
+    );
+  }
+  if (list.isError) {
+    return (
+      <p className="bg-background text-destructive flex-1 px-6 pt-10 text-center text-sm whitespace-pre-line">
+        {list.error.message}
+      </p>
+    );
+  }
+
+  const chats = list.data.pages.flatMap((page) => page.items);
   if (chats.length === 0) {
     return (
       <p className="bg-background text-muted-foreground flex-1 pt-10 text-center text-sm">
@@ -543,13 +706,13 @@ function HistoryList({
           >
             <button
               type="button"
-              onClick={() => onOpen(chat)}
+              onClick={() => onOpen(chat.id)}
               className="min-w-0 flex-1 py-2 text-left"
             >
               <span className="block truncate text-sm">{chat.title}</span>
               <span className="text-muted-foreground text-xs">
-                {formatDistanceToNow(chat.updatedAt, { addSuffix: true, locale: ko })} ·{" "}
-                {chat.messages.length}개 메시지
+                {formatDistanceToNow(new Date(chat.updatedAt), { addSuffix: true, locale: ko })} ·{" "}
+                {chat.messageCount}개 메시지
               </span>
             </button>
             <Button
@@ -565,6 +728,20 @@ function HistoryList({
           </div>
         </li>
       ))}
+      {list.hasNextPage && (
+        <li className="pt-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => void list.fetchNextPage()}
+            disabled={list.isFetchingNextPage}
+            className="text-muted-foreground w-full"
+          >
+            {list.isFetchingNextPage && <Loader2 className="animate-spin" />}
+            더보기
+          </Button>
+        </li>
+      )}
     </ul>
   );
 }
