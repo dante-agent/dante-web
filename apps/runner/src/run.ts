@@ -1,4 +1,11 @@
 import { Sandbox, type CommandFinished } from "@vercel/sandbox";
+import {
+  REPORT_PATH,
+  buildTestCommand,
+  parseReport,
+  type TestFramework,
+  type TestReport,
+} from "./report.js";
 
 // 테스트 한 번을 격리된 환경에서 돌린다 (실행 환경 결정은 docs/adr/0001-test-runtime.md).
 //
@@ -29,12 +36,17 @@ export interface RunRequest {
      */
     token?: string;
   };
-  /** 레포 위에 덮어쓸 테스트 파일. 커밋되지 않은 버전을 돌리기 위한 것이다. */
-  testFile: {
+  /**
+   * 레포 위에 덮어쓸 테스트 파일들. 커밋되지 않은 버전을 돌리기 위한 것이다.
+   * 이 파일들만 실행한다 — PR 에서 바뀐 컴포넌트마다 하나씩 온다.
+   */
+  testFiles: {
     /** 레포 루트 기준 경로. 예: "src/components/Button.test.tsx" */
     path: string;
     content: string;
-  };
+  }[];
+  /** 프로젝트의 테스트 러너(Project.testFramework). 리포트 플래그를 고르는 데 쓴다. */
+  framework: TestFramework;
   /** 프로젝트 설정(Runtime 탭)에서 오는 값. 지금은 web 이 기본값을 채워 보낸다. */
   commands: {
     /** 예: "pnpm install --frozen-lockfile" */
@@ -60,6 +72,11 @@ export interface RunResult {
   logs: string;
   /** status 가 "error" 일 때만. 화면에 한 줄로 띄울 사유. */
   errorMessage?: string;
+  /**
+   * 테스트별 결과. 테스트가 돌기 전에 멈췄거나 러너가 리포트를 안 남겼으면 null.
+   * PR 코멘트의 "N of M failed" 와 실패 목록이 여기서 나온다.
+   */
+  report: TestReport | null;
   startedAt: string;
   finishedAt: string;
 }
@@ -72,12 +89,14 @@ export async function runTest(req: RunRequest): Promise<RunResult> {
   const done = (
     status: RunResult["status"],
     exitCode: number | null,
-    errorMessage?: string
+    errorMessage?: string,
+    report: TestReport | null = null
   ): RunResult => ({
     status,
     exitCode,
     logs: joinLogs(logs),
     ...(errorMessage ? { errorMessage } : {}),
+    report,
     startedAt: startedAt.toISOString(),
     finishedAt: new Date().toISOString(),
   });
@@ -99,9 +118,9 @@ export async function runTest(req: RunRequest): Promise<RunResult> {
     const repoDir = `${sandbox.cwd}/${cloneDirName(req.repo.url)}`;
 
     // 아직 커밋되지 않은 버전을 돌리는 게 목적이라 항상 덮어쓴다.
-    await sandbox.writeFiles([
-      { path: `${repoDir}/${req.testFile.path}`, content: req.testFile.content },
-    ]);
+    await sandbox.writeFiles(
+      req.testFiles.map((file) => ({ path: `${repoDir}/${file.path}`, content: file.content }))
+    );
 
     const install = await sandbox.runCommand({
       cmd: "sh",
@@ -115,15 +134,34 @@ export async function runTest(req: RunRequest): Promise<RunResult> {
       return done("error", null, `설치 실패 (exit ${install.exitCode})`);
     }
 
+    const command = buildTestCommand(
+      req.commands.test,
+      req.framework,
+      req.testFiles.map((file) => file.path)
+    );
     const test = await sandbox.runCommand({
       cmd: "sh",
-      args: ["-c", req.commands.test],
+      args: ["-c", command],
       cwd: repoDir,
       timeoutMs,
     });
-    logs.push(await section(req.commands.test, test));
+    logs.push(await section(command, test));
 
-    return done(test.exitCode === 0 ? "passed" : "failed", test.exitCode);
+    const report = await readReport(sandbox, repoDir);
+
+    if (test.exitCode === 0) return done("passed", test.exitCode, undefined, report);
+
+    // 0 이 아닌데 리포트도 없으면 테스트가 돈 게 아니다(설정 파일 에러, 러너 미설치,
+    // 커맨드가 인자를 안 받음). 사용자 테스트의 실패로 적으면 엉뚱한 곳을 보게 된다.
+    if (report === null) {
+      return done(
+        "error",
+        test.exitCode,
+        `테스트 러너가 결과 리포트를 남기지 않았습니다 (exit ${test.exitCode})`
+      );
+    }
+
+    return done("failed", test.exitCode, undefined, report);
   } catch (err) {
     // 샌드박스 생성 실패, 클론 실패, 타임아웃, 쿼터 초과가 전부 여기로 온다.
     // 어느 쪽이든 사용자가 손댈 수 있는 게 아니라 error 다.
@@ -132,6 +170,22 @@ export async function runTest(req: RunRequest): Promise<RunResult> {
     // 타임아웃까지 기다리면 그만큼 요금이 붙는다. 끝났으면 바로 내린다.
     // 여기서 실패해도 원래 결과를 덮지 않는다 — 샌드박스는 timeout 이 되면 어차피 사라진다.
     await sandbox?.stop().catch(() => {});
+  }
+}
+
+/**
+ * 러너가 쓴 JSON 리포트를 읽는다. 없거나 못 읽으면 null.
+ *
+ * 로그와 따로 읽는 이유: 리포트를 stdout 으로 받으면 사람이 읽는 출력과 섞여서
+ * JSON 으로 파싱이 안 된다. 그래서 파일로 쓰게 하고 여기서 꺼낸다.
+ */
+async function readReport(sandbox: Sandbox, repoDir: string): Promise<TestReport | null> {
+  try {
+    const file = await sandbox.runCommand({ cmd: "cat", args: [REPORT_PATH], cwd: repoDir });
+    if (file.exitCode !== 0) return null;
+    return parseReport(await file.output("stdout"), repoDir);
+  } catch {
+    return null;
   }
 }
 
