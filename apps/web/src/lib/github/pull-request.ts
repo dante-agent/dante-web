@@ -202,6 +202,30 @@ export async function fetchPullRequest(octokit: Octokit, ref: RepoRef, prNumber:
 }
 
 /**
+ * PR 에서 바뀐 파일 목록.
+ *
+ * GitHub 은 이 엔드포인트에서 최대 3,000개까지만 준다. 그보다 큰 PR 은 어차피
+ * 사람도 리뷰하지 못하는 크기라 잘린 목록으로 판단한다.
+ */
+export async function fetchPullRequestFiles(octokit: Octokit, ref: RepoRef, prNumber: number) {
+  const files: { filename: string; status: string }[] = [];
+
+  for (let page = 1; page <= 30; page++) {
+    const { data } = await octokit.request("GET /repos/{owner}/{repo}/pulls/{pull_number}/files", {
+      ...ref,
+      pull_number: prNumber,
+      per_page: 100,
+      page,
+    });
+
+    for (const file of data) files.push({ filename: file.filename, status: file.status });
+    if (data.length < 100) break;
+  }
+
+  return files;
+}
+
+/**
  * head 커밋 메시지. `[skip dante]` 를 찾는 데만 쓴다.
  *
  * pull_request 페이로드에는 커밋 메시지가 없어서 한 번 더 물어봐야 한다.

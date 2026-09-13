@@ -3,11 +3,13 @@ import { prisma } from "@dante/db";
 import {
   fetchHeadCommitMessage,
   fetchPullRequest,
+  fetchPullRequestFiles,
   installationClient,
 } from "@/lib/github/pull-request";
+import { changedComponents } from "@/lib/notifications/changed-components";
 import { deliverRunSummary, type PullRequestContext } from "@/lib/notifications/deliver";
 import { danteLinks } from "@/lib/notifications/links";
-import { queuedRun } from "@/lib/notifications/run-summary";
+import { queuedRun, type RunSummary } from "@/lib/notifications/run-summary";
 
 // ⚠️ 서버 전용. 웹훅 시크릿을 읽는다.
 //
@@ -261,8 +263,9 @@ async function handleRepository(payload: RepositoryEvent) {
 /**
  * PR 이 열림·푸시·다시 열림·리뷰 준비됨.
  *
- * 여기서 하는 일은 "코멘트 자리를 만드는 것"까지다. 스캔·생성·실행이 아직
- * 없어서 상태는 Queued 에 머문다. 그래도 지금 만들어 두는 이유는 sticky
+ * 여기서 하는 일은 바뀐 컴포넌트를 고르고 "코멘트 자리를 만드는 것"까지다.
+ * 바뀐 컴포넌트가 없으면 unchanged 로 끝나고, 있으면 생성·실행이 아직 없어서
+ * Queued 에 머문다. 그래도 지금 만들어 두는 이유는 sticky
  * 코멘트가 "하나를 계속 고쳐 쓰는" 물건이고, 그 하나가 생기는 자리가 여기라서다.
  *
  * 우리가 처리하지 않는 action(closed, labeled 등)은 그냥 지나간다. 나중에
@@ -290,7 +293,7 @@ async function handlePullRequest(payload: PullRequestEvent) {
       headCommitMessage: await commitMessage(project, pr.head.sha),
     };
 
-    await deliverRunSummary(project, context, queuedRun(danteLinks(project.ref, pr.number)));
+    await deliverRunSummary(project, context, await pullRequestRun(project, pr.number));
   }
 
   return `pr #${pr.number} ${payload.action} → ${projects.length} project(s)`;
@@ -329,10 +332,40 @@ async function handleCheckRun(payload: CheckRunEvent) {
       continue;
     }
 
-    await deliverRunSummary(project, context, queuedRun(danteLinks(project.ref, prNumber)));
+    await deliverRunSummary(project, context, await pullRequestRun(project, prNumber));
   }
 
   return `check re-run #${prNumber} → ${projects.length} project(s)`;
+}
+
+/**
+ * 이 PR 의 첫 상태. 바뀐 컴포넌트가 없으면 여기서 바로 끝난다(unchanged).
+ *
+ * 파일 목록을 못 읽으면 unchanged 로 접지 않고 평소대로 Queued 로 둔다.
+ * 모르는데 "바뀐 게 없다"고 적으면 실제로 컴포넌트를 고친 PR 에서 코멘트가
+ * 빠지고, 체크도 통과처럼 보인다.
+ */
+async function pullRequestRun(
+  project: { ref: string; repoOwner: string; repoName: string; installationId: bigint },
+  prNumber: number
+): Promise<RunSummary> {
+  const run = queuedRun(danteLinks(project.ref, prNumber));
+
+  let files;
+  try {
+    const octokit = await installationClient(project.installationId);
+    files = await fetchPullRequestFiles(
+      octokit,
+      { owner: project.repoOwner, repo: project.repoName },
+      prNumber
+    );
+  } catch (error) {
+    console.error(`[github-webhook] changed files lookup failed for #${prNumber}`, error);
+    return run;
+  }
+
+  const components = changedComponents(files);
+  return components.length === 0 ? { ...run, status: "unchanged" } : { ...run, components };
 }
 
 /**
