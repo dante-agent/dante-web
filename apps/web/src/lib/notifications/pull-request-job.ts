@@ -24,6 +24,7 @@ import {
 } from "@/lib/notifications/pr-test-generation";
 import { runPullRequestTests } from "@/lib/notifications/pr-test-run";
 import { finalRun, type LocatedComponent } from "@/lib/notifications/run-result";
+import { packageDependencies } from "@/lib/projects/test-generation-prompt";
 import { queuedRun, type RunSummary } from "@/lib/notifications/run-summary";
 
 // ⚠️ 서버 전용.
@@ -181,10 +182,17 @@ async function pullRequestRun(
 
   await progress({ ...run, status: "generating", components });
 
+  // 테스트가 레포에 없는 패키지를 import 하면 파일째 실행이 깨진다. head 커밋의 package.json 을
+  // 한 번 읽어 프롬프트에 넣는다. 루트만 본다(Runtime 설정도 루트 기준이다).
+  const dependencies = packageDependencies(
+    await fetchFileText(octokit, ref, "package.json", headSha)
+  );
+
   const generation = await generatePullRequestTests({
     userId: author.userId,
     projectId: project.id,
     testFramework: project.testFramework,
+    dependencies,
     sources,
   });
   console.info(`[pull-request-job] generated tests for #${prNumber}`, {
