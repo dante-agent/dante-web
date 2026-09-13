@@ -49,6 +49,8 @@ export async function requireProjectContext(ref: string) {
 /** 대시보드 히어로가 그리는 값. 지표(테스트 수·통과율)는 아직 목업이다. */
 export type DashboardProject = ProjectSummary & {
   testFramework: string | null;
+  /** 러너가 실행할 테스트 명령. 없으면 Advisor 가 setup 이슈를 띄운다. */
+  testCommand: string | null;
   connection: ConnectionStatus;
 };
 
@@ -65,6 +67,7 @@ export async function getDashboardProject(
     select: {
       ...summarySelect,
       testFramework: true,
+      testCommand: true,
       // 연결 상태는 프로젝트와 설치 두 군데에 나뉘어 적힌다 (lib/github/connection.ts).
       disconnectedAt: true,
       disconnectedReason: true,
@@ -103,6 +106,18 @@ export const getOwnedProjectId = cache(
     });
     return row?.id ?? null;
   }
+);
+
+/**
+ * 채팅이 쓰는 프로젝트 정보: 사용량을 붙일 id + 답변 기준이 될 테스트 러너.
+ * 권한 확인을 겸한다 — 내가 멤버가 아닌 팀의 ref 면 null.
+ */
+export const getOwnedChatProject = cache(
+  (ref: string, userId: string): Promise<{ id: string; testFramework: string | null } | null> =>
+    prisma.project.findFirst({
+      where: { ref, ...accessibleProjectWhere(userId) },
+      select: { id: true, testFramework: true },
+    })
 );
 
 /** layout·page 가 같은 요청에서 각각 부르므로 cache 로 dedup. */

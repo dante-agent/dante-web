@@ -47,7 +47,7 @@ export async function deleteProject(
 
   // 프로젝트 삭제는 owner 만 한다. member 에게는 이미 프로젝트가 보이므로 "없음"으로
   // 가리지 않고 이유를 말한다.
-  const role = project.teamId ? await getTeamRole(project.teamId, user.id) : null;
+  const role = await getTeamRole(project.teamId, user.id);
   if (role !== "owner") {
     return { message: "Only team owners can delete a project." };
   }

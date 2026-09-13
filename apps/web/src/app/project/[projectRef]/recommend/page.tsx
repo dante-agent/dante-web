@@ -5,7 +5,7 @@ import { getTestRecommendations } from "@/lib/projects/recommendations";
 import { PromptInput } from "./_components/prompt-input";
 import { RecommendTabs, type RecommendTab } from "./_components/recommend-tabs";
 import { SessionList } from "./_components/session-list";
-import { SuggestedList } from "./_components/suggested-list";
+import { SuggestedSection } from "./_components/suggested-section";
 import { recommendMock } from "./mock-data";
 
 const VALID_TABS: RecommendTab[] = ["suggested", "sessions", "scheduled"];
@@ -32,7 +32,7 @@ export default async function RecommendPage({
 
       {activeTab === "suggested" &&
         (recommendations.length > 0 ? (
-          <SuggestedList recommendations={recommendations} />
+          <SuggestedSection projectRef={projectRef} initial={recommendations} />
         ) : (
           <p className="text-muted-foreground py-12 text-center text-sm">
             테스트가 없는 파일을 찾지 못했습니다.

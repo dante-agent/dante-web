@@ -17,10 +17,12 @@ export function SuitePanel({
 }: {
   framework: string;
   branch: string;
-  testFiles: number;
-  components: number;
+  /** null = 레포 트리를 못 읽음(연결 끊김). 값 대신 "—" 를 그린다. */
+  testFiles: number | null;
+  components: number | null;
   runs: number;
-  passRate: number;
+  /** null = 판정된 실행이 없음(러너 미연결). 초록 배지 대신 중립 "—". */
+  passRate: number | null;
 }) {
   return (
     <div
@@ -41,13 +43,17 @@ export function SuitePanel({
               <p className="text-muted-foreground truncate text-xs">{framework}</p>
               <p className="text-muted-foreground truncate font-mono text-xs">{branch}</p>
             </div>
-            <Badge variant="success">{passRate}%</Badge>
+            {passRate === null ? (
+              <Badge variant="outline">—</Badge>
+            ) : (
+              <Badge variant="success">{passRate}%</Badge>
+            )}
           </div>
 
           <div className="border-border mt-3 flex flex-wrap items-center gap-x-1.5 gap-y-1 border-t pt-2.5 text-[11px]">
-            <PanelMetric label="Tests" value={testFiles} />
+            <PanelMetric label="Tests" value={testFiles ?? "—"} />
             <Dot />
-            <PanelMetric label="Components" value={components} />
+            <PanelMetric label="Components" value={components ?? "—"} />
             <Dot />
             <PanelMetric label="Runs" value={runs} />
           </div>
