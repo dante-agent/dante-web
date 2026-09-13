@@ -6,6 +6,7 @@ import { ConnectionPanel } from "@/components/settings/github/connection-panel";
 import { SettingsHeader } from "@/components/settings/settings-section";
 import { Badge } from "@/components/ui/badge";
 import { requireUser } from "@/lib/auth/user";
+import { accessibleProjectWhere } from "@/lib/teams/access";
 import { installationSettingsUrl } from "@/lib/github/app";
 import { connectionNotice, projectConnection } from "@/lib/github/connection";
 
@@ -22,10 +23,10 @@ export default async function ProjectGithubPage({
   const user = await requireUser();
   const { projectRef } = await params;
 
-  // 레이아웃에서 이미 소유를 확인했지만 페이지도 userId 로 다시 거른다 —
+  // 레이아웃에서 이미 소유를 확인했지만 페이지도 멤버십으로 다시 거른다 —
   // 레이아웃이 바뀌면 조용히 뚫린다 (General 페이지와 같은 이유).
   const project = await prisma.project.findFirst({
-    where: { ref: projectRef, userId: user.id },
+    where: { ref: projectRef, ...accessibleProjectWhere(user.id) },
     select: {
       repoId: true,
       repoOwner: true,

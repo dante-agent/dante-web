@@ -1,5 +1,6 @@
 import { prisma } from "@dante/db";
 import { authenticateExtension, unauthorized } from "@/lib/extension/auth";
+import { accessibleProjectWhere } from "@/lib/teams/access";
 
 // 익스텐션 사이드바의 컴포넌트 트리 (dante-extension 기능 4).
 // 응답 모양은 dante-extension 의 src/api/types.ts `Component` 와 맞춘다.
@@ -21,7 +22,7 @@ export async function GET(
   // 중첩 select 의 take 는 관계 깊이만큼의 질의로 끝난다 — 컴포넌트 수만큼
   // 질의가 늘어나지 않는다(N+1 금지).
   const project = await prisma.project.findFirst({
-    where: { ref: projectRef, userId: token.userId },
+    where: { ref: projectRef, ...accessibleProjectWhere(token.userId) },
     select: {
       components: {
         // 트리 순서가 새로고침마다 흔들리지 않게 완전히 결정적으로 정렬한다.

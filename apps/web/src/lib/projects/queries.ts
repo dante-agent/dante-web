@@ -1,10 +1,12 @@
-// 프로젝트 조회 (서버 전용). 소유자(userId) 스코프. 팀 도입 시 여기가 teamId 로 바뀐다.
+// 프로젝트 조회 (서버 전용). 이 사용자가 멤버인 팀의 프로젝트만 읽는다(lib/teams/access.ts).
+// 함수들이 userId 를 받는 이유는 그대로다 — 멤버십을 누구 기준으로 볼지가 그 값이다.
 
 import { cache } from "react";
 import { notFound } from "next/navigation";
 import { prisma } from "@dante/db";
 import { requireUser } from "@/lib/auth/user";
 import { projectConnection, type ConnectionStatus } from "@/lib/github/connection";
+import { accessibleProjectWhere } from "@/lib/teams/access";
 
 export type ProjectSummary = {
   ref: string;
@@ -22,18 +24,18 @@ const summarySelect = {
   defaultBranch: true,
 } as const;
 
-/** 이 사용자의 프로젝트 전부. 최근 생성 순. 헤더 스위처·목록용. */
+/** 이 사용자가 멤버인 팀들의 프로젝트 전부. 최근 생성 순. 헤더 스위처·목록용. */
 export function listProjects(userId: string): Promise<ProjectSummary[]> {
   return prisma.project.findMany({
-    where: { userId },
+    where: accessibleProjectWhere(userId),
     select: summarySelect,
     orderBy: { createdAt: "desc" },
   });
 }
 
 /**
- * 프로젝트 스코프 레이아웃 진입점. 로그인 + 소유 확인.
- * ref 에 해당하는 프로젝트가 없거나 남의 것이면 notFound().
+ * 프로젝트 스코프 레이아웃 진입점. 로그인 + 멤버 확인.
+ * ref 에 해당하는 프로젝트가 없거나 내가 멤버가 아닌 팀의 것이면 notFound().
  * 목록도 같이 돌려준다 — 헤더가 필요로 하고, 조회 한 번으로 끝난다.
  */
 export async function requireProjectContext(ref: string) {
@@ -59,7 +61,7 @@ export async function getDashboardProject(
   userId: string
 ): Promise<DashboardProject | null> {
   const row = await prisma.project.findFirst({
-    where: { ref, userId },
+    where: { ref, ...accessibleProjectWhere(userId) },
     select: {
       ...summarySelect,
       testFramework: true,
@@ -96,7 +98,7 @@ export type ProjectRepo = {
 export const getOwnedProjectId = cache(
   async (ref: string, userId: string): Promise<string | null> => {
     const row = await prisma.project.findFirst({
-      where: { ref, userId },
+      where: { ref, ...accessibleProjectWhere(userId) },
       select: { id: true },
     });
     return row?.id ?? null;
@@ -106,7 +108,7 @@ export const getOwnedProjectId = cache(
 /** layout·page 가 같은 요청에서 각각 부르므로 cache 로 dedup. */
 export const getProjectRepo = cache((ref: string, userId: string): Promise<ProjectRepo | null> =>
   prisma.project.findFirst({
-    where: { ref, userId },
+    where: { ref, ...accessibleProjectWhere(userId) },
     select: { repoOwner: true, repoName: true, defaultBranch: true, installationId: true },
   })
 );
