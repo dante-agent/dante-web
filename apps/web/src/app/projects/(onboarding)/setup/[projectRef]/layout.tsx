@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@dante/db";
 import { requireUser } from "@/lib/auth/user";
+import { accessibleProjectWhere } from "@/lib/teams/access";
 
 // setup 단계들의 문지기.
 //
@@ -23,7 +24,7 @@ export default async function SetupLayout({
 
   // 내 프로젝트가 맞는지도 여기서 한 번 본다 — 권한 검사는 앱 코드에서 (AGENTS.md).
   const project = await prisma.project.findFirst({
-    where: { ref: projectRef, userId: user.id },
+    where: { ref: projectRef, ...accessibleProjectWhere(user.id) },
     select: { setupCompletedAt: true },
   });
   if (!project) notFound();

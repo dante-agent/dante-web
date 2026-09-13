@@ -9,6 +9,7 @@ import { SnoozeBanner } from "@/components/settings/notifications/snooze";
 import { SnoozeControl } from "@/components/settings/notifications/snooze-control";
 import { ComingSoon, SettingsHeader } from "@/components/settings/settings-section";
 import { requireUser } from "@/lib/auth/user";
+import { accessibleProjectWhere } from "@/lib/teams/access";
 import { installationSettingsUrl } from "@/lib/github/app";
 import { connectionNotice, projectConnection } from "@/lib/github/connection";
 import { cachedRepoLookup, repoLookupKey } from "@/lib/github/lookup-cache";
@@ -33,7 +34,7 @@ export default async function ProjectNotificationsPage({
 
   // 권한 검사는 앱 코드에서 (AGENTS.md).
   const project = await prisma.project.findFirst({
-    where: { ref: projectRef, userId: user.id },
+    where: { ref: projectRef, ...accessibleProjectWhere(user.id) },
     select: {
       id: true,
       ref: true,

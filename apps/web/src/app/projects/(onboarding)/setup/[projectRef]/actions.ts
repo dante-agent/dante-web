@@ -3,6 +3,7 @@
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@dante/db";
 import { requireUser } from "@/lib/auth/user";
+import { accessibleProjectWhere } from "@/lib/teams/access";
 import { isTestFramework } from "@/lib/projects/frameworks";
 
 /**
@@ -60,10 +61,10 @@ async function completeSetup(projectId: string, ref: string): Promise<never> {
   redirect(`/project/${ref}/dashboard`);
 }
 
-/** 내 프로젝트가 맞는지 확인 — 권한 검사는 앱 코드에서 (AGENTS.md). */
+/** 내가 멤버인 팀의 프로젝트가 맞는지 확인 — 권한 검사는 앱 코드에서 (AGENTS.md). */
 async function requireOwnedProject(ref: string, userId: string) {
   const project = await prisma.project.findFirst({
-    where: { ref, userId },
+    where: { ref, ...accessibleProjectWhere(userId) },
     select: { id: true },
   });
   if (!project) notFound();
