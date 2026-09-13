@@ -53,6 +53,8 @@ app.listen({ port: PORT, host: "0.0.0.0" }).catch((err) => {
   process.exit(1);
 });
 
+const MAX_TEST_FILES = 50;
+
 /**
  * 요청 본문 검증. zod 를 쓰지 않은 이유는 필드가 몇 개 안 되고, runner 에
  * 의존성을 하나 더 얹을 만한 일이 아니어서다 (AGENTS.md).
@@ -70,13 +72,29 @@ function parseRunRequest(body: unknown): { value: RunRequest } | { error: string
     return { error: "repo.token 이 문자열이 아닙니다" };
   }
 
-  const testFile = body.testFile;
-  if (!isRecord(testFile)) return { error: "testFile 이 없습니다" };
-  if (!isNonEmptyString(testFile.path)) return { error: "testFile.path 가 없습니다" };
-  if (typeof testFile.content !== "string") return { error: "testFile.content 가 없습니다" };
-  // 클론한 레포 밖으로 쓰지 못하게 막는다. 절대경로와 상위 참조 둘 다.
-  if (testFile.path.startsWith("/") || testFile.path.split("/").includes("..")) {
-    return { error: "testFile.path 는 레포 안의 상대경로여야 합니다" };
+  const testFiles: RunRequest["testFiles"] = [];
+  if (!Array.isArray(body.testFiles) || body.testFiles.length === 0) {
+    return { error: "testFiles 가 비었습니다" };
+  }
+  // 한 번에 돌리는 파일 수 상한. 샌드박스 하나의 수명(최대 15분) 안에 끝나야 한다.
+  if (body.testFiles.length > MAX_TEST_FILES) {
+    return { error: `testFiles 는 ${MAX_TEST_FILES}개까지입니다` };
+  }
+  for (const [index, testFile] of body.testFiles.entries()) {
+    if (!isRecord(testFile)) return { error: `testFiles[${index}] 가 객체가 아닙니다` };
+    if (!isNonEmptyString(testFile.path)) return { error: `testFiles[${index}].path 가 없습니다` };
+    if (typeof testFile.content !== "string") {
+      return { error: `testFiles[${index}].content 가 없습니다` };
+    }
+    // 클론한 레포 밖으로 쓰지 못하게 막는다. 절대경로와 상위 참조 둘 다.
+    if (testFile.path.startsWith("/") || testFile.path.split("/").includes("..")) {
+      return { error: `testFiles[${index}].path 는 레포 안의 상대경로여야 합니다` };
+    }
+    testFiles.push({ path: testFile.path, content: testFile.content });
+  }
+
+  if (body.framework !== "vitest" && body.framework !== "jest") {
+    return { error: 'framework 는 "vitest" 또는 "jest" 여야 합니다' };
   }
 
   const commands = body.commands;
@@ -91,7 +109,8 @@ function parseRunRequest(body: unknown): { value: RunRequest } | { error: string
   return {
     value: {
       repo: { url: repo.url, revision: repo.revision, token: repo.token },
-      testFile: { path: testFile.path, content: testFile.content },
+      testFiles,
+      framework: body.framework,
       commands: { install: commands.install, test: commands.test },
       timeoutMs: body.timeoutMs,
     },
