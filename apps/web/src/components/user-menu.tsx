@@ -8,7 +8,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Popover } from "@base-ui/react/popover";
-import { LogOut, Settings } from "lucide-react";
+import { LogOut, Settings, Users } from "lucide-react";
 import { signOut } from "@/app/auth/actions";
 import { UserAvatar } from "@/components/user-avatar";
 
@@ -46,6 +46,11 @@ export function UserMenu({ user }: { user: HeaderUser }) {
               <Link href="/account/settings/general" onClick={() => setOpen(false)} className={ROW}>
                 <Settings className="text-muted-foreground size-4" />
                 Account settings
+              </Link>
+              {/* 팀 id 는 /team 이 고른다 — 이 메뉴는 어느 화면에서나 같아서 팀을 모른다. */}
+              <Link href="/team" onClick={() => setOpen(false)} className={ROW}>
+                <Users className="text-muted-foreground size-4" />
+                Team settings
               </Link>
 
               {/* 서버 액션이라 <form> 이 필요하다. 로그아웃은 리다이렉트로 끝나므로
