@@ -107,12 +107,12 @@ export const getOwnedProjectId = cache(
 
 /**
  * 채팅이 쓰는 프로젝트 정보: 사용량을 붙일 id + 답변 기준이 될 테스트 러너.
- * 소유 확인을 겸한다 — 남의 ref 면 null.
+ * 권한 확인을 겸한다 — 내가 멤버가 아닌 팀의 ref 면 null.
  */
 export const getOwnedChatProject = cache(
   (ref: string, userId: string): Promise<{ id: string; testFramework: string | null } | null> =>
     prisma.project.findFirst({
-      where: { ref, userId },
+      where: { ref, ...accessibleProjectWhere(userId) },
       select: { id: true, testFramework: true },
     })
 );
