@@ -49,6 +49,8 @@ export async function requireProjectContext(ref: string) {
 /** 대시보드 히어로가 그리는 값. 지표(테스트 수·통과율)는 아직 목업이다. */
 export type DashboardProject = ProjectSummary & {
   testFramework: string | null;
+  /** 러너가 실행할 테스트 명령. 없으면 Advisor 가 setup 이슈를 띄운다. */
+  testCommand: string | null;
   connection: ConnectionStatus;
 };
 
@@ -65,6 +67,7 @@ export async function getDashboardProject(
     select: {
       ...summarySelect,
       testFramework: true,
+      testCommand: true,
       // 연결 상태는 프로젝트와 설치 두 군데에 나뉘어 적힌다 (lib/github/connection.ts).
       disconnectedAt: true,
       disconnectedReason: true,
