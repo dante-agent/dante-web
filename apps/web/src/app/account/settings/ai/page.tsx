@@ -1,7 +1,9 @@
 import { EngineCards } from "@/components/ai/engine-cards";
+import { AiQualityForm } from "@/components/settings/ai/quality-form";
 import { ComingSoon, SettingsHeader } from "@/components/settings/settings-section";
 import { getMonthlyBudgetStatus, type BudgetStatus } from "@/lib/ai/budget";
 import { ACTIVE_ENGINE } from "@/lib/ai/engine";
+import { getUserAiQuality } from "@/lib/ai/quality-queries";
 import {
   formatUsageCalls,
   formatUsageCost,
@@ -26,9 +28,10 @@ import { requireUser } from "@/lib/auth/user";
 // 확인할 수 있도록" 하겠다고 약속한다.
 export default async function AccountAiPage() {
   const user = await requireUser();
-  const [usage, budget] = await Promise.all([
+  const [usage, budget, quality] = await Promise.all([
     getMonthlyUserAiUsage(user.id),
     getMonthlyBudgetStatus(user.id),
+    getUserAiQuality(user.id),
   ]);
 
   return (
@@ -42,13 +45,21 @@ export default async function AccountAiPage() {
         <EngineCards />
       </div>
 
+      <section className="mt-10 max-w-2xl">
+        <h2 className="text-[15px] font-medium">Generation quality</h2>
+        <p className="text-muted-foreground mt-2 text-[13px] leading-relaxed">
+          The default for this account. Both use the same model. Deep lets it think longer.
+        </p>
+        <div className="mt-4">
+          <AiQualityForm initial={quality} />
+        </div>
+      </section>
+
       <PlanLimit budget={budget} />
 
       <UsageThisMonth usage={usage} />
 
-      <ComingSoon>
-        Picking generation quality (Standard vs. Deep) and overriding the engine per project.
-      </ComingSoon>
+      <ComingSoon>Overriding the engine per project.</ComingSoon>
     </>
   );
 }
