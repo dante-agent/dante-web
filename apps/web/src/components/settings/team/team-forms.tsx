@@ -41,6 +41,9 @@ export function RenameTeamForm({
 
       <div className="mt-4 flex gap-2">
         <Input
+          // 저장하면 서버가 새 이름으로 다시 그린다. 비제어 입력의 defaultValue 를 바꾸면
+          // Base UI 가 경고하므로, 이름이 바뀌면 입력칸을 새로 만든다.
+          key={name}
           id="team-name"
           name="name"
           defaultValue={name}
