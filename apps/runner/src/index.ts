@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import Fastify from "fastify";
+import { createSerialQueue } from "./queue.js";
 import { runTest, type RunRequest } from "./run.js";
 
 // 테스트 실행 서버. 실행 환경은 Vercel Sandbox (docs/adr/0001-test-runtime.md).
@@ -23,6 +24,9 @@ const RUNNER_SECRET = process.env.RUNNER_SECRET ?? "";
 
 const app = Fastify({ logger: true, bodyLimit: 8 * 1024 * 1024 });
 
+/** 샌드박스 실행은 한 번에 하나. 이유는 queue.ts 위쪽 주석에. */
+const runs = createSerialQueue();
+
 // 웹(BFF)만 이 서버를 호출한다. 공유 시크릿으로 게이트.
 app.addHook("onRequest", async (req, reply) => {
   if (req.url === "/health") return;
@@ -41,9 +45,9 @@ app.post("/runs", async (req, reply) => {
 
   // 동기로 돌린다. 테스트가 몇 분 걸리면 이 요청도 그만큼 열려 있다.
   //
-  // 큐를 두지 않은 이유: 지금은 호출자가 web 하나뿐이고, 결과를 TestRun 에 쓰는
-  // 것도 web 이다. 여기서 비동기로 만들면 "누가 결과를 받아 적는가" 를 runner 가
-  // 떠안게 되고, 그러려면 DB 를 알아야 한다. 동시 실행이 문제가 될 때 큐를 붙인다.
+  // 결과를 응답으로 돌려주는 이유: 결과를 TestRun 에 쓰는 것은 web 이다. 여기서 비동기로
+  // 만들면 "누가 결과를 받아 적는가" 를 runner 가 떠안게 되고, 그러려면 DB 를 알아야 한다.
+  // 동시 실행은 queue.ts 가 하나로 막는다. 겹친 요청은 앞 실행이 끝날 때까지 기다린다.
   //
   // web 이 응답 전에 연결을 끊으면(PR 에 새 커밋이 왔다) 기다리는 쪽이 없으니 바로 멈춘다.
   // 응답을 다 보낸 뒤의 close 는 정상 종료라 무시한다.
@@ -52,7 +56,8 @@ app.post("/runs", async (req, reply) => {
     if (!reply.raw.writableFinished) controller.abort();
   });
 
-  const result = await runTest(parsed.value, controller.signal);
+  if (runs.size > 0) req.log.info({ ahead: runs.size }, "run queued");
+  const result = await runs.run(() => runTest(parsed.value, controller.signal));
   if (controller.signal.aborted) req.log.info("client closed, run stopped");
   return reply.code(200).send(result);
 });
