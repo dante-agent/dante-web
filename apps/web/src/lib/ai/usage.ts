@@ -10,7 +10,7 @@ import { costUsd } from "./pricing";
 // /api/chat 안에 특수하게 박아두면 그때 같은 코드를 다시 쓰게 된다.
 
 /** 어디서 부른 건지. 값이 늘 때 마이그레이션하지 않으려고 문자열로 둔다. */
-export type UsageSurface = "chat";
+export type UsageSurface = "chat" | "recommend";
 
 type RecordArgs = {
   userId: string;
