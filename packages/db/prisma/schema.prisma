@@ -49,6 +49,7 @@ model User {
   extensionAuthCodes ExtensionAuthCode[]
   extensionTokens    ExtensionToken[]
   aiUsage            AiUsage[]
+  chatConversations  ChatConversation[]
   teamMemberships    TeamMember[]
   /// 가입할 때 자동으로 만든 "내 팀". 사용자당 하나다(Team.personalForUserId 가 unique).
   personalTeam       Team?                @relation("PersonalTeam")
@@ -238,10 +239,10 @@ model Project {
   disconnectedReason String?   @map("disconnected_reason")
 
   /// 프로젝트를 만든 사람. 이관이 끝나면 teamId 로 대체된다.
-  userId         String  @map("user_id") @db.Uuid
+  userId         String @map("user_id") @db.Uuid
   /// 프로젝트의 주인. 레포를 열어준 설치와 같은 팀이다.
-  teamId         String  @map("team_id") @db.Uuid
-  installationId BigInt  @map("installation_id")
+  teamId         String @map("team_id") @db.Uuid
+  installationId BigInt @map("installation_id")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -256,6 +257,7 @@ model Project {
   deliveries          NotificationDelivery[]
   webhookDeliveries   WebhookDelivery[]
   aiUsage             AiUsage[]
+  chatConversations   ChatConversation[]
 
   /// 같은 레포를 같은 사용자가 두 번 연결하지 못하게 막는다.
   /// TODO(팀 PR): 소유 주체가 User → Team 으로 바뀌면 이 제약도 teamId 기준으로 옮긴다.
@@ -579,4 +581,59 @@ model AiUsage {
   /// "이 사용자가 이번 달 얼마 썼나" 가 가장 잦은 질문이다.
   @@index([userId, createdAt])
   @@map("ai_usage")
+}
+
+/// 폴더 보기 AI 채팅의 대화 하나.
+///
+/// 브라우저(localStorage)에 두던 기록을 서버로 옮겼다 — 기기를 옮기면 사라지고, 용량을
+/// 넘으면 조용히 저장이 실패했다. 보는 사람은 만든 본인뿐이다(팀원에게 공유하지 않는다).
+/// 읽을 때는 userId 에 더해 프로젝트 접근 권한도 본다: 팀에서 빠진 사람이 예전 대화로
+/// 그 레포 코드를 다시 보지 못하게.
+///
+/// 보유 기간: 사용자가 지우거나 탈퇴할 때까지. 자동 삭제 작업은 없다(개인정보처리방침과 같은 값).
+model ChatConversation {
+  id        String @id @default(uuid()) @db.Uuid
+  userId    String @map("user_id") @db.Uuid
+  projectId String @map("project_id") @db.Uuid
+
+  /// 목록에 보이는 제목(첫 질문을 한 줄로 접은 것). 질문 내용 그대로라 본문처럼 암호문으로 둔다.
+  title String
+
+  createdAt DateTime @default(now()) @map("created_at")
+  /// 목록 정렬 기준. 메시지를 저장할 때 같이 갱신된다.
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// 탈퇴·프로젝트 삭제 시 대화도 같이 지운다 — 보유 기간이 "탈퇴할 때까지"라서.
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project  Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  messages ChatMessage[]
+
+  /// "이 프로젝트에서 내 최근 대화" 목록을 updatedAt 커서로 넘긴다.
+  @@index([userId, projectId, updatedAt])
+  @@map("chat_conversations")
+}
+
+/// 대화 안의 메시지 하나. 질문과 답은 정상 완료된 뒤에 한 쌍으로만 저장한다
+/// (중단한 답은 질문까지 남기지 않는다).
+model ChatMessage {
+  id             String @id @default(uuid()) @db.Uuid
+  conversationId String @map("conversation_id") @db.Uuid
+
+  /// "user" | "assistant". 문자열인 이유는 testFramework 와 같다.
+  role String
+
+  /// 본문. AES-256-GCM 암호문(lib/crypto/secret.ts) — 사용자가 코드나 비밀값을 붙여 넣는다.
+  /// DB 에서 내용 검색은 못 하게 되지만 그런 기능은 없다.
+  content String
+
+  /// 질문할 때 열어 둔 파일 경로. 본문은 저장하지 않는다 — 레포에서 다시 읽을 수 있고,
+  /// 저장하면 레포 코드 사본이 DB 에 쌓인다.
+  filePath String? @map("file_path")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  conversation ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@map("chat_messages")
 }
