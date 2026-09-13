@@ -43,14 +43,15 @@ const shortPath = (path: string) => path.split("/").slice(-2).join("/");
  */
 type ChatError = { kind: "error" | "limit"; message: string };
 
-/**
- * 대화 하나에 담을 수 있는 메시지 수(질문·답 합계). 서버도 같은 값으로 막는다(409).
- *
- * 매 질문마다 대화 전체가 모델에 들어가서, 대화가 길수록 질문 한 번의 원가가 커진다.
- * 토큰으로 세면 정확하지만 보내기 전에는 알 수 없어 게이지가 늘 한 박자 늦다 — 개수는
- * 화면이 바로 안다. 입력창 옆 % 가 이 값 대비 비율이다.
- */
+/** 대화 하나에 담을 수 있는 메시지 수(질문·답 합계). 서버도 같은 값으로 막는다(409). */
 const MAX_MESSAGES = 50;
+/**
+ * 대화 하나의 컨텍스트 토큰 상한. 입력창 위 상태 바의 % 가 이 값 대비 비율이다.
+ * 서버(lib/chat/conversations.ts)와 같은 값 — 왜 5만인지는 거기 적었다.
+ */
+const MAX_CONTEXT_TOKENS = 50_000;
+/** 서버가 답 스트림 끝에 붙이는 구분자. 뒤에 실제 컨텍스트 토큰 수가 온다(api/chat/route.ts). */
+const USAGE_MARK = "\u001e";
 /** 이 비율부터 게이지를 경고 톤으로. 가득 차기 전에 새 대화를 떠올리게. */
 const WARN_RATIO = 0.8;
 
@@ -61,6 +62,8 @@ type Conversation = {
   id: string;
   title: string;
   updatedAt: string;
+  /** 마지막 답 기준 실제 컨텍스트 토큰(입력+출력). */
+  contextTokens: number;
   messages: (Msg & { createdAt: string })[];
 };
 type ConversationSummary = { id: string; title: string; updatedAt: string; messageCount: number };
@@ -236,11 +239,12 @@ function ChatPanel({
   const abortRef = useRef<AbortController | null>(null);
   const [showHistory, setShowHistory] = useState(false);
 
-  // 게이지는 서버에 저장된 개수 기준이다 — 서버가 409 로 막는 기준과 같아야 화면이 먼저
+  // 가득 참은 서버에 저장된 값 기준이다 — 서버가 409 로 막는 기준과 같아야 화면이 먼저
   // 막을 수 있다. 서버가 409 를 주면(다른 탭에서 채웠다든지) 화면 값과 상관없이 가득 참.
   const [fullFromServer, setFullFromServer] = useState(false);
-  const count = saved?.length ?? 0;
-  const full = fullFromServer || count >= MAX_MESSAGES;
+  const tokens = conversation.data?.contextTokens ?? 0;
+  const full =
+    fullFromServer || (saved?.length ?? 0) >= MAX_MESSAGES || tokens >= MAX_CONTEXT_TOKENS;
 
   // 입력창 높이를 내용에 맞춘다. CSS field-sizing: content 는 크롬 계열만 돼서 직접 잰다.
   // auto 로 한 번 접어야 줄이 줄었을 때도 줄어든다. 보내서 input 이 비면 한 줄로 돌아가고,
@@ -311,8 +315,9 @@ function ChatPanel({
     // 요청 시점의 대화. 스트리밍 중에 다른 대화로 옮기면 요청이 끊기므로 이 값이 기준이다.
     const sentTo = conversationId;
 
-    // 받은 답을 따로 모아둔다 — 캐시에 붙일 때 state 가 반영되길 기다리지 않으려고.
-    let answer = "";
+    // 받은 스트림을 따로 모아둔다 — 캐시에 붙일 때 state 가 반영되길 기다리지 않으려고.
+    // 끝에 USAGE_MARK + 토큰 수가 붙어 오므로 화면에는 그 앞까지만 쓴다.
+    let raw = "";
 
     try {
       const response = await fetch("/api/chat", {
@@ -331,11 +336,15 @@ function ChatPanel({
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
-        answer += value;
+        raw += value;
+        const shown = raw.split(USAGE_MARK)[0];
         setTail((prev) =>
-          prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: m.content + value } : m))
+          prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: shown } : m))
         );
       }
+      const [answer, usage] = raw.split(USAGE_MARK);
+      // 구분자가 안 왔으면(구버전 서버 등) 이전 값을 그대로 둔다.
+      const contextTokens = usage ? Number(usage) : undefined;
 
       // 서버는 스트림이 끝나면 두 메시지를 저장한다. 같은 모양을 캐시에 붙여 다시 받지 않는다.
       // 캐시를 먼저 채우고 id 를 바꿔야 새 대화일 때 useQuery 가 빈 캐시로 요청을 보내지 않는다.
@@ -346,8 +355,13 @@ function ChatPanel({
       ];
       queryClient.setQueryData<Conversation>(conversationKey(id), (old) =>
         old
-          ? { ...old, updatedAt: now, messages: [...old.messages, ...pair] }
-          : { id, title: "", updatedAt: now, messages: pair }
+          ? {
+              ...old,
+              updatedAt: now,
+              contextTokens: contextTokens ?? old.contextTokens,
+              messages: [...old.messages, ...pair],
+            }
+          : { id, title: "", updatedAt: now, contextTokens: contextTokens ?? 0, messages: pair }
       );
       setConversationId(id);
       setTail([]);
@@ -531,12 +545,13 @@ function ChatPanel({
           {/* 가득 찬 대화에는 더 붙일 수 없다(서버도 409). 이어 쓰려면 새 대화뿐이라 그 버튼을 바로 옆에 둔다. */}
           {full && (
             <div className="text-muted-foreground mb-2 flex items-center justify-between gap-2 text-xs">
-              <span>대화가 가득 찼어요 ({MAX_MESSAGES}개). 새 대화에서 이어가 주세요.</span>
+              <span>대화가 가득 찼어요. 새 대화에서 이어가 주세요.</span>
               <Button type="button" size="sm" variant="outline" onClick={newChat}>
                 <SquarePen />새 대화
               </Button>
             </div>
           )}
+          <ContextBar tokens={full ? MAX_CONTEXT_TOKENS : tokens} />
           <div className="border-input bg-muted focus-within:border-ring flex items-end gap-1.5 rounded-xl border p-2 shadow-lg shadow-black/40 transition-colors">
             <textarea
               ref={inputRef}
@@ -554,7 +569,6 @@ function ChatPanel({
               placeholder="Ask anything — Enter to send"
               className="text-foreground placeholder:text-muted-foreground block max-h-42 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent px-0.5 text-sm leading-7 outline-none disabled:cursor-not-allowed disabled:opacity-50"
             />
-            <ContextGauge count={full ? MAX_MESSAGES : count} />
             {pending ? (
               <Button
                 type="button"
@@ -623,24 +637,24 @@ function CollapsibleText({ text }: { text: string }) {
 }
 
 /**
- * 입력창 옆 컨텍스트 게이지: 이 대화가 메시지 상한의 몇 % 를 썼는지.
+ * 입력창 위 한 줄 "Context N%": 마지막 답의 실제 토큰(모델이 알려준 입력+출력)이 상한의 몇 % 인지.
+ * 답이 끝날 때만 바뀐다 — 보내기 전에는 실제 값을 알 수 없어 추정치를 섞지 않는다.
+ * 입력창 안에 두면 버튼과 자리를 다퉈서 따로 한 줄을 준다.
  * 경고 톤부터는 "곧 새 대화를 시작해야 한다"를 먼저 알린다.
  */
-function ContextGauge({ count }: { count: number }) {
-  const ratio = Math.min(count / MAX_MESSAGES, 1);
+function ContextBar({ tokens }: { tokens: number }) {
+  const ratio = Math.min(tokens / MAX_CONTEXT_TOKENS, 1);
+  const warn = ratio >= WARN_RATIO;
   return (
-    <span
-      title={`대화 메시지 ${count}/${MAX_MESSAGES}`}
+    <div
+      title={`${tokens.toLocaleString()} / ${MAX_CONTEXT_TOKENS.toLocaleString()} 토큰`}
       className={cn(
-        "flex h-7 shrink-0 items-center text-[11px] tabular-nums",
-        ratio >= WARN_RATIO ? "text-brand-orange font-semibold" : "text-muted-foreground"
+        "mb-1.5 px-1 text-[11px] tabular-nums",
+        warn ? "text-brand-orange font-semibold" : "text-muted-foreground"
       )}
     >
-      <span aria-hidden>{Math.round(ratio * 100)}%</span>
-      <span className="sr-only">
-        대화 메시지 {count}/{MAX_MESSAGES}
-      </span>
-    </span>
+      Context {Math.round(ratio * 100)}%
+    </div>
   );
 }
 

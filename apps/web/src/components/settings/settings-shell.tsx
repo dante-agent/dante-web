@@ -14,6 +14,7 @@ export function SettingsShell({
   title,
   items,
   footer,
+  replace,
   children,
 }: {
   /** 이 설정이 무엇에 붙는지. "Account" 또는 프로젝트 이름. */
@@ -23,6 +24,8 @@ export function SettingsShell({
   items: SettingsNavItem[];
   /** 링크 목록 아래 (다른 스코프로 건너가는 링크 등). */
   footer?: ReactNode;
+  /** 탭 이동을 히스토리에 쌓지 않는다 (SettingsNav 참고). */
+  replace?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -35,7 +38,7 @@ export function SettingsShell({
           {scope}
         </p>
 
-        <SettingsNav items={items} />
+        <SettingsNav items={items} replace={replace} />
 
         {footer && <div className="border-border mt-5 border-t pt-4">{footer}</div>}
       </div>

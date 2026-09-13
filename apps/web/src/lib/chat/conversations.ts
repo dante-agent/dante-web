@@ -16,8 +16,16 @@ export { isUuid };
 
 export type ChatRole = "user" | "assistant";
 
-/** 대화당 메시지 상한(질문·답 합계). 화면의 "컨텍스트 %"가 이 값을 100% 로 쓴다. */
+/** 대화당 메시지 상한(질문·답 합계). 토큰 상한 전에 걸리는 일은 드물다 — 행 수를 묶는 안전장치. */
 export const MAX_MESSAGES = 50;
+
+/**
+ * 대화당 컨텍스트 토큰 상한. 화면의 "컨텍스트 %"가 이 값을 100% 로 쓴다(ai-chat.tsx 에 같은 값).
+ *
+ * 모델 한계(약 40만)가 아니라 원가로 정했다. 매 질문마다 대화 전체가 입력으로 다시 들어가서
+ * 한 대화의 원가는 길이의 제곱으로 는다. 5만까지 채우면 대략 $0.4 — 인당 월 한도 $5 의 1할이다.
+ */
+export const MAX_CONTEXT_TOKENS = 50_000;
 
 /** 목록 한 페이지. 패널이 좁아서 한 번에 많이 그릴 일이 없다. */
 const PAGE_SIZE = 20;
@@ -88,6 +96,7 @@ export type ConversationDetail = {
   projectId: string;
   title: string;
   updatedAt: Date;
+  contextTokens: number;
   messages: { role: ChatRole; content: string; createdAt: Date }[];
 };
 
@@ -105,6 +114,7 @@ export async function getConversation(
       projectId: true,
       title: true,
       updatedAt: true,
+      contextTokens: true,
       messages: {
         orderBy: { createdAt: "asc" },
         select: { role: true, content: true, createdAt: true },
@@ -150,6 +160,7 @@ export async function saveExchange(input: {
   answer: string;
   filePath: string | null;
   askedAt: Date;
+  contextTokens: number;
 }): Promise<void> {
   const messages = {
     create: [
@@ -170,6 +181,7 @@ export async function saveExchange(input: {
         userId: input.userId,
         projectId: input.projectId,
         title: encryptSecret(titleOf(input.question)),
+        contextTokens: input.contextTokens,
         messages,
       },
     });
@@ -178,7 +190,7 @@ export async function saveExchange(input: {
     // @updatedAt 이 안 바뀔 수 있다 — 그러면 이어 쓴 대화가 목록 위로 안 올라온다.
     await prisma.chatConversation.update({
       where: { id: input.conversationId },
-      data: { updatedAt: new Date(), messages },
+      data: { updatedAt: new Date(), contextTokens: input.contextTokens, messages },
     });
   }
 }

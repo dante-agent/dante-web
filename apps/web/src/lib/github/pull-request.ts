@@ -18,6 +18,20 @@ export function installationClient(installationId: bigint | number) {
   return githubApp().getInstallationOctokit(Number(installationId));
 }
 
+/**
+ * 설치 토큰 원문. runner 가 private 레포를 클론할 때 넘긴다.
+ *
+ * Octokit 클라이언트가 아니라 문자열이 필요한 자리는 여기뿐이다. 1시간 뒤 만료되고,
+ * 권한은 설치에 준 것 그대로다.
+ */
+export async function installationToken(installationId: bigint | number) {
+  const { data } = await githubApp().octokit.request(
+    "POST /app/installations/{installation_id}/access_tokens",
+    { installation_id: Number(installationId) }
+  );
+  return data.token;
+}
+
 export type RepoRef = { owner: string; repo: string };
 
 /**
@@ -157,7 +171,10 @@ export async function upsertCheckRun(
     output: { title: result.title, summary: result.summary },
   };
 
-  if (options.cachedCheckRunId !== null) {
+  if (
+    options.cachedCheckRunId !== null &&
+    (await canReuseCheckRun(octokit, ref, headSha, result, options.cachedCheckRunId))
+  ) {
     try {
       const { data } = await octokit.request(
         "PATCH /repos/{owner}/{repo}/check-runs/{check_run_id}",
@@ -299,4 +316,32 @@ export async function checkRequiredStatus(
   // 룰셋에 없다고 끝이 아니다. classic branch protection 은 이 엔드포인트에
   // 안 나오고, 그걸 읽으려면 우리에게 없는 권한이 필요하다.
   return "unknown";
+}
+
+/**
+ * 캐시된 체크를 고쳐 써도 되는지.
+ *
+ * GitHub 은 끝난(completed) 체크를 PATCH 로 in_progress 로 되돌리지 않는다. 제목만 바뀌고
+ * 상태는 completed 로 남아, 같은 커밋을 다시 돌리면 진행 중인데 결론이 난 것처럼 보인다.
+ * 그래서 진행 중 상태를 쓸 때만 한 번 읽어 보고, 이미 끝났거나 다른 커밋의 체크면 새로 만든다.
+ * 결론을 쓸 때는 읽지 않는다 — completed 위에 completed 는 고쳐 써진다.
+ */
+async function canReuseCheckRun(
+  octokit: Octokit,
+  ref: RepoRef,
+  headSha: string,
+  result: CheckRunResult,
+  checkRunId: number
+) {
+  if (result.status !== "in_progress") return true;
+  try {
+    const { data } = await octokit.request("GET /repos/{owner}/{repo}/check-runs/{check_run_id}", {
+      ...ref,
+      check_run_id: checkRunId,
+    });
+    return data.head_sha === headSha && data.status !== "completed";
+  } catch (error) {
+    if (errorStatus(error) === 404) return false;
+    throw error;
+  }
 }

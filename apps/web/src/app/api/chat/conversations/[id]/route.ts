@@ -33,6 +33,7 @@ export async function GET(
       id: conversation.id,
       title: conversation.title,
       updatedAt: conversation.updatedAt.toISOString(),
+      contextTokens: conversation.contextTokens,
       messages: conversation.messages.map((m) => ({
         role: m.role,
         content: m.content,

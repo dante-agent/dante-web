@@ -1,10 +1,21 @@
 import { after, NextResponse } from "next/server";
-import { createTextStreamResponse, streamText, type ModelMessage } from "ai";
+import {
+  createTextStreamResponse,
+  streamText,
+  type LanguageModelUsage,
+  type ModelMessage,
+} from "ai";
 import { getMonthlyBudgetStatus, reserveAiBudget } from "@/lib/ai/budget";
 import { chatModel, MODEL } from "@/lib/ai/chat-model";
 import { maxCostUsd } from "@/lib/ai/pricing";
 import { settleAiUsage } from "@/lib/ai/usage";
-import { getConversation, isUuid, MAX_MESSAGES, saveExchange } from "@/lib/chat/conversations";
+import {
+  getConversation,
+  isUuid,
+  MAX_CONTEXT_TOKENS,
+  MAX_MESSAGES,
+  saveExchange,
+} from "@/lib/chat/conversations";
 import { getFileText } from "@/lib/github/blob";
 import { TEST_FRAMEWORKS } from "@/lib/projects/frameworks";
 import { getOwnedChatProject, getProjectRepo } from "@/lib/projects/queries";
@@ -88,6 +99,15 @@ const MAX_MESSAGE = 20_000;
  */
 const MAX_OUTPUT_TOKENS = 16_000;
 
+/**
+ * 답 스트림 맨 끝에 붙이는 구분자. 뒤에 이번 턴의 컨텍스트 토큰 수(숫자)가 온다(ai-chat.tsx 에 같은 값).
+ * 헤더는 본문보다 먼저 나가서 끝나야 아는 토큰 수를 실을 수 없다. 모델 답에 나올 일 없는 제어문자(RS).
+ */
+const USAGE_MARK = "\u001e";
+
+/** 이번 턴이 차지한 컨텍스트 = 모델에 넣은 것 + 받은 것. 다음 질문이 이만큼을 들고 간다. */
+const contextTokensOf = (u: LanguageModelUsage) => (u.inputTokens ?? 0) + (u.outputTokens ?? 0);
+
 /** 개인 데이터라 브라우저·CDN 어디에도 남기지 않는다. 모든 응답에 붙인다. */
 const NO_STORE = { "Cache-Control": "private, no-store" };
 
@@ -165,10 +185,13 @@ export async function POST(request: Request) {
       );
     }
     // 질문·답을 한 쌍으로 저장하므로 두 개가 들어갈 자리가 있어야 한다.
-    if (conversation.messages.length + 2 > MAX_MESSAGES) {
+    if (
+      conversation.messages.length + 2 > MAX_MESSAGES ||
+      conversation.contextTokens >= MAX_CONTEXT_TOKENS
+    ) {
       return fail(
         409,
-        `대화가 가득 찼습니다(메시지 ${MAX_MESSAGES}개).\n새 대화로 이어서 물어봐주세요.`,
+        "대화가 가득 찼습니다.\n새 대화로 이어서 물어봐주세요.",
         "conversation_full"
       );
     }
@@ -244,6 +267,7 @@ export async function POST(request: Request) {
           answer: text,
           filePath: file,
           askedAt,
+          contextTokens: contextTokensOf(usage),
         });
       } catch (error) {
         // 답은 이미 화면에 나갔다. 저장 실패로 스트림을 깨지 않고 로그만 남긴다.
@@ -261,8 +285,11 @@ export async function POST(request: Request) {
   const stream = new ReadableStream<string>({
     async pull(controller) {
       const { done, value } = await reader.read();
-      if (done) controller.close();
-      else controller.enqueue(value);
+      if (!done) return controller.enqueue(value);
+      // 토큰 수를 못 받으면 꼬리 없이 닫는다 — 이미 보낸 답을 에러로 깨지 않게. 화면은 이전 값을 둔다.
+      const usage = await Promise.resolve(result.usage).catch(() => null);
+      if (usage) controller.enqueue(USAGE_MARK + contextTokensOf(usage));
+      controller.close();
     },
     cancel() {
       clientGone = true;
