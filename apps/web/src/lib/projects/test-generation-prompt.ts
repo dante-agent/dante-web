@@ -9,6 +9,18 @@ export function testPathFor(filePath: string): string {
 }
 
 /**
+ * PR 에서 만든 테스트의 경로. `src/foo.tsx` → `src/foo.dante.test.tsx`.
+ *
+ * testPathFor 와 따로 두는 이유: 레포에 이미 `foo.test.tsx` 가 있으면 runner 가 그 파일을
+ * 생성본으로 덮어쓰고 돌린다 — 기존 테스트가 사라진 채로 결과가 나온다. `.dante.test` 는
+ * 사람이 쓴 테스트와 겹치지 않고, vitest·jest 기본 규칙(`*.test.*`)에는 그대로 잡힌다.
+ * 추천 화면은 레포에 커밋할 테스트를 만들므로 원래 규칙을 쓴다.
+ */
+export function pullRequestTestPathFor(filePath: string): string {
+  return filePath.replace(/(\.[^./]+)$/, ".dante.test$1");
+}
+
+/**
  * 러너별로 한 줄 덧붙일 지시. 모르는 값이거나 없으면 덧붙이지 않는다.
  *
  * 추천 화면은 러너를 넘기지 않는다 — 그쪽 프롬프트는 이 기능 전과 글자 하나 다르지 않다.
