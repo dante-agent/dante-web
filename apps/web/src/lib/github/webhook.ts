@@ -359,6 +359,7 @@ function notifiableProjects(installationIdValue: bigint, repoId: number) {
       defaultBranch: true,
       installationId: true,
       teamId: true,
+      testFramework: true,
     },
   });
 }
