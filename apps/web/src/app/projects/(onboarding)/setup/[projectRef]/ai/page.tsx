@@ -5,6 +5,7 @@ import { BackLink } from "@/components/projects/back-link";
 import { StepHeader } from "@/components/projects/step-header";
 import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth/user";
+import { accessibleProjectWhere } from "@/lib/teams/access";
 import { ACTIVE_ENGINE } from "@/lib/ai/engine";
 import { finishSetup } from "../actions";
 
@@ -20,7 +21,7 @@ export default async function AiPage({ params }: PageProps<"/projects/setup/[pro
   const { projectRef } = await params;
 
   const project = await prisma.project.findFirst({
-    where: { ref: projectRef, userId: user.id },
+    where: { ref: projectRef, ...accessibleProjectWhere(user.id) },
     select: { repoOwner: true, repoName: true, testFramework: true },
   });
   if (!project) notFound();

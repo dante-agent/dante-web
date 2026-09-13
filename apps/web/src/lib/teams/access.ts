@@ -9,12 +9,36 @@
 
 import { cache } from "react";
 import { notFound } from "next/navigation";
-import { prisma, type TeamRole } from "@dante/db";
+import { prisma, type Prisma, type TeamRole } from "@dante/db";
 import { requireUser } from "@/lib/auth/user";
 
 /** role 이 required 이상인가. owner 는 member 가 하는 일을 전부 한다. */
 export function hasRole(role: TeamRole, required: TeamRole) {
   return required === "member" || role === "owner";
+}
+
+/**
+ * "이 사용자가 멤버인 팀의 프로젝트" 조건. 프로젝트를 읽는 where 에 펼쳐 넣는다.
+ *
+ * 호출부마다 조건을 손으로 쓰지 않고 여기로 모은 이유: userId 로 거르던 곳이 20곳이
+ * 넘는다. 한 곳이라도 조건을 틀리게 쓰면 그 화면만 조용히 뚫린다. 이름으로 grep 하면
+ * 검사가 빠진 조회를 찾을 수 있다.
+ *
+ * required 가 owner 면 owner 인 팀의 프로젝트만 걸린다(프로젝트 삭제).
+ */
+export function accessibleProjectWhere(userId: string, required: TeamRole = "member") {
+  return { team: memberOf(userId, required) } satisfies Prisma.ProjectWhereInput;
+}
+
+/** 설치 버전. 설치도 팀이 가진다. */
+export function accessibleInstallationWhere(userId: string, required: TeamRole = "member") {
+  return { team: memberOf(userId, required) } satisfies Prisma.GithubInstallationWhereInput;
+}
+
+function memberOf(userId: string, required: TeamRole) {
+  return {
+    members: { some: required === "owner" ? { userId, role: "owner" as const } : { userId } },
+  } satisfies Prisma.TeamWhereInput;
 }
 
 /** 이 사용자의 이 팀 역할. 멤버가 아니면 null. */
@@ -62,7 +86,7 @@ export type AccessibleProject = {
 export const getAccessibleProject = cache(
   async (ref: string, userId: string): Promise<AccessibleProject | null> => {
     const row = await prisma.project.findFirst({
-      where: { ref, team: { members: { some: { userId } } } },
+      where: { ref, ...accessibleProjectWhere(userId) },
       select: {
         id: true,
         ref: true,
@@ -71,9 +95,8 @@ export const getAccessibleProject = cache(
       },
     });
 
-    // teamId 가 비어 있는 행은 위 조건에 걸리지 않지만, 타입이 nullable 이라 한 번 더 좁힌다.
-    const role = row?.team?.members[0]?.role;
-    if (!row?.teamId || !role) return null;
+    const role = row?.team.members[0]?.role;
+    if (!row || !role) return null;
     return { id: row.id, ref: row.ref, teamId: row.teamId, role };
   }
 );

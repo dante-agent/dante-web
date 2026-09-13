@@ -3,6 +3,7 @@ import { prisma } from "@dante/db";
 import { RuntimeForm } from "@/components/settings/runtime/runtime-form";
 import { ComingSoon, SettingsHeader } from "@/components/settings/settings-section";
 import { requireUser } from "@/lib/auth/user";
+import { accessibleProjectWhere } from "@/lib/teams/access";
 import { detectRuntimeCommands } from "@/lib/projects/detect-runtime";
 import { resolveRuntimeSettings } from "@/lib/projects/runtime";
 
@@ -19,7 +20,7 @@ export default async function ProjectRuntimePage({
 
   // 권한 검사는 앱 코드에서 (AGENTS.md).
   const project = await prisma.project.findFirst({
-    where: { ref: projectRef, userId: user.id },
+    where: { ref: projectRef, ...accessibleProjectWhere(user.id) },
     select: {
       testFramework: true,
       installCommand: true,
