@@ -1,14 +1,13 @@
 import { formatDistanceToNow } from "date-fns";
-import { ko } from "date-fns/locale";
 import { MoreHorizontal } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import type { AiSession, SessionStatus } from "../mock-data";
 
 const STATUS_LABEL: Record<SessionStatus, string> = {
-  needs_clarification: "확인 필요",
-  in_progress: "진행 중",
-  completed: "완료",
+  needs_clarification: "Needs clarification",
+  in_progress: "In progress",
+  completed: "Completed",
 };
 
 const STATUS_VARIANT: Record<SessionStatus, "outline" | "secondary" | "default"> = {
@@ -35,7 +34,7 @@ export function SessionList({
             <span className="min-w-0 flex-1 truncate text-sm">{session.title}</span>
             <Badge variant={STATUS_VARIANT[session.status]}>{STATUS_LABEL[session.status]}</Badge>
             <span className="text-muted-foreground w-20 shrink-0 text-right text-xs">
-              {formatDistanceToNow(new Date(session.updatedAt), { addSuffix: true, locale: ko })}
+              {formatDistanceToNow(new Date(session.updatedAt), { addSuffix: true })}
             </span>
           </Link>
           <button

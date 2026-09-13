@@ -63,7 +63,7 @@ export function CodePanel({ code }: { code: SessionDetail["code"] }) {
           type="button"
           onClick={() => setCollapsed((c) => !c)}
           className="text-muted-foreground hover:text-foreground shrink-0"
-          aria-label={collapsed ? "diff 펼치기" : "diff 접기"}
+          aria-label={collapsed ? "Expand diff" : "Collapse diff"}
         >
           {collapsed ? <ChevronRight className="size-3.5" /> : <ChevronDown className="size-3.5" />}
         </button>
@@ -81,7 +81,7 @@ export function CodePanel({ code }: { code: SessionDetail["code"] }) {
           type="button"
           onClick={copy}
           className="text-muted-foreground hover:text-foreground ml-1 flex items-center gap-1"
-          aria-label="코드 복사"
+          aria-label="Copy code"
         >
           {copied ? <Check className="text-brand-mint size-3.5" /> : <Copy className="size-3.5" />}
         </button>

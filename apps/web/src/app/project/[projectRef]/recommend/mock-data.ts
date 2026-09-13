@@ -14,25 +14,25 @@ export const recommendMock = {
   sessions: [
     {
       id: "s-1",
-      title: "CheckoutForm 결제 검증 로직 테스트 생성",
+      title: "Generate tests for CheckoutForm payment validation logic",
       status: "needs_clarification",
       updatedAt: "2026-09-10T14:20:00+09:00",
     },
     {
       id: "s-2",
-      title: "useAuth 훅 토큰 갱신 케이스",
+      title: "useAuth hook token refresh cases",
       status: "in_progress",
       updatedAt: "2026-09-10T13:05:00+09:00",
     },
     {
       id: "s-3",
-      title: "PricingTable 조건부 렌더링",
+      title: "PricingTable conditional rendering",
       status: "completed",
       updatedAt: "2026-09-10T09:40:00+09:00",
     },
     {
       id: "s-4",
-      title: "OrderSummary API 에러 핸들링",
+      title: "OrderSummary API error handling",
       status: "completed",
       updatedAt: "2026-09-09T18:12:00+09:00",
     },

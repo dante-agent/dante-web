@@ -38,22 +38,22 @@ export interface SessionDetail {
 
 export const sessionDetailMock: SessionDetail = {
   id: "s-1",
-  title: "formatDateKoreanYMD 테스트 파일 생성",
+  title: "Generate formatDateKoreanYMD test file",
   readOnly: true,
   targetFile: "src/shared/lib/formatDateKoreanYMD.ts",
   branch: "test/format-date-korean-ymd-8288460042810619024",
   timeSpent: "15 mins",
   summary: {
     what: [
-      "`formatDateKoreanYMD` 에 대한 Vitest 테스트 파일을 새로 생성했습니다.",
-      "유효한 날짜 · 유효하지 않은 날짜 · 경계값(월/일 자리수) 케이스를 각각 검증합니다.",
-      "`Intl.DateTimeFormat` 의 `timeZone: 'Asia/Seoul'` 적용 결과를 스냅샷으로 고정했습니다.",
+      "Created a new Vitest test file for `formatDateKoreanYMD`.",
+      "Verifies valid dates, invalid dates, and boundary (month/day digit) cases.",
+      "Snapshots the result of applying `timeZone: 'Asia/Seoul'` with `Intl.DateTimeFormat`.",
     ],
     why: [
-      "날짜 포맷 로직은 타임존·로케일에 민감해 회귀가 잘 생기는데 테스트가 없었습니다.",
-      "유효하지 않은 입력에 `Invalid Date` 를 반환하는 계약을 테스트로 못박아 둡니다.",
+      "Date formatting logic is sensitive to timezone and locale and regresses easily, but had no tests.",
+      "Locks in the contract of returning `Invalid Date` for invalid input.",
     ],
-    verification: ["`pnpm vitest run formatDateKoreanYMD` 로 6개 케이스 전부 통과를 확인했습니다."],
+    verification: ["Confirmed all 6 cases pass with `pnpm vitest run formatDateKoreanYMD`."],
   },
   code: {
     changeType: "A",
@@ -79,7 +79,7 @@ export const sessionDetailMock: SessionDetail = {
         kind: "add",
         oldNo: null,
         newNo: 5,
-        text: '  it("유효한 ISO 날짜를 YYYY. MM. DD. 로 변환한다", () => {',
+        text: '  it("converts a valid ISO date to YYYY. MM. DD.", () => {',
       },
       {
         kind: "add",
@@ -93,7 +93,7 @@ export const sessionDetailMock: SessionDetail = {
         kind: "add",
         oldNo: null,
         newNo: 9,
-        text: '  it("한 자리 월/일도 2자리로 채운다", () => {',
+        text: '  it("pads single-digit month/day to two digits", () => {',
       },
       {
         kind: "add",
@@ -107,7 +107,7 @@ export const sessionDetailMock: SessionDetail = {
         kind: "add",
         oldNo: null,
         newNo: 13,
-        text: '  it("유효하지 않은 날짜엔 Invalid Date 를 반환한다", () => {',
+        text: '  it("returns Invalid Date for an invalid date", () => {',
       },
       {
         kind: "add",
@@ -121,7 +121,7 @@ export const sessionDetailMock: SessionDetail = {
         kind: "add",
         oldNo: null,
         newNo: 17,
-        text: '  it("Asia/Seoul 기준으로 자정 경계를 처리한다", () => {',
+        text: '  it("handles the midnight boundary in Asia/Seoul", () => {',
       },
       {
         kind: "add",
