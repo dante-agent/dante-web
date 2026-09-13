@@ -16,7 +16,14 @@ export type SettingsNavItem = {
   label: string;
 };
 
-export function SettingsNav({ items }: { items: SettingsNavItem[] }) {
+export function SettingsNav({
+  items,
+  replace,
+}: {
+  items: SettingsNavItem[];
+  /** 탭 이동을 히스토리에 쌓지 않는다. 뒤로가기가 탭이 아니라 들어온 페이지로 가게. */
+  replace?: boolean;
+}) {
   const pathname = usePathname();
 
   return (
@@ -28,6 +35,7 @@ export function SettingsNav({ items }: { items: SettingsNavItem[] }) {
           <Link
             key={href}
             href={href}
+            replace={replace}
             aria-current={active ? "page" : undefined}
             className={cn(
               "-ml-2.5 rounded-[4px] px-2.5 py-1.5 text-[13px] transition-colors duration-[180ms] ease-out",
