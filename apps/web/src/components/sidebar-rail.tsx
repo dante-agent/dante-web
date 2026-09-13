@@ -25,6 +25,8 @@ export type RailItem = {
   Icon: LucideIcon;
   /** 이 섹션에 서브 사이드바가 있나. 있으면 활성 상태에서 재클릭 = 접기/펼치기. */
   togglesSubSidebar?: boolean;
+  /** 있으면 일반 클릭은 이걸 부르고 href 이동은 막는다. 새 탭 열기(⌘/Ctrl·휠 클릭)는 href 로. */
+  onClick?: () => void;
 };
 
 export function SidebarRail({ items }: { items: RailItem[] }) {
@@ -33,7 +35,7 @@ export function SidebarRail({ items }: { items: RailItem[] }) {
 
   return (
     <aside className="group/rail bg-sidebar border-sidebar-border fixed top-[47px] bottom-0 left-0 z-30 flex w-14 flex-col gap-1 overflow-hidden border-r p-2 transition-[width] duration-200 hover:w-56 has-[:focus-visible]:w-56">
-      {items.map(({ href, label, Icon, togglesSubSidebar }) => {
+      {items.map(({ href, label, Icon, togglesSubSidebar, onClick }) => {
         const active = pathname.startsWith(href);
         const toggles = active && togglesSubSidebar;
 
@@ -75,6 +77,14 @@ export function SidebarRail({ items }: { items: RailItem[] }) {
           <Link
             key={href}
             href={href}
+            onClick={
+              onClick &&
+              ((e) => {
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+                e.preventDefault();
+                onClick();
+              })
+            }
             aria-label={label}
             aria-current={active ? "page" : undefined}
             className={className}

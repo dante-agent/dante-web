@@ -44,8 +44,9 @@ model User {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  installations      GithubInstallation[]
-  projects           Project[]
+  /// 이 사람이 연결한 설치·만든 프로젝트. 주인은 팀이라 권한과는 무관한 기록이다.
+  createdInstallations GithubInstallation[]
+  createdProjects      Project[]
   extensionAuthCodes ExtensionAuthCode[]
   extensionTokens    ExtensionToken[]
   aiUsage            AiUsage[]
@@ -176,8 +177,9 @@ model TeamInvite {
 model GithubInstallation {
   /// GitHub 이 발급한 설치 ID. 우리가 만드는 값이 아니라 GitHub 것이라 그대로 PK.
   id           BigInt    @id
-  /// 설치를 연결한 사람. 이관이 끝나면 teamId 로 대체된다.
-  userId       String    @map("user_id") @db.Uuid
+  /// 설치를 처음 연결한 사람. 기록일 뿐 권한에는 쓰지 않는다(주인은 teamId).
+  /// 컬럼 이름은 user_id 그대로 둔다 — 이름을 바꾸면 배포 순서에 따라 옛 코드가 깨진다.
+  createdById  String?   @map("user_id") @db.Uuid
   /// 설치의 주인. 설치 ID 가 PK 라서 설치 1건은 팀 1개만 가진다.
   /// 한 번 정해지면 다시 연결해도 바뀌지 않는다(api/github/setup).
   teamId       String    @map("team_id") @db.Uuid
@@ -198,11 +200,12 @@ model GithubInstallation {
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  team     Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  projects Project[]
+  /// SetNull: 연결한 사람이 계정을 지워도 팀의 설치와 그 아래 프로젝트는 남는다.
+  createdBy User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  team      Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  projects  Project[]
 
-  @@index([userId])
+  @@index([createdById])
   @@index([teamId])
   @@map("github_installations")
 }
@@ -265,8 +268,9 @@ model Project {
   /// 문자열인 이유는 testFramework 와 같다 — 값이 늘 때마다 마이그레이션하지 않으려고.
   disconnectedReason String?   @map("disconnected_reason")
 
-  /// 프로젝트를 만든 사람. 이관이 끝나면 teamId 로 대체된다.
-  userId         String @map("user_id") @db.Uuid
+  /// 프로젝트를 만든 사람. 기록일 뿐 권한에는 쓰지 않는다(주인은 teamId).
+  /// 컬럼 이름은 GithubInstallation.createdById 와 같은 이유로 user_id 그대로다.
+  createdById    String? @map("user_id") @db.Uuid
   /// 프로젝트의 주인. 레포를 열어준 설치와 같은 팀이다.
   teamId         String @map("team_id") @db.Uuid
   installationId BigInt @map("installation_id")
@@ -274,7 +278,8 @@ model Project {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// SetNull: 만든 사람이 계정을 지워도 팀의 프로젝트는 남는다.
+  createdBy    User?              @relation(fields: [createdById], references: [id], onDelete: SetNull)
   team         Team               @relation(fields: [teamId], references: [id], onDelete: Cascade)
   installation GithubInstallation @relation(fields: [installationId], references: [id], onDelete: Cascade)
   components   Component[]
