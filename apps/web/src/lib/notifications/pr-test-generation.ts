@@ -30,8 +30,9 @@ const MAX_FILES_TO_GENERATE = 10;
 /**
  * 파일을 하나씩 차례로 만든다.
  *
- * 동시에 부르지 않는 이유: 한도 검사는 호출 전, 기록은 호출 후라(budget.ts 의 "경합")
- * 한꺼번에 보내면 한도를 넘은 뒤에도 전부 나간다. 파일마다 다시 보고 넘었으면 멈춘다.
+ * 동시에 부르지 않는 이유: 호출마다 원가 상한을 예약하므로(budget.ts reserveAiBudget)
+ * 한꺼번에 보내면 파일 10개 몫의 상한이 한 번에 잡혀 한도가 남았는데도 뒤 파일이 막힐 수 있다.
+ * 파일마다 다시 보고 넘었으면 멈춘다.
  */
 export async function generatePullRequestTests(args: {
   userId: string;
@@ -51,14 +52,15 @@ export async function generatePullRequestTests(args: {
     }
 
     try {
-      const { testPath, code } = await generateTestCode({
+      const generated = await generateTestCode({
         userId: args.userId,
         projectId: args.projectId,
         filePath,
         source,
         testFramework: args.testFramework,
       });
-      result.tests.push({ filePath, testPath, code });
+      if (!generated) return { ...result, stopped: "budget-exceeded" };
+      result.tests.push({ filePath, ...generated });
     } catch (error) {
       console.error("[pr-test-generation] 테스트 생성 실패", { filePath, error });
       result.failedFiles.push(filePath);

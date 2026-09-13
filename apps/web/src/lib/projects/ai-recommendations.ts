@@ -9,11 +9,18 @@
 
 import { generateObject } from "ai";
 import { z } from "zod";
-import { getMonthlyBudgetStatus } from "@/lib/ai/budget";
-import { chatModel } from "@/lib/ai/chat-model";
-import { recordAiUsage } from "@/lib/ai/usage";
+import { reserveAiBudget } from "@/lib/ai/budget";
+import { chatModel, MODEL } from "@/lib/ai/chat-model";
+import { maxCostUsd } from "@/lib/ai/pricing";
+import { settleAiUsage, usageFromError } from "@/lib/ai/usage";
 import type { ProjectRepo } from "@/lib/projects/queries";
 import { getTestRecommendations, type TestRecommendation } from "./recommendations";
+
+/**
+ * 출력 토큰 상한(추론 토큰 포함). 후보 30개에 한 줄 사유씩이라 JSON 은 수천 토큰이면 된다.
+ * 예약 금액(원가 상한)을 이 값으로 묶는다.
+ */
+const MAX_OUTPUT_TOKENS = 8_000;
 
 const rankingSchema = z.object({
   items: z.array(
@@ -55,23 +62,28 @@ export async function getAiTestRecommendations(args: {
   if (candidates.length === 0) return { recommendations: [], outcome: "ranked" };
 
   // 이번 달 예산을 넘겼으면 AI 를 부르지 않고 휴리스틱 결과를 그대로 준다.
-  const budget = await getMonthlyBudgetStatus(args.userId);
-  if (budget.exceeded) return { recommendations: candidates, outcome: "budget" };
+  // 통과하면 이 호출의 원가 상한을 먼저 잡아둔다(동시 요청이 함께 한도를 뚫지 못하게).
+  const prompt = buildPrompt(candidates);
+  const reserved = await reserveAiBudget({
+    userId: args.userId,
+    projectId: args.projectId,
+    surface: "recommend",
+    estimateUsd: maxCostUsd(MODEL, { prompt, maxOutputTokens: MAX_OUTPUT_TOKENS }),
+  });
+  if (!reserved.ok) return { recommendations: candidates, outcome: "budget" };
+  const { reservation } = reserved;
 
   try {
     const { object, usage } = await generateObject({
       model: chatModel(),
       schema: rankingSchema,
-      prompt: buildPrompt(candidates),
+      prompt,
+      maxOutputTokens: MAX_OUTPUT_TOKENS,
     });
-    await recordAiUsage({
-      userId: args.userId,
-      projectId: args.projectId,
-      surface: "recommend",
-      usage,
-    });
+    await settleAiUsage(reservation, usage);
     return { recommendations: mergeRanking(candidates, object.items), outcome: "ranked" };
   } catch (error) {
+    await settleAiUsage(reservation, usageFromError(error));
     console.error("[ai-recommend] 랭킹 실패, 휴리스틱으로 폴백", error);
     return { recommendations: candidates, outcome: "error" };
   }

@@ -60,6 +60,35 @@ export function costUsd(model: string, tokens: TokenCounts): number | null {
   return Number(usd.toFixed(6));
 }
 
+/**
+ * 프롬프트 바이트 수로 셀 수 없는 입력(메시지 구분자, generateObject 의 JSON 스키마 등)의
+ * 여유분. 스키마가 수백 토큰이라 넉넉히 잡았다.
+ */
+const PROMPT_OVERHEAD_TOKENS = 2_000;
+
+/**
+ * 호출 1건의 원가 상한(USD). 호출 전 예약(budget.ts reserveAiBudget)에 쓴다.
+ *
+ * 입력 토큰은 UTF-8 바이트 수를 넘지 않는다 — 토큰 하나는 적어도 1바이트다. 그래서 실제
+ * 토큰 수를 몰라도 바이트 수로 위에서 막을 수 있다(한국어·영어 모두 실제보다 3~4배 크게
+ * 잡힌다). 출력은 호출에 건 maxOutputTokens 가 상한이다(추론 토큰도 여기에 들어간다).
+ * 캐시 할인은 무시한다 — 상한이니까.
+ *
+ * 단가를 모르는 모델이면 던진다. 호출 전이라 막아야 한다(costUsd 가 null 을 주는 것과 반대).
+ */
+export function maxCostUsd(
+  model: string,
+  { prompt, maxOutputTokens }: { prompt: string; maxOutputTokens: number }
+): number {
+  const rate = RATES[model];
+  if (!rate) throw new Error(`단가표에 없는 모델입니다: ${model}`);
+
+  const inputTokens = Buffer.byteLength(prompt, "utf8") + PROMPT_OVERHEAD_TOKENS;
+  const usd = (inputTokens * rate.input + maxOutputTokens * rate.output) / PER_MILLION;
+  // 상한이라 올림으로 자른다. 내리면 상한보다 작아진다.
+  return Math.ceil(usd * PER_MILLION) / PER_MILLION;
+}
+
 /** 단가를 아는 모델인지. 배포 전 점검이나 테스트에서 쓴다. */
 export function hasRate(model: string): boolean {
   return model in RATES;
