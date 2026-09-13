@@ -11,9 +11,8 @@ import {
   fetchPullRequest,
   installationClient,
 } from "@/lib/github/pull-request";
-import { deliverRunSummary, type PullRequestContext } from "@/lib/notifications/deliver";
-import { danteLinks } from "@/lib/notifications/links";
-import { queuedRun } from "@/lib/notifications/run-summary";
+import type { PullRequestContext } from "@/lib/notifications/deliver";
+import { enqueuePullRequestJob } from "@/lib/notifications/pull-request-job";
 import {
   clampFailedLimit,
   COMMENT_FIELDS,
@@ -43,6 +42,12 @@ async function requireProject(projectRef: string) {
       repoName: true,
       defaultBranch: true,
       installationId: true,
+      // 재시도가 PR 작업을 다시 돌린다(pull-request-job.ts 의 JobProject).
+      teamId: true,
+      testFramework: true,
+      installCommand: true,
+      testCommand: true,
+      testTimeoutMs: true,
     },
   });
 
@@ -219,7 +224,9 @@ export async function retryDelivery(formData: FormData) {
     return;
   }
 
-  await deliverRunSummary(project, pr, queuedRun(danteLinks(project.ref, prNumber)));
+  // queued 를 바로 보내지 않고 작업을 다시 돌린다. 체크가 in_progress 로 나가는데
+  // 결론을 채워줄 작업이 없으면 그 체크는 영원히 돈다.
+  await enqueuePullRequestJob(project, pr);
 
   revalidatePath(settingsPath(project.ref));
 }

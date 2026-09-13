@@ -51,6 +51,7 @@ describe("parseReport", () => {
           message: "AssertionError: expected 1 to be 2",
         },
       ],
+      files: [{ file: "src/Sidebar.test.tsx", total: 2, passed: 1, failed: 1 }],
     });
   });
 
