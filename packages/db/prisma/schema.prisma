@@ -37,6 +37,10 @@ model User {
   /// AI 월 한도를 정하는 플랜. null 이면 환경변수 AI_MONTHLY_BUDGET_USD 가 기본 한도다
   /// (apps/web/src/lib/ai/budget.ts). 가입할 때 플랜을 고르는 흐름이 없어서 대부분 null 이다.
   aiPlanId    String?  @map("ai_plan_id") @db.Uuid
+  /// 생성 품질 기본값. "standard" | "deep" (apps/web/src/lib/ai/quality.ts).
+  /// 문자열인 이유는 testFramework 와 같다 — 단계가 늘 때마다 마이그레이션하지 않으려고.
+  /// 권한에 쓰이는 값이 아니라서 모르는 값이 들어와도 standard 로 읽으면 된다.
+  aiQuality   String   @default("standard") @map("ai_quality")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
