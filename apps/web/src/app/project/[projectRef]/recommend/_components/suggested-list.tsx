@@ -1,6 +1,6 @@
 import { FileCode2, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import type { RecommendationPriority, TestRecommendation } from "../mock-data";
+import type { RecommendationPriority, TestRecommendation } from "@/lib/projects/recommendations";
 
 const PRIORITY_LABEL: Record<RecommendationPriority, string> = {
   high: "높음",
