@@ -110,9 +110,8 @@ export function ExtensionConsent({
 
   return (
     <>
-      <h1 className="font-heading text-2xl font-semibold tracking-tight">
-        Connect {editor} to Dante?
-      </h1>
+      {/* 에디터 이름은 버튼에 남긴다. 시작한 에디터와 다르면 멈추라는 단서다. */}
+      <h1 className="font-heading text-2xl font-semibold tracking-tight">Connect to Dante?</h1>
       <p className="text-muted-foreground mt-2 text-sm">
         The Dante extension will read your projects and tests and upload test results as{" "}
         <span className="text-foreground">{account}</span>.
