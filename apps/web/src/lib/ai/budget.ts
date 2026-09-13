@@ -49,10 +49,8 @@ const LIMIT_ENV = "AI_MONTHLY_BUDGET_USD";
  * 입력 5k + 출력 0.8k ≈ $0.02 다. 그 2~3배를 잡아뒀다 — 틀리더라도 한도가 느슨해지는
  * 쪽이 아니라 빡빡해지는 쪽으로 틀린다.
  *
- * 이건 어디까지나 임시 방편이다. 근본 해결은 단가표에 없는 모델은 아예 부르지 않는
- * 것인데(배포 시점 점검), 그건 이 PR 범위를 넘는다. pricing.ts 의 `hasRate()` 가
- * 그 용도로 이미 나와 있다.
- * ponytail: 배포 전 점검으로 hasRate(MODEL) 을 강제하면 이 상수는 (1) 만 덮으면 된다.
+ * (2) 는 이제 next.config.ts 가 막는다 — 단가표에 없는 MODEL 이면 빌드와 dev 서버가
+ * 뜨지 않는다. 그래서 이 상수가 실제로 덮는 건 (1) 뿐이다.
  */
 const UNKNOWN_CALL_COST_USD = 0.05;
 

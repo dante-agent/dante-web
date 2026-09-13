@@ -6,6 +6,7 @@ import { fetchInstallation } from "@/lib/github/app";
 import { listInstallationRepos } from "@/lib/github/repos";
 import { INSTALL_STATE_COOKIE, matchesState } from "@/lib/github/state";
 import { createClient } from "@/lib/supabase/server";
+import { getTeamRole } from "@/lib/teams/access";
 
 // GitHub App 설치가 끝나면 GitHub 이 여기로 돌려보낸다 (App 설정의 Setup URL).
 // 쿼리로 installation_id, setup_action, state 가 온다.
@@ -81,10 +82,26 @@ export async function GET(request: Request) {
     return back({ error: "mismatch" });
   }
 
-  await syncUser(user);
+  const { personalTeamId } = await syncUser(user);
+
+  // 5) 이미 다른 팀이 가진 설치면 가져가지 않는다.
+  //    설치 1건은 팀 1개만 가진다(설치 ID 가 PK). 조직 설치는 위에서 본인 것인지
+  //    확인하지 못하므로, 여기서 막지 않으면 설치 흐름을 시작한 뒤 installation_id 만
+  //    바꾼 요청으로 남의 팀 설치와 거기 딸린 프로젝트를 자기 팀으로 옮길 수 있다.
+  //    같은 설치를 함께 쓰려면 그 팀에 초대받아야 한다.
+  const existing = await prisma.githubInstallation.findUnique({
+    where: { id: BigInt(installationId) },
+    select: { teamId: true },
+  });
+  if (existing && !(await getTeamRole(existing.teamId, user.id))) {
+    return back({ error: "taken" });
+  }
+
+  // 이미 있으면 그 팀에 그대로 둔다(멤버가 레포를 추가하러 GitHub 에 다녀온 경우).
+  // 새 설치는 팀 전환이 붙기 전까지 연결한 사람의 개인 팀에 붙인다.
+  const teamId = existing?.teamId ?? personalTeamId;
 
   const fields = {
-    userId: user.id,
     accountLogin: account.login,
     accountId: BigInt(account.id),
     accountType: account.type ?? "User",
@@ -93,11 +110,13 @@ export async function GET(request: Request) {
 
   await prisma.githubInstallation.upsert({
     where: { id: BigInt(installationId) },
-    create: { id: BigInt(installationId), ...fields },
+    create: { id: BigInt(installationId), userId: user.id, teamId, ...fields },
+    // 주인(teamId)과 처음 연결한 사람(userId)은 덮지 않는다. 두 사람이 같은 새 설치로
+    // 동시에 들어와도, 먼저 만든 쪽의 팀이 남는다.
     update: fields,
   });
 
-  await relinkProjects(user.id, installationId);
+  await relinkProjects(teamId, installationId);
 
   return back({ installation_id: String(installationId) });
 }
@@ -114,10 +133,10 @@ export async function GET(request: Request) {
  * 레포를 추가·제거한 뒤에도 여기로 오므로(Redirect on update), 설치에서 뺐다가
  * 다시 열어준 레포도 이 경로로 되살아난다.
  *
- * repoId 로만 찾고 userId 로 거른다. repoId 는 GitHub 것이라 남의 프로젝트와
- * 겹칠 수 있다 — 같은 공개 레포를 둘이 각자 연결한 경우다.
+ * repoId 로 찾고 설치를 가진 팀으로 거른다. repoId 는 GitHub 것이라 다른 팀의
+ * 프로젝트와 겹칠 수 있다 — 같은 공개 레포를 두 팀이 각자 연결한 경우다.
  */
-async function relinkProjects(userId: string, installationId: number) {
+async function relinkProjects(teamId: string, installationId: number) {
   let repos;
   try {
     repos = await listInstallationRepos(installationId);
@@ -132,7 +151,7 @@ async function relinkProjects(userId: string, installationId: number) {
   if (repoIds.length === 0) return;
 
   await prisma.project.updateMany({
-    where: { userId, repoId: { in: repoIds } },
+    where: { teamId, repoId: { in: repoIds } },
     data: {
       installationId: BigInt(installationId),
       disconnectedAt: null,

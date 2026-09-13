@@ -6,6 +6,7 @@ import { RepoPicker } from "@/components/projects/repo-picker";
 import { StepHeader } from "@/components/projects/step-header";
 import { buttonVariants } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth/user";
+import { accessibleInstallationWhere, accessibleProjectWhere } from "@/lib/teams/access";
 import { installationSettingsUrl } from "@/lib/github/app";
 import { listInstallationRepos, type InstallationRepo } from "@/lib/github/repos";
 
@@ -28,13 +29,13 @@ export default async function GitHubConnectPage({
   // 통째로 사라진다(onDelete: Cascade) — GitHub 에 물어보면 실패라서, 남겨두면
   // 재설치하고 돌아온 사용자에게 "일부 설치의 레포를 못 읽었다" 빨간 배너가 뜬다.
   const connected = await prisma.githubInstallation.findMany({
-    where: { userId: user.id, suspendedAt: null, deletedAt: null },
+    where: { ...accessibleInstallationWhere(user.id), suspendedAt: null, deletedAt: null },
     orderBy: { createdAt: "asc" },
   });
 
   // 이미 프로젝트로 만든 레포는 다시 고를 수 없게 표시한다.
   const projects = await prisma.project.findMany({
-    where: { userId: user.id },
+    where: accessibleProjectWhere(user.id),
     select: { ref: true, repoId: true },
   });
   const refByRepoId = new Map(projects.map((p) => [p.repoId.toString(), p.ref]));
@@ -164,6 +165,9 @@ function errorMessage(code: string) {
       return "The GitHub account you installed with is not the one you signed in with.";
     case "account":
       return "Enterprise accounts are not supported yet.";
+    case "taken":
+      // 설치 1건은 팀 1개만 가진다(api/github/setup). 가져가게 두면 남의 프로젝트가 옮겨 온다.
+      return "This GitHub installation is already connected to another team. Ask someone on that team to invite you.";
     case "installation":
       // installation_id 가 없거나 GitHub 에 그 설치가 없다. 설치를 중간에 취소했거나
       // Setup URL 을 직접 열어본 경우다.

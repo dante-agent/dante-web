@@ -2,9 +2,32 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@dante/db";
+import { parseAiQuality } from "@/lib/ai/quality";
 import { requireUser } from "@/lib/auth/user";
 
 const EXTENSION_SETTINGS_PATH = "/account/settings/extension";
+const AI_SETTINGS_PATH = "/account/settings/ai";
+
+export type SaveState = { error?: string; saved?: boolean } | null;
+
+/**
+ * 생성 품질 기본값 저장.
+ *
+ * 폼 값은 클라이언트가 보낸 문자열이라 quality.ts 의 선택지로 좁힌 뒤에만 쓴다.
+ * 모르는 값을 그대로 저장하면 읽는 쪽이 매번 standard 로 되돌려 읽게 되고, 화면에는
+ * 저장됐다고 뜬다.
+ */
+export async function saveAiQuality(_prev: SaveState, formData: FormData): Promise<SaveState> {
+  const user = await requireUser();
+
+  const quality = parseAiQuality(formData.get("quality"));
+  if (!quality) return { error: "Pick Standard or Deep." };
+
+  await prisma.user.update({ where: { id: user.id }, data: { aiQuality: quality } });
+
+  revalidatePath(AI_SETTINGS_PATH);
+  return { saved: true };
+}
 
 /** uuid 모양만 본다. @db.Uuid 컬럼에 아무 문자열이나 넣으면 Postgres 가 던진다. */
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
