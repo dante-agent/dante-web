@@ -1,8 +1,9 @@
 import { after, NextResponse } from "next/server";
 import { createTextStreamResponse, streamText, type ModelMessage } from "ai";
-import { getMonthlyBudgetStatus } from "@/lib/ai/budget";
-import { chatModel } from "@/lib/ai/chat-model";
-import { recordAiUsage } from "@/lib/ai/usage";
+import { getMonthlyBudgetStatus, reserveAiBudget } from "@/lib/ai/budget";
+import { chatModel, MODEL } from "@/lib/ai/chat-model";
+import { maxCostUsd } from "@/lib/ai/pricing";
+import { settleAiUsage } from "@/lib/ai/usage";
 import { getConversation, isUuid, MAX_MESSAGES, saveExchange } from "@/lib/chat/conversations";
 import { getFileText } from "@/lib/github/blob";
 import { TEST_FRAMEWORKS } from "@/lib/projects/frameworks";
@@ -80,11 +81,26 @@ function fileBlock(path: string, text: string): string {
 /** 질문 한 개의 글자 상한. 붙여 넣은 코드 한 덩어리는 들어가고, 파일 통째로는 안 들어가는 선. */
 const MAX_MESSAGE = 20_000;
 
+/**
+ * 답 한 번의 출력 토큰 상한(추론 토큰 포함). 호출 전 예약 금액(원가 상한)을 이 값으로 묶는다
+ * — 상한이 없으면 예약을 얼마로 잡아야 할지 알 수 없다. 짧게 답하라고 지시하는 채팅이라
+ * 보통은 여기에 한참 못 미친다. 이 값에서 출력 원가 상한은 $0.224 다.
+ */
+const MAX_OUTPUT_TOKENS = 16_000;
+
 /** 개인 데이터라 브라우저·CDN 어디에도 남기지 않는다. 모든 응답에 붙인다. */
 const NO_STORE = { "Cache-Control": "private, no-store" };
 
 function fail(status: number, error: string, code?: string) {
   return NextResponse.json({ error, ...(code && { code }) }, { status, headers: NO_STORE });
+}
+
+function budgetExceeded(limitUsd: number) {
+  return fail(
+    402,
+    `이번 달 AI 사용 한도($${limitUsd})를 모두 썼습니다.\n` +
+      `한도는 매월 1일에 초기화됩니다. 더 필요하면 문의해주세요.`
+  );
 }
 
 type Body = { projectRef?: unknown; conversationId?: unknown; file?: unknown; message?: unknown };
@@ -121,14 +137,10 @@ export async function POST(request: Request) {
   // 끊긴다) 오히려 해롭다. 402 는 RFC 9110 에서 아직 "reserved" 지만 실무에서는 "결제·쿼터
   // 문제라 재시도해도 안 된다"는 뜻으로 굳었다. 나중에 분당 호출 제한을 붙이면 그건 429 로
   // 두면 되고, 두 상황이 상태코드로 구분되는 게 클라이언트 입장에서도 낫다.
+  //
+  // 여기는 락 없는 사전 검사다. 동시 요청을 실제로 막는 건 모델 호출 직전의 reserveAiBudget.
   const budget = await getMonthlyBudgetStatus(user.id);
-  if (budget.exceeded) {
-    return fail(
-      402,
-      `이번 달 AI 사용 한도($${budget.limitUsd})를 모두 썼습니다.\n` +
-        `한도는 매월 1일에 초기화됩니다. 더 필요하면 문의해주세요.`
-    );
-  }
+  if (budget.exceeded) return budgetExceeded(budget.limitUsd);
 
   // 대화는 프로젝트에 붙어 저장되므로 프로젝트 없이는 받지 않는다. 권한 확인을 겸한다
   // (projectRef 는 클라이언트가 보낸 값이다). 없음과 권한 없음을 구분하지 않는다.
@@ -181,21 +193,45 @@ export async function POST(request: Request) {
   // 모델 호출과 떼어서 알아야 한다.
   let clientGone = false;
 
+  // 모델을 부르기 직전에 원가 상한을 예약한다. 위의 반환(404·409 등)을 모두 지난 뒤라
+  // 예약이 정산 없이 버려지는 경로가 없다. chatModel() 도 예약 전에 불러 둔다 — 키가 없어
+  // 던지면 예약이 남는다.
+  const model = chatModel();
+  const system = systemPrompt(runner) + context;
+  const messages: ModelMessage[] = [...history, { role: "user", content: message }];
+  const reserved = await reserveAiBudget({
+    userId: user.id,
+    projectId: project.id,
+    surface: "chat",
+    // 메시지는 JSON 으로 센다. 모양이 무엇이든 본문 바이트 이상이 된다(이스케이프는 늘리기만 한다).
+    estimateUsd: maxCostUsd(MODEL, {
+      prompt: system + JSON.stringify(messages),
+      maxOutputTokens: MAX_OUTPUT_TOKENS,
+    }),
+  });
+  if (!reserved.ok) return budgetExceeded(reserved.budget.limitUsd);
+  const { reservation } = reserved;
+
   const result = streamText({
-    model: chatModel(),
-    system: systemPrompt(runner) + context,
-    messages: [...history, { role: "user", content: message }],
+    model,
+    system,
+    messages,
+    maxOutputTokens: MAX_OUTPUT_TOKENS,
     // abortSignal 을 넘기지 않는다. 넘기면 중단 시 onFinish 가 오지 않고(onAbort 는 토큰 수를
     // 주지 않는다) 이미 쓴 토큰이 사용량에 안 남는다 — 답이 거의 끝날 때마다 중단을 누르면
     // 월 한도를 우회해 원가를 쓸 수 있다. 그래서 중단돼도 생성은 끝까지 가고, 그 비용은
     // 사용자 한도에 정확히 잡힌다. 대가: 중단 뒤 남은 답의 토큰도 낸다.
     // 스트림 도중 에러는 throw 되지 않고 스트림으로 흘러간다 — 서버 로그에는 남긴다.
-    onError: ({ error }) => console.error("[chat]", error),
+    // 에러로 끝나면 onFinish 가 오지 않으므로 여기서 예약을 푼다(원가를 모르는 건으로).
+    onError: async ({ error }) => {
+      console.error("[chat]", error);
+      await settleAiUsage(reservation, undefined);
+    },
     // 생성이 끝나면 (클라이언트가 끊었어도) 온다. 사용량은 항상, 대화는 끝까지 받았을 때만 남긴다.
     // projectId 는 위 권한 확인을 통과한 프로젝트다 — 클라이언트가 보낸 projectRef 를
     // 그대로 믿으면 남의 프로젝트에 사용량을 붙일 수 있다.
     onFinish: async ({ usage, text }) => {
-      await recordAiUsage({ userId: user.id, projectId: project.id, surface: "chat", usage });
+      await settleAiUsage(reservation, usage);
       // 빈 답이나 중단된 요청은 저장하지 않는다(중단 시 질문도 남기지 않는다).
       if (!text || clientGone) return;
       try {

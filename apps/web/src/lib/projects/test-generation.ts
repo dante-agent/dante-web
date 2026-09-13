@@ -4,11 +4,19 @@
 
 import { generateObject } from "ai";
 import { z } from "zod";
-import { getMonthlyBudgetStatus } from "@/lib/ai/budget";
-import { chatModel } from "@/lib/ai/chat-model";
-import { recordAiUsage } from "@/lib/ai/usage";
+import { getMonthlyBudgetStatus, reserveAiBudget } from "@/lib/ai/budget";
+import { chatModel, MODEL } from "@/lib/ai/chat-model";
+import { maxCostUsd } from "@/lib/ai/pricing";
+import { settleAiUsage, usageFromError, type AiReservation } from "@/lib/ai/usage";
 import { getFileText } from "@/lib/github/blob";
 import type { ProjectRepo } from "@/lib/projects/queries";
+
+/**
+ * 출력 토큰 상한(추론 토큰 포함). 예약 금액(원가 상한)을 이 값으로 묶는다 — 이 값에서 출력
+ * 원가 상한은 $0.448 이다. 테스트 파일 하나로는 넉넉하지만, 넘으면 JSON 이 잘려 생성이
+ * 실패(reason: "error")한다.
+ */
+const MAX_OUTPUT_TOKENS = 32_000;
 
 const generatedTestSchema = z.object({
   code: z.string().min(1),
@@ -24,7 +32,9 @@ export async function generateTestForFile(args: {
   projectId: string | null;
   filePath: string;
 }): Promise<GenerateTestResult> {
+  let reservation: AiReservation | null = null;
   try {
+    // 락 없는 사전 검사. 막힐 요청에 GitHub API 를 태우지 않으려고 파일을 읽기 전에 본다.
     const budget = await getMonthlyBudgetStatus(args.userId);
     if (budget.exceeded) return { ok: false, reason: "budget" };
 
@@ -32,21 +42,30 @@ export async function generateTestForFile(args: {
     if (source === null) return { ok: false, reason: "not-found" };
 
     const testPath = testPathFor(args.filePath);
-    const { object, usage } = await generateObject({
-      model: chatModel(),
-      schema: generatedTestSchema,
-      prompt: buildPrompt({ filePath: args.filePath, testPath, source }),
-    });
+    const prompt = buildPrompt({ filePath: args.filePath, testPath, source });
 
-    await recordAiUsage({
+    // 동시 요청을 실제로 막는 판정. 원가 상한은 소스 본문 크기에 달려 있어 읽은 뒤에야 잡을 수 있다.
+    const reserved = await reserveAiBudget({
       userId: args.userId,
       projectId: args.projectId,
       surface: "test-generation",
-      usage,
+      estimateUsd: maxCostUsd(MODEL, { prompt, maxOutputTokens: MAX_OUTPUT_TOKENS }),
     });
+    if (!reserved.ok) return { ok: false, reason: "budget" };
+    reservation = reserved.reservation;
+
+    const { object, usage } = await generateObject({
+      model: chatModel(),
+      schema: generatedTestSchema,
+      prompt,
+      maxOutputTokens: MAX_OUTPUT_TOKENS,
+    });
+
+    await settleAiUsage(reservation, usage);
 
     return { ok: true, filePath: args.filePath, testPath, code: object.code };
   } catch (error) {
+    if (reservation) await settleAiUsage(reservation, usageFromError(error));
     console.error("[test-generation] 테스트 생성 실패", {
       repo: `${args.repo.repoOwner}/${args.repo.repoName}`,
       filePath: args.filePath,
