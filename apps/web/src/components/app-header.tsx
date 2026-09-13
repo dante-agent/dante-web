@@ -12,8 +12,10 @@ import danteLogo from "@/assets/dante-logo.png";
 import { FeedbackDialog } from "@/components/feedback-dialog";
 import { FileSearch } from "@/components/file-search";
 import { HeaderSwitcher, SwitcherRow } from "@/components/header-switcher";
+import { TeamSwitcher } from "@/components/team-switcher";
 import { UserMenu, type HeaderUser } from "@/components/user-menu";
 import type { ProjectSummary } from "@/lib/projects/queries";
+import type { TeamOption } from "@/lib/teams/current";
 
 function Slash() {
   return <span className="text-muted-foreground/40 text-sm select-none">/</span>;
@@ -22,10 +24,13 @@ function Slash() {
 export function AppHeader({
   project,
   projects,
+  teams,
   user,
 }: {
   project: ProjectSummary;
+  /** 이 프로젝트와 같은 팀의 프로젝트만 온다(requireProjectContext). */
   projects: ProjectSummary[];
+  teams: TeamOption[];
   user: HeaderUser;
 }) {
   const router = useRouter();
@@ -63,6 +68,10 @@ export function AppHeader({
       </div>
 
       <div className="flex shrink-0 items-center gap-4">
+        {/* 팀은 쿠키가 아니라 이 프로젝트의 팀이다(lib/teams/current.ts). */}
+        <Slash />
+        <TeamSwitcher teams={teams} value={project.teamId} landing="projects" />
+
         <Slash />
         <HeaderSwitcher
           value={owner}

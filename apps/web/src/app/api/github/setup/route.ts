@@ -7,6 +7,7 @@ import { listInstallationRepos } from "@/lib/github/repos";
 import { INSTALL_STATE_COOKIE, matchesState } from "@/lib/github/state";
 import { createClient } from "@/lib/supabase/server";
 import { getTeamRole } from "@/lib/teams/access";
+import { getCurrentTeamId } from "@/lib/teams/current";
 
 // GitHub App 설치가 끝나면 GitHub 이 여기로 돌려보낸다 (App 설정의 Setup URL).
 // 쿼리로 installation_id, setup_action, state 가 온다.
@@ -82,7 +83,8 @@ export async function GET(request: Request) {
     return back({ error: "mismatch" });
   }
 
-  const { personalTeamId } = await syncUser(user);
+  // 설치 행이 public.users 를 참조한다(userId). 새 설치의 팀을 고르기 전에 미러해 둔다.
+  await syncUser(user);
 
   // 5) 이미 다른 팀이 가진 설치면 가져가지 않는다.
   //    설치 1건은 팀 1개만 가진다(설치 ID 가 PK). 조직 설치는 위에서 본인 것인지
@@ -98,8 +100,9 @@ export async function GET(request: Request) {
   }
 
   // 이미 있으면 그 팀에 그대로 둔다(멤버가 레포를 추가하러 GitHub 에 다녀온 경우).
-  // 새 설치는 팀 전환이 붙기 전까지 연결한 사람의 개인 팀에 붙인다.
-  const teamId = existing?.teamId ?? personalTeamId;
+  // 새 설치는 지금 팀에 붙인다. 쿠키는 current.ts 가 멤버십으로 다시 거르므로, 빠진 팀을
+  // 가리키고 있으면 개인 팀으로 떨어진다. member 도 연결할 수 있다(프로젝트 생성과 같다).
+  const teamId = existing?.teamId ?? (await getCurrentTeamId(user));
 
   const fields = {
     accountLogin: account.login,
