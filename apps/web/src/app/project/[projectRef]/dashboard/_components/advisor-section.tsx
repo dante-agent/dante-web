@@ -3,7 +3,7 @@ import { Activity, FileCode2, Terminal } from "lucide-react";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { Section } from "./section";
-import type { Advisory } from "../mock-data";
+import type { Advisory } from "@/lib/projects/advisories";
 
 const CATEGORY = {
   coverage: { label: "Coverage", Icon: FileCode2 },

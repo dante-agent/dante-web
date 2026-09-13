@@ -5,6 +5,7 @@ import { GitHubIcon } from "@/components/brand-icons";
 import { DeletedNotice } from "@/components/projects/deleted-notice";
 import { buttonVariants } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth/user";
+import { accessibleInstallationWhere, accessibleProjectWhere } from "@/lib/teams/access";
 import { installationSettingsUrl } from "@/lib/github/app";
 
 // 로그인 후 착륙 지점.
@@ -18,7 +19,7 @@ export default async function ProjectsPage({ searchParams }: PageProps<"/project
   const { deleted } = await searchParams;
 
   const projects = await prisma.project.findMany({
-    where: { userId: user.id },
+    where: accessibleProjectWhere(user.id),
     orderBy: { createdAt: "desc" },
     select: {
       ref: true,
@@ -104,7 +105,7 @@ export default async function ProjectsPage({ searchParams }: PageProps<"/project
 /**
  * 프로젝트를 지우고 넘어왔을 때의 안내 (settings/general/actions.ts).
  *
- * ?deleted= 에는 설치 ID 만 온다. 그 값을 그대로 믿지 않고 이 사용자의 설치인지
+ * ?deleted= 에는 설치 ID 만 온다. 그 값을 그대로 믿지 않고 이 사용자가 멤버인 팀의 설치인지
  * DB 로 확인한 뒤, 계정 이름·GitHub URL 은 DB 값으로 만든다. 남의 ID 나 아무 값을
  * 붙인 링크로는 안내가 뜨지 않는다.
  */
@@ -112,7 +113,7 @@ async function deletedNotice(deleted: string | string[] | undefined, userId: str
   if (typeof deleted !== "string" || !/^\d+$/.test(deleted)) return null;
 
   const installation = await prisma.githubInstallation.findFirst({
-    where: { id: BigInt(deleted), userId },
+    where: { id: BigInt(deleted), ...accessibleInstallationWhere(userId) },
     select: { id: true, accountLogin: true, accountType: true, deletedAt: true },
   });
   if (!installation) return null;

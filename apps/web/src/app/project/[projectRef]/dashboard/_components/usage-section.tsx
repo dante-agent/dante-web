@@ -1,6 +1,6 @@
 import { format } from "date-fns";
+import type { ActivitySeries } from "@/lib/projects/window";
 import { Section } from "./section";
-import type { UsageSeries } from "../mock-data";
 
 /**
  * 지표 줄 — 합계 한 줄 + 표면별 카드.
@@ -14,10 +14,11 @@ export function UsageSection({
   to,
   passRate,
 }: {
-  series: UsageSeries[];
+  series: ActivitySeries[];
   from: string;
   to: string;
-  passRate: number;
+  /** null = 판정된 실행이 없음(러너 미연결) → "—". */
+  passRate: number | null;
 }) {
   const total = series.reduce((sum, s) => sum + s.total, 0);
   const fromLabel = format(new Date(from), "MMM d");
@@ -28,7 +29,7 @@ export function UsageSection({
       title={
         <span className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
           <Headline value={total.toLocaleString()} label="Total events" />
-          <Headline value={`${passRate}%`} label="Pass rate" />
+          <Headline value={passRate === null ? "—" : `${passRate}%`} label="Pass rate" />
         </span>
       }
       action={
@@ -59,7 +60,7 @@ function UsageCard({
   fromLabel,
   toLabel,
 }: {
-  series: UsageSeries;
+  series: ActivitySeries;
   fromLabel: string;
   toLabel: string;
 }) {
