@@ -176,8 +176,8 @@ async function handleRepository(payload: RepositoryEvent) {
   const repo = payload.repository;
   if (id === null || !repo) return null;
 
-  // repoId 는 사용자마다 하나씩 있을 수 있다(@@unique([userId, repoId])).
-  // installationId 까지 걸어야 이 이벤트와 무관한 남의 프로젝트를 건드리지 않는다.
+  // repoId 는 전역에서 프로젝트 하나지만(@@unique([repoId])) installationId 도 건다.
+  // 설치에서 빠진 뒤 다른 설치로 옮겨 간 프로젝트를 옛 설치의 이벤트가 건드리지 않게.
   const where = { installationId: id, repoId: BigInt(repo.id) };
 
   switch (payload.action) {
@@ -285,9 +285,8 @@ async function handleCheckRun(payload: CheckRunEvent) {
 /**
  * 이 레포에 걸린, 아직 끊기지 않은 프로젝트들.
  *
- * 여러 건일 수 있다 — 같은 레포를 두 사용자가 각자 연결할 수 있기 때문이다
- * (@@unique([userId, repoId])). 각자 설정이 다르므로 각자에게 보낸다. 코멘트가
- * 서로 섞이지 않는 건 마커에 프로젝트 ref 가 들어가 있어서다.
+ * 레포는 전역에서 프로젝트 하나라(@@unique([repoId])) 많아야 한 건이다. 배열로 두는
+ * 건 호출부가 "없음"과 "있음"을 같은 모양으로 다루게 하려는 것뿐이다.
  */
 function notifiableProjects(installationIdValue: bigint, repoId: number) {
   return prisma.project.findMany({

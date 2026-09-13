@@ -213,7 +213,7 @@ export function GithubNotificationsForm({
         </div>
 
         <CommentPreview
-          markdown={renderPrComment(samples[tab], settings, projectRef)}
+          markdown={renderPrComment(samples[tab], settings)}
           tab={tab}
           onTab={setTab}
           disabled={!comment}

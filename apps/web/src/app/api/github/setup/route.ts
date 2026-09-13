@@ -136,8 +136,9 @@ export async function GET(request: Request) {
  * 레포를 추가·제거한 뒤에도 여기로 오므로(Redirect on update), 설치에서 뺐다가
  * 다시 열어준 레포도 이 경로로 되살아난다.
  *
- * repoId 로 찾고 설치를 가진 팀으로 거른다. repoId 는 GitHub 것이라 다른 팀의
- * 프로젝트와 겹칠 수 있다 — 같은 공개 레포를 두 팀이 각자 연결한 경우다.
+ * repoId 로 찾고 설치를 가진 팀으로 거른다. 레포는 전역에서 프로젝트 하나지만
+ * (@@unique([repoId])), 다른 팀 프로젝트를 이 설치로 끌어오면 그 팀의 연결이
+ * 이 팀 설치에 묶인다. 팀이 다르면 건드리지 않는다.
  */
 async function relinkProjects(teamId: string, installationId: number) {
   let repos;

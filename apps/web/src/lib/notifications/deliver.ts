@@ -173,8 +173,8 @@ async function deliverComment(
       octokit,
       repo,
       pr.number,
-      renderPrComment(run, settings, project.ref),
-      { mode: settings.prCommentMode, cachedCommentId, projectRef: project.ref }
+      renderPrComment(run, settings),
+      { mode: settings.prCommentMode, cachedCommentId }
     );
 
     // append 모드에서도 마지막 코멘트 ID 를 적어 둔다. 나중에 sticky 로 바꾸면
