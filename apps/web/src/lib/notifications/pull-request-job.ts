@@ -15,6 +15,8 @@ import {
 import { deliverRunSummary, type PullRequestContext } from "@/lib/notifications/deliver";
 import { extractComponents } from "@/lib/notifications/extract-components";
 import { danteLinks } from "@/lib/notifications/links";
+import { checkPullRequestAuthor } from "@/lib/notifications/pr-author";
+import { authorSkipReason } from "@/lib/notifications/pr-author-rules";
 import { queuedRun, type ComponentChange, type RunSummary } from "@/lib/notifications/run-summary";
 
 // ⚠️ 서버 전용.
@@ -38,6 +40,8 @@ export type JobProject = {
   repoName: string;
   defaultBranch: string;
   installationId: bigint;
+  /** PR 작성자가 이 팀의 멤버인지 볼 때 쓴다 */
+  teamId: string;
 };
 
 /**
@@ -65,7 +69,7 @@ async function runPullRequestJob(jobId: string, project: JobProject, pr: PullReq
   });
 
   try {
-    const run = await pullRequestRun(project, pr.number, pr.headSha);
+    const run = await pullRequestRun(project, pr);
 
     // 처리하는 사이에 새 커밋이 푸시됐으면 옛 결과로 코멘트를 덮지 않는다.
     // sticky 코멘트는 PR 에 하나라, 늦게 끝난 옛 작업이 새 결과를 지워버린다.
@@ -110,11 +114,8 @@ async function isSuperseded(jobId: string, projectId: string, prNumber: number) 
  * 모르는데 "바뀐 게 없다"고 적으면 실제로 컴포넌트를 고친 PR 에서 코멘트가
  * 빠지고, 체크도 통과처럼 보인다.
  */
-async function pullRequestRun(
-  project: JobProject,
-  prNumber: number,
-  headSha: string
-): Promise<RunSummary> {
+async function pullRequestRun(project: JobProject, pr: PullRequestContext): Promise<RunSummary> {
+  const { number: prNumber, headSha } = pr;
   const run = queuedRun(danteLinks(project.ref, prNumber));
   const ref = { owner: project.repoOwner, repo: project.repoName };
 
@@ -132,7 +133,14 @@ async function pullRequestRun(
   if (files.length === 0) return { ...run, status: "unchanged" };
 
   const components = await componentsIn(octokit, ref, headSha, files);
-  return components.length === 0 ? { ...run, status: "unchanged" } : { ...run, components };
+  if (components.length === 0) return { ...run, status: "unchanged" };
+
+  // 할 일이 있을 때만 작성자를 본다. README PR 에 "작성자가 멤버가 아님"을 적을 이유가 없다.
+  // TODO(파이프라인): 테스트 생성이 붙으면 ok 일 때의 userId 로 AiUsage 를 기록한다.
+  const reason = authorSkipReason(await checkPullRequestAuthor(project.teamId, pr.author));
+  if (reason) return { ...run, status: "skipped", components, skipReason: reason };
+
+  return { ...run, components };
 }
 
 /**

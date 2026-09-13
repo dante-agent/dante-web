@@ -82,6 +82,8 @@ type PullRequestEvent = InstallationEvent & {
     head: { sha: string };
     base: { ref: string };
     labels?: { name: string }[];
+    /** PR 작성자. 테스트 생성 비용을 이 사람 한도로 센다 */
+    user?: { id: number; login: string } | null;
   };
 };
 
@@ -286,6 +288,7 @@ async function handlePullRequest(payload: PullRequestEvent) {
       draft: pr.draft ?? false,
       labels: (pr.labels ?? []).map((label) => label.name),
       headCommitMessage: await commitMessage(project, pr.head.sha),
+      author: pr.user ? { githubId: pr.user.id, login: pr.user.login } : null,
     };
 
     await enqueuePullRequestJob(project, context);
@@ -355,6 +358,7 @@ function notifiableProjects(installationIdValue: bigint, repoId: number) {
       repoName: true,
       defaultBranch: true,
       installationId: true,
+      teamId: true,
     },
   });
 }

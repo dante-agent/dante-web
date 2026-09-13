@@ -195,6 +195,8 @@ export async function fetchPullRequest(octokit: Octokit, ref: RepoRef, prNumber:
     baseRef: data.base.ref,
     draft: data.draft ?? false,
     labels: data.labels.map((label) => label.name),
+    // Octokit 은 ID 를 number|bigint 로 타이핑하지만 실제 값은 2^53 안쪽이다 (createComment 와 같은 판단).
+    author: data.user ? { githubId: Number(data.user.id), login: data.user.login } : null,
   };
 }
 

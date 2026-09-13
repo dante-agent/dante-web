@@ -77,6 +77,16 @@ export function checkRunResult(run: RunSummary, settings: NotificationSettings):
     };
   }
 
+  if (run.status === "skipped") {
+    // 테스트가 깨진 게 아니라 돌리지 않은 것이다. required check 여도 머지를 막지 않는다.
+    return {
+      status: "completed",
+      conclusion: "neutral",
+      title: "Skipped test generation",
+      summary: run.skipReason ?? "Dante skipped test generation for this pull request.",
+    };
+  }
+
   if (run.status === "failed") {
     // 우리 쪽이 못 끝낸 것이지 테스트가 깨진 게 아니다. 그래도 blocking 을 켠
     // 팀에게는 "결과를 모른다"가 통과보다 위험하므로 같은 규칙을 적용한다.

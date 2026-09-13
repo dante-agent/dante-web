@@ -25,11 +25,15 @@ export type RunStatus =
   /** 어느 단계든 실패 — 테스트 실패가 아니라 우리 쪽이 못 끝낸 것 */
   | "failed"
   /** 변경된 컴포넌트가 없어 할 일이 없었음 */
-  | "unchanged";
+  | "unchanged"
+  /** 할 일은 있었지만 하지 않기로 함 (예: PR 작성자의 AI 한도로 셀 수 없음). skipReason 에 이유 */
+  | "skipped";
 
 /** 끝난 상태인지. 아니면 코멘트에 진행 표시만 그린다. */
 export function isTerminal(status: RunStatus) {
-  return status === "completed" || status === "failed" || status === "unchanged";
+  return (
+    status === "completed" || status === "failed" || status === "unchanged" || status === "skipped"
+  );
 }
 
 export type FailedTest = {
@@ -65,6 +69,8 @@ export type RunSummary = {
   rerunUrl: string | null;
   /** 우리 쪽이 실패했을 때(status === "failed") 사람이 읽을 사유 */
   error: string | null;
+  /** 건너뛰었을 때(status === "skipped") 코멘트에 적을 사유 */
+  skipReason?: string;
 };
 
 /**
