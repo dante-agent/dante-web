@@ -121,7 +121,7 @@ async function monthlyLimit(
  * 건"의 수다. `_sum` 은 null 을 알아서 건너뛴다. AiUsage 의 `[userId, createdAt]`
  * 인덱스가 그대로 쓰인다.
  *
- * 이 함수는 throw 할 수 있다(설정 누락). recordAiUsage() 와 반대다 — 그쪽은 응답이 이미
+ * 이 함수는 throw 할 수 있다(설정 누락). settleAiUsage() 와 반대다 — 그쪽은 응답이 이미
  * 나간 뒤라 삼켜야 하고, 이쪽은 호출 전이라 막아야 한다.
  *
  * 구간은 billing-period.ts 에서 받는다. 직접 계산하지 않는 이유: 사용량 화면
