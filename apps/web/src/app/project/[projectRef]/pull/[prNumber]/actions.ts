@@ -21,6 +21,9 @@ import { accessibleProjectWhere } from "@/lib/teams/access";
  * GitHub 체크의 Re-run 버튼(webhook.ts handleCheckRun)과 같은 일을 한다 — PR 의 지금 head
  * 커밋을 다시 읽어 작업을 다시 돌린다. 비용은 PR 작성자가 아니라 누른 사람 한도로 센다
  * (pr-author-rules.ts 의 Payer).
+ *
+ * TODO(지권): 로그인한 상태로 이 버튼을 눌러, 누른 사람 한도로 생성·실행되는지 검증한다.
+ * #129 는 GitHub 체크 Re-run 웹훅으로만 검증했고 이 경로는 타입 검사까지만 했다.
  */
 export async function rerunPullRequest(formData: FormData) {
   const projectRef = String(formData.get("projectRef") ?? "");
