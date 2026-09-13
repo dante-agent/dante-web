@@ -38,8 +38,14 @@ export function isRunnerConfigured() {
   return Boolean(process.env.RUNNER_URL && process.env.RUNNER_SECRET);
 }
 
-/** runner 에 실행을 맡기고 결과를 받는다. 연결 실패·401·400 은 던진다. */
-export async function callRunner(request: RunnerRequest): Promise<RunnerResult> {
+/**
+ * runner 에 실행을 맡기고 결과를 받는다. 연결 실패·401·400 은 던진다.
+ * signal 로 끊으면 요청을 닫고, runner 는 연결이 닫힌 걸 보고 샌드박스를 내린다.
+ */
+export async function callRunner(
+  request: RunnerRequest,
+  signal?: AbortSignal
+): Promise<RunnerResult> {
   const url = process.env.RUNNER_URL;
   const secret = process.env.RUNNER_SECRET;
   if (!url || !secret)
@@ -49,7 +55,10 @@ export async function callRunner(request: RunnerRequest): Promise<RunnerResult> 
     method: "POST",
     headers: { authorization: `Bearer ${secret}`, "content-type": "application/json" },
     body: JSON.stringify(request),
-    signal: AbortSignal.timeout(request.timeoutMs + RESPONSE_GRACE_MS),
+    signal: AbortSignal.any([
+      AbortSignal.timeout(request.timeoutMs + RESPONSE_GRACE_MS),
+      ...(signal ? [signal] : []),
+    ]),
   });
 
   if (!response.ok) {

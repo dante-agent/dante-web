@@ -44,7 +44,16 @@ app.post("/runs", async (req, reply) => {
   // 큐를 두지 않은 이유: 지금은 호출자가 web 하나뿐이고, 결과를 TestRun 에 쓰는
   // 것도 web 이다. 여기서 비동기로 만들면 "누가 결과를 받아 적는가" 를 runner 가
   // 떠안게 되고, 그러려면 DB 를 알아야 한다. 동시 실행이 문제가 될 때 큐를 붙인다.
-  const result = await runTest(parsed.value);
+  //
+  // web 이 응답 전에 연결을 끊으면(PR 에 새 커밋이 왔다) 기다리는 쪽이 없으니 바로 멈춘다.
+  // 응답을 다 보낸 뒤의 close 는 정상 종료라 무시한다.
+  const controller = new AbortController();
+  reply.raw.on("close", () => {
+    if (!reply.raw.writableFinished) controller.abort();
+  });
+
+  const result = await runTest(parsed.value, controller.signal);
+  if (controller.signal.aborted) req.log.info("client closed, run stopped");
   return reply.code(200).send(result);
 });
 
