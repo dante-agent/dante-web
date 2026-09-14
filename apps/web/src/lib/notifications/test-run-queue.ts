@@ -1,4 +1,4 @@
-import { prisma } from "@dante/db";
+import { prisma, type Prisma } from "@dante/db";
 import { isStaleTestRun, signTestRunToken } from "@/lib/notifications/test-run-rules";
 
 // ⚠️ 서버 전용. 팀 단위 샌드박스 실행 줄 (docs/adr/0002-run-sandbox-from-web.md).
@@ -47,45 +47,51 @@ export async function dispatchTestRuns(teamId: string) {
  * 두 함수가 동시에 "없다" 를 보고 둘 다 실행한다. 샌드박스가 도는 몇 분 동안은 락을 들고 있지 않는다 —
  * 그동안 자리를 막는 것은 testing 상태 자체다.
  */
-async function claimNextTestRun(teamId: string) {
-  return prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`pr-test-run:${teamId}`}))`;
-    const now = new Date();
+function claimNextTestRun(teamId: string) {
+  return prisma.$transaction((tx) => claimTestRunSlot(tx, teamId, new Date()));
+}
 
-    const testing = await tx.pullRequestJob.findMany({
-      where: { status: "testing", project: { teamId } },
-      select: { id: true, runStartedAt: true },
-    });
+/**
+ * claimNextTestRun 의 본문. 호출자가 연 트랜잭션 안에서 돈다 — 락은 그 트랜잭션이 끝날 때 풀린다.
+ *
+ * 따로 뺀 이유: 되돌리는 트랜잭션 안에서 여러 팀의 작업을 만들어 놓고 차례 규칙을 검증할 수 있게.
+ */
+export async function claimTestRunSlot(tx: Prisma.TransactionClient, teamId: string, now: Date) {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`pr-test-run:${teamId}`}))`;
 
-    // 함수가 죽어 testing 으로 남은 작업. 닫아야 줄이 다시 흐른다. 체크는 in_progress 로 남으니
-    // 사용자는 Re-run 으로 다시 돌린다 — 여기서 GitHub 에 쓰려면 트랜잭션 안에서 네트워크를 타야 한다.
-    const stale = testing.filter((job) => isStaleTestRun(job.runStartedAt, now));
-    if (stale.length > 0) {
-      await tx.pullRequestJob.updateMany({
-        where: { id: { in: stale.map((job) => job.id) }, status: "testing" },
-        data: {
-          status: "failed",
-          error: "The test run stopped without reporting back.",
-          finishedAt: now,
-        },
-      });
-    }
-    if (testing.length > stale.length) return null;
-
-    // 생성이 끝난 순서대로. awaiting_run 으로 바꿀 때 updatedAt 이 그 시각이 된다.
-    const next = await tx.pullRequestJob.findFirst({
-      where: { status: "awaiting_run", project: { teamId } },
-      orderBy: { updatedAt: "asc" },
-      select: { id: true },
-    });
-    if (!next) return null;
-
-    await tx.pullRequestJob.update({
-      where: { id: next.id },
-      data: { status: "testing", runStartedAt: now },
-    });
-    return next.id;
+  const testing = await tx.pullRequestJob.findMany({
+    where: { status: "testing", project: { teamId } },
+    select: { id: true, runStartedAt: true },
   });
+
+  // 함수가 죽어 testing 으로 남은 작업. 닫아야 줄이 다시 흐른다. 체크는 in_progress 로 남으니
+  // 사용자는 Re-run 으로 다시 돌린다 — 여기서 GitHub 에 쓰려면 트랜잭션 안에서 네트워크를 타야 한다.
+  const stale = testing.filter((job) => isStaleTestRun(job.runStartedAt, now));
+  if (stale.length > 0) {
+    await tx.pullRequestJob.updateMany({
+      where: { id: { in: stale.map((job) => job.id) }, status: "testing" },
+      data: {
+        status: "failed",
+        error: "The test run stopped without reporting back.",
+        finishedAt: now,
+      },
+    });
+  }
+  if (testing.length > stale.length) return null;
+
+  // 생성이 끝난 순서대로. awaiting_run 으로 바꿀 때 updatedAt 이 그 시각이 된다.
+  const next = await tx.pullRequestJob.findFirst({
+    where: { status: "awaiting_run", project: { teamId } },
+    orderBy: { updatedAt: "asc" },
+    select: { id: true },
+  });
+  if (!next) return null;
+
+  await tx.pullRequestJob.update({
+    where: { id: next.id },
+    data: { status: "testing", runStartedAt: now },
+  });
+  return next.id;
 }
 
 /** 넘기는 요청의 응답 대기. 실행 함수는 받자마자 202 를 돌려주므로 오래 걸릴 일이 없다. */
