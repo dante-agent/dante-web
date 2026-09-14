@@ -95,7 +95,9 @@ export default async function PullRequestPreviewPage({
           <RerunPanel
             projectRef={projectRef}
             prNumber={prNumber}
-            inFlight={job?.status === "queued" || job?.status === "running"}
+            inFlight={
+              job !== null && ["queued", "running", "awaiting_run", "testing"].includes(job.status)
+            }
           />
         )}
 
