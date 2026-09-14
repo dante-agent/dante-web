@@ -66,7 +66,7 @@ export function SidebarRail({ items }: { items: RailItem[] }) {
             key={href}
             type="button"
             onClick={toggleSubSidebar}
-            aria-label={collapsed ? `${label} 사이드바 펼치기` : `${label} 사이드바 접기`}
+            aria-label={collapsed ? `Expand ${label} sidebar` : `Collapse ${label} sidebar`}
             aria-expanded={!collapsed}
             aria-current="page"
             className={className}

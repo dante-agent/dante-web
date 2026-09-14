@@ -92,10 +92,10 @@ export async function getAiTestRecommendations(args: {
 function buildPrompt(candidates: TestRecommendation[]): string {
   const list = candidates.map((c) => `- ${c.filePath}`).join("\n");
   return [
-    "다음은 대응 테스트 파일이 아직 없는 소스 파일 경로 목록이다.",
-    "각 파일에 테스트를 먼저 써야 할 우선순위를 매겨라. 파일 내용은 주어지지 않으니 경로·파일명만으로 판단한다.",
-    "인증·결제·권한처럼 틀리면 크게 다치는 로직은 high, 단순 표현용 UI 는 low, 나머지는 medium.",
-    "reason 은 한국어 한 문장(80자 이내). 목록에 없는 경로는 만들어내지 마라.",
+    "Below is a list of source file paths that don't have a matching test file yet.",
+    "Rank how urgently each file needs tests. File contents are not provided, so judge by path and file name only.",
+    "Logic where bugs cause serious harm (auth, payments, permissions) is high, simple presentational UI is low, everything else is medium.",
+    "reason is one English sentence (80 characters max). Never make up paths that aren't in the list.",
     "",
     list,
   ].join("\n");

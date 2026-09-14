@@ -101,18 +101,12 @@ function FileActions({
         size="icon-sm"
         variant="ghost"
         onClick={download}
-        title="다운로드"
-        aria-label="다운로드"
+        title="Download"
+        aria-label="Download"
       >
         <Download />
       </Button>
-      <Button
-        size="icon-sm"
-        variant="ghost"
-        onClick={copy}
-        title="전체 복사"
-        aria-label="전체 복사"
-      >
+      <Button size="icon-sm" variant="ghost" onClick={copy} title="Copy all" aria-label="Copy all">
         <Copy />
       </Button>
       {trailing}
@@ -159,8 +153,8 @@ function ExpandButton({ active, onToggle }: { active: boolean; onToggle: () => v
       size="icon-sm"
       variant="ghost"
       onClick={onToggle}
-      title={active ? "복원" : "확대"}
-      aria-label={active ? "복원" : "확대"}
+      title={active ? "Restore" : "Expand"}
+      aria-label={active ? "Restore" : "Expand"}
     >
       {active ? <Minimize2 /> : <Maximize2 />}
     </Button>
@@ -252,7 +246,7 @@ export function FileView({
             </Button>
             <span className="bg-border mx-0.5 h-4 w-px" />
             {/* ponytail: 되돌리기(After→원본) 다음 PR */}
-            <Button size="icon-sm" variant="ghost" disabled title="되돌리기" aria-label="되돌리기">
+            <Button size="icon-sm" variant="ghost" disabled title="Revert" aria-label="Revert">
               <RotateCcw />
             </Button>
             {/* ponytail: AI (재)생성 다음 PR */}
@@ -260,8 +254,8 @@ export function FileView({
               size="icon-sm"
               variant="ghost"
               disabled
-              title="AI 생성"
-              aria-label="AI 생성"
+              title="Generate with AI"
+              aria-label="Generate with AI"
               className="text-brand-orange"
             >
               <Sparkles />
@@ -365,8 +359,8 @@ export function FileView({
             </Button>
             <Link
               href={editHref}
-              title="편집"
-              aria-label="편집"
+              title="Edit"
+              aria-label="Edit"
               className={cn(
                 buttonVariants({ variant: "ghost", size: "icon-sm" }),
                 "text-brand-orange hover:bg-brand-orange/10 hover:text-brand-orange"
@@ -420,9 +414,9 @@ export function FileView({
           <CodePane lang={lang} value={content.test} />
         ) : (
           <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-            <p className="text-sm">아직 테스트가 없습니다.</p>
+            <p className="text-sm">No tests yet.</p>
             <Button size="sm" disabled>
-              테스트 생성
+              Generate tests
             </Button>
           </div>
         )}

@@ -12,16 +12,13 @@ export async function GET(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401, headers: NO_STORE });
+    return NextResponse.json({ error: "Please sign in." }, { status: 401, headers: NO_STORE });
   }
 
   const params = new URL(request.url).searchParams;
   const projectRef = params.get("projectRef");
   if (!projectRef) {
-    return NextResponse.json(
-      { error: "요청 형식이 올바르지 않습니다." },
-      { status: 400, headers: NO_STORE }
-    );
+    return NextResponse.json({ error: "Invalid request." }, { status: 400, headers: NO_STORE });
   }
 
   // 접근할 수 없는 프로젝트면 빈 목록이다 — 그런 프로젝트가 있는지 드러내지 않는다.
@@ -29,7 +26,7 @@ export async function GET(request: Request) {
   if (!page) {
     return NextResponse.json(
       {
-        error: "목록 위치가 올바르지 않습니다.\n처음부터 다시 불러와주세요.",
+        error: "Invalid list cursor.\nPlease reload from the start.",
         code: "invalid_cursor",
       },
       { status: 400, headers: NO_STORE }
