@@ -2,12 +2,13 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import Fastify from "fastify";
 import { createSerialQueue } from "./queue.js";
-import { runTest, type RunRequest } from "./run.js";
+import { runTest, type RunRequest } from "@dante/sandbox";
 
 // 테스트 실행 서버. 실행 환경은 Vercel Sandbox (docs/adr/0001-test-runtime.md).
+// 실행 코드는 packages/sandbox 로 옮겼고, 이 서버는 ADR-0002 에 따라 없어진다.
 //
 // DB 는 건드리지 않는다. 무엇을 돌릴지는 web 이 읽어서 요청에 담아 보내고,
-// TestRun 행을 쓰는 것도 web 이다. 이유는 run.ts 위쪽 주석에.
+// TestRun 행을 쓰는 것도 web 이다. 이유는 packages/sandbox/run.ts 위쪽 주석에.
 
 // 로컬 개발용 OIDC 토큰. `vercel env pull` 이 리포 루트에 .env.local 을 만든다.
 //

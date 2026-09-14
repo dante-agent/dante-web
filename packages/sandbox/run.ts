@@ -5,9 +5,9 @@ import {
   parseReport,
   type TestFramework,
   type TestReport,
-} from "./report.js";
+} from "./report.ts";
 
-// 테스트 한 번을 격리된 환경에서 돌린다 (실행 환경 결정은 docs/adr/0001-test-runtime.md).
+// 테스트 한 번을 격리된 환경에서 돌린다 (실행 환경 결정은 docs/adr/0001-test-runtime.md, 0002).
 //
 // 이 파일은 DB 를 모른다. 무엇을 돌릴지는 전부 요청으로 받고, 결과만 돌려준다.
 // AGENTS.md 의 "DB 접근은 전부 Next.js 서버에서" 를 지키기도 하고, ADR-0001 이

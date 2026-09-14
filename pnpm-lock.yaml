@@ -133,9 +133,9 @@ importers:
       '@dante/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@vercel/sandbox':
-        specifier: ^3.2.2
-        version: 3.2.2
+      '@dante/sandbox':
+        specifier: workspace:*
+        version: link:../../packages/sandbox
       fastify:
         specifier: ^5.2.0
         version: 5.12.3
@@ -280,6 +280,19 @@ importers:
       prisma:
         specifier: ^6.16.1
         version: 6.19.3(typescript@5.9.3)
+
+  packages/sandbox:
+    dependencies:
+      '@vercel/sandbox':
+        specifier: ^3.2.2
+        version: 3.2.2
+    devDependencies:
+      '@types/node':
+        specifier: ^22
+        version: 22.20.1
+      typescript:
+        specifier: ^5
+        version: 5.9.3
 
 packages:
 
