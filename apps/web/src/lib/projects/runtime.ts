@@ -1,7 +1,7 @@
 import type { TestFrameworkId } from "@/lib/projects/frameworks";
 
-// 실행 환경 설정값의 모양·기본값·검증. runner 가 샌드박스에서 그대로 실행하는
-// 값이다 (docs/adr/0001-test-runtime.md).
+// 실행 환경 설정값의 모양·기본값·검증. 샌드박스에서 그대로 실행하는 값이다
+// (docs/adr/0001-test-runtime.md, 0002-run-sandbox-from-web.md).
 //
 // DB 컬럼이 null 일 수 있다는 게 이 파일의 존재 이유다. 프로젝트를 만들 때
 // 미리 채우지 않기 때문에(기본값을 바꾸면 기존 행을 전부 손봐야 한다) "없음"을
@@ -15,15 +15,18 @@ export interface RuntimeSettings {
   timeoutMs: number;
 }
 
-/** 저장된 값이 없을 때 쓰는 상한. runner 의 기본값과 같다. */
+/** 저장된 값이 없을 때 쓰는 상한. packages/sandbox 의 기본값과 같다. */
 export const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 
 /**
- * runner 가 받아주는 범위. 여기서 한 번 좁혀도 runner 가 다시 좁힌다 —
+ * packages/sandbox 가 받아주는 범위. 여기서 한 번 좁혀도 거기서 다시 좁힌다 —
  * 설정 화면을 우회해 저장된 값이 있어도 샌드박스가 무한정 돌지 않게.
+ *
+ * 최대가 10분인 이유: 실행이 Vercel Function(Pro 최대 800초) 안에서 돈다. 예전에 15분으로
+ * 저장된 프로젝트는 resolveRuntimeSettings 가 10분으로 접는다.
  */
 export const MIN_TIMEOUT_MS = 30 * 1000;
-export const MAX_TIMEOUT_MS = 15 * 60 * 1000;
+export const MAX_TIMEOUT_MS = 10 * 60 * 1000;
 
 export interface RuntimeCommands {
   install: string;
@@ -70,7 +73,7 @@ export function frameworkTestCommand(testFramework: string | null): string {
   return FALLBACK_COMMANDS.test;
 }
 
-/** DB 행(일부 null)을 화면·runner 가 쓸 완전한 값으로 접는다. */
+/** DB 행(일부 null)을 화면·샌드박스가 쓸 완전한 값으로 접는다. */
 export function resolveRuntimeSettings(
   project: {
     installCommand: string | null;
@@ -83,7 +86,7 @@ export function resolveRuntimeSettings(
   return {
     installCommand: project.installCommand ?? defaults.install,
     testCommand: project.testCommand ?? defaults.test,
-    timeoutMs: project.testTimeoutMs ?? DEFAULT_TIMEOUT_MS,
+    timeoutMs: Math.min(project.testTimeoutMs ?? DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS),
   };
 }
 
@@ -93,7 +96,7 @@ export function formatTimeout(ms: number) {
   return Number.isInteger(minutes) ? `${minutes} min` : `${Math.round(ms / 1000)} s`;
 }
 
-export const TIMEOUT_CHOICES = [1, 3, 5, 10, 15].map((minutes) => ({
+export const TIMEOUT_CHOICES = [1, 3, 5, 10].map((minutes) => ({
   value: minutes * 60_000,
   label: `${minutes} min`,
 }));

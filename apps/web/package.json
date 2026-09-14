@@ -16,6 +16,7 @@
     "@ai-sdk/openai": "^4.0.59",
     "@base-ui/react": "^1.8.0",
     "@dante/db": "workspace:*",
+    "@dante/sandbox": "workspace:*",
     "@hookform/resolvers": "^5.9.1",
     "@monaco-editor/react": "^4.7.0",
     "@supabase/ssr": "^0.12.6",

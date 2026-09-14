@@ -2,5 +2,5 @@
 //
 // 샌드박스 제공자를 바꾸더라도 부르는 쪽(web)은 이 입구만 본다.
 
-export { runTest, type RunRequest, type RunResult } from "./run.ts";
+export { isSandboxConfigured, runTest, type RunRequest, type RunResult } from "./run.ts";
 export { type FailedTest, type TestFramework, type TestReport } from "./report.ts";
