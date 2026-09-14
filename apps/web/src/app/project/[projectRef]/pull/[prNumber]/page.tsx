@@ -8,6 +8,9 @@ import { getPullRequestPreview, parsePrNumber } from "@/lib/notifications/pull-r
 import { readStoredRun, type StoredRun } from "@/lib/notifications/stored-run";
 import { rerunPullRequest } from "./actions";
 
+/** "다시 실행" 서버 액션이 after() 로 PR 작업을 돈다. api/github/webhook/route.ts 와 같은 이유 */
+export const maxDuration = 800;
+
 // PR preview. PR 코멘트의 "Open in Dante" 가 여기로 온다(lib/notifications/links.ts).
 //
 // 폴더 보기와 같은 화면이다. `?file=` 로 고른 파일을 <FileView> 로 띄운다 — 왼쪽은 PR head
