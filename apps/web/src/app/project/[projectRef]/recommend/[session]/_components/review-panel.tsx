@@ -1,12 +1,4 @@
-import {
-  ArrowLeft,
-  ChevronDown,
-  GitBranch,
-  Lock,
-  Sparkles,
-  ThumbsDown,
-  ThumbsUp,
-} from "lucide-react";
+import { ArrowLeft, GitBranch, Lock, Sparkles, ThumbsDown, ThumbsUp } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import type { SessionDetail } from "../mock-data";
@@ -105,18 +97,7 @@ export function ReviewPanel({
                 <ThumbsDown className="size-3.5" />
               </button>
             </div>
-            <div className="flex items-center gap-3">
-              <span className="text-muted-foreground text-xs">Time: {session.timeSpent}</span>
-              <button
-                type="button"
-                disabled
-                title="GitHub PR 생성 기능은 아직 연결되지 않았습니다."
-                className="bg-primary text-primary-foreground flex cursor-not-allowed items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium opacity-50"
-              >
-                PR 생성 준비 중
-                <ChevronDown className="size-3.5" />
-              </button>
-            </div>
+            <span className="text-muted-foreground text-xs">Time: {session.timeSpent}</span>
           </div>
         </div>
       </div>
