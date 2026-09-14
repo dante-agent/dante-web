@@ -1,12 +1,12 @@
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/user";
 import { getProjectRepo } from "@/lib/projects/queries";
+import { getGeneratedSessions } from "@/lib/projects/generation-sessions";
 import { getTestRecommendations } from "@/lib/projects/recommendations";
 import { PromptInput } from "./_components/prompt-input";
 import { RecommendTabs, type RecommendTab } from "./_components/recommend-tabs";
 import { SessionList } from "./_components/session-list";
 import { SuggestedList } from "./_components/suggested-list";
-import { recommendMock } from "./mock-data";
 
 const VALID_TABS: RecommendTab[] = ["suggested", "sessions", "scheduled"];
 
@@ -19,14 +19,14 @@ export default async function RecommendPage({
   const activeTab: RecommendTab = VALID_TABS.includes(tab as RecommendTab)
     ? (tab as RecommendTab)
     : "suggested";
-  const { sessions } = recommendMock;
+  const sessions = activeTab === "sessions" ? await loadSessions(projectRef) : [];
 
   // 추천 탭에서만 레포 트리를 읽는다 — 다른 탭을 볼 때 GitHub 호출을 아끼려고.
   const recommendations = activeTab === "suggested" ? await loadRecommendations(projectRef) : [];
 
   return (
     <div className="mx-auto flex w-2/3 flex-col gap-8 p-8">
-      <PromptInput />
+      <PromptInput projectRef={projectRef} />
 
       <RecommendTabs projectRef={projectRef} active={activeTab} />
 
@@ -38,7 +38,14 @@ export default async function RecommendPage({
             테스트가 없는 파일을 찾지 못했습니다.
           </p>
         ))}
-      {activeTab === "sessions" && <SessionList projectRef={projectRef} sessions={sessions} />}
+      {activeTab === "sessions" &&
+        (sessions.length > 0 ? (
+          <SessionList projectRef={projectRef} sessions={sessions} />
+        ) : (
+          <p className="text-muted-foreground py-12 text-center text-sm">
+            AI로 생성한 테스트 세션이 아직 없습니다.
+          </p>
+        ))}
       {activeTab === "scheduled" && (
         <p className="text-muted-foreground py-12 text-center text-sm">
           예약된 테스트 생성 작업이 아직 없습니다.
@@ -53,4 +60,9 @@ async function loadRecommendations(projectRef: string) {
   const repo = await getProjectRepo(projectRef, user.id);
   if (!repo) notFound();
   return getTestRecommendations(repo);
+}
+
+async function loadSessions(projectRef: string) {
+  const user = await requireUser();
+  return getGeneratedSessions(projectRef, user.id);
 }

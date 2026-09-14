@@ -3,7 +3,9 @@ import { ko } from "date-fns/locale";
 import { MoreHorizontal } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
-import type { AiSession, SessionStatus } from "../mock-data";
+import type { GeneratedSession } from "@/lib/projects/generation-sessions";
+
+type SessionStatus = GeneratedSession["status"];
 
 const STATUS_LABEL: Record<SessionStatus, string> = {
   needs_clarification: "확인 필요",
@@ -22,7 +24,7 @@ export function SessionList({
   sessions,
 }: {
   projectRef: string;
-  sessions: AiSession[];
+  sessions: GeneratedSession[];
 }) {
   return (
     <ul className="flex flex-col gap-1">

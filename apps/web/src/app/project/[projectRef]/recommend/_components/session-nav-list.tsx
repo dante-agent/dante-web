@@ -1,6 +1,8 @@
 import { CheckCircle2, CircleDot, HelpCircle } from "lucide-react";
 import Link from "next/link";
-import type { AiSession, SessionStatus } from "../mock-data";
+import type { GeneratedSession } from "@/lib/projects/generation-sessions";
+
+type SessionStatus = GeneratedSession["status"];
 
 const STATUS_ICON: Record<SessionStatus, typeof CheckCircle2> = {
   needs_clarification: HelpCircle,
@@ -19,13 +21,18 @@ export function SessionNavList({
   sessions,
 }: {
   projectRef: string;
-  sessions: AiSession[];
+  sessions: GeneratedSession[];
 }) {
   return (
     <div className="flex flex-col gap-1 overflow-y-auto pt-10">
       <p className="text-muted-foreground px-2 text-[11px] font-medium tracking-wide uppercase">
         최근 세션
       </p>
+      {sessions.length === 0 && (
+        <p className="text-muted-foreground px-2 py-3 text-xs leading-5">
+          AI로 생성한 테스트 세션이 아직 없습니다.
+        </p>
+      )}
       {sessions.map((session) => {
         const Icon = STATUS_ICON[session.status];
         return (

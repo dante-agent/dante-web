@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore, type ReactNode } from "react";
-import { PanelLeftClose } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // 폴더 보기 / AI 추천 섹션의 서브 사이드바 셸.
@@ -68,6 +68,19 @@ export function SubSidebar({ nav, children }: { nav?: ReactNode; children: React
           {nav}
         </div>
       </aside>
+
+      {isCollapsed && (
+        <button
+          type="button"
+          onClick={toggleSubSidebar}
+          title="서브 사이드바 펼치기"
+          aria-label="서브 사이드바 펼치기"
+          aria-expanded={false}
+          className="border-sidebar-border bg-sidebar text-sidebar-foreground hover:bg-sidebar-accent fixed top-[55px] left-16 z-20 grid size-9 place-items-center rounded-md border shadow-sm"
+        >
+          <PanelLeftOpen className="size-4" />
+        </button>
+      )}
 
       <div className={cn("transition-[margin] duration-200", isCollapsed ? "ml-0" : "ml-60")}>
         {children}
