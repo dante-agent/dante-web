@@ -1,4 +1,4 @@
-import { Sandbox, type CommandFinished } from "@vercel/sandbox";
+import { Sandbox, type Command } from "@vercel/sandbox";
 
 // 테스트 한 번을 격리된 환경에서 돌린다 (실행 환경 결정은 docs/adr/0001-test-runtime.md).
 //
@@ -64,7 +64,14 @@ export interface RunResult {
   finishedAt: string;
 }
 
-export async function runTest(req: RunRequest): Promise<RunResult> {
+export interface RunLog {
+  stream: "stdout" | "stderr";
+  data: string;
+}
+
+export type RunLogCallback = (log: RunLog) => void | Promise<void>;
+
+export async function runTest(req: RunRequest, onLog?: RunLogCallback): Promise<RunResult> {
   const startedAt = new Date();
   const timeoutMs = Math.min(req.timeoutMs ?? DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS);
   const logs: string[] = [];
@@ -108,11 +115,12 @@ export async function runTest(req: RunRequest): Promise<RunResult> {
       args: ["-c", req.commands.install],
       cwd: repoDir,
       timeoutMs,
+      detached: true,
     });
-    logs.push(await section(req.commands.install, install));
-    if (install.exitCode !== 0) {
+    const installResult = await streamSection(req.commands.install, install, logs, onLog);
+    if (installResult.exitCode !== 0) {
       // 사용자 테스트 코드의 문제가 아니다. failed 로 접으면 안 된다.
-      return done("error", null, `설치 실패 (exit ${install.exitCode})`);
+      return done("error", null, `설치 실패 (exit ${installResult.exitCode})`);
     }
 
     const test = await sandbox.runCommand({
@@ -120,10 +128,11 @@ export async function runTest(req: RunRequest): Promise<RunResult> {
       args: ["-c", req.commands.test],
       cwd: repoDir,
       timeoutMs,
+      detached: true,
     });
-    logs.push(await section(req.commands.test, test));
+    const testResult = await streamSection(req.commands.test, test, logs, onLog);
 
-    return done(test.exitCode === 0 ? "passed" : "failed", test.exitCode);
+    return done(testResult.exitCode === 0 ? "passed" : "failed", testResult.exitCode);
   } catch (err) {
     // 샌드박스 생성 실패, 클론 실패, 타임아웃, 쿼터 초과가 전부 여기로 온다.
     // 어느 쪽이든 사용자가 손댈 수 있는 게 아니라 error 다.
@@ -155,13 +164,40 @@ function gitSource(repo: RunRequest["repo"]) {
  * 명령 하나의 로그 블록. stdout 과 stderr 를 나누지 않고 합치는 이유는
  * vitest 가 둘에 걸쳐 출력해서, 나눠 놓으면 사람이 읽을 때 순서가 어그러져서다.
  */
-async function section(command: string, result: CommandFinished) {
-  const output = await result.output("both").catch((err: unknown) => {
-    // 명령이 유효한 Unicode 를 안 뱉으면 여기서 던진다. 결과 자체는 멀쩡하므로
-    // 실행을 실패로 만들지 않고 로그만 포기한다.
-    return `(로그를 읽지 못했습니다: ${err instanceof Error ? err.message : String(err)})`;
-  });
-  return [`$ ${command}`, output, `(exit ${result.exitCode})`].filter(Boolean).join("\n");
+async function streamSection(
+  command: string,
+  running: Command,
+  logs: string[],
+  onLog?: RunLogCallback
+) {
+  const sectionPrefix = logs.length > 0 ? "\n\n" : "";
+  await appendLog(logs, { stream: "stdout", data: `${sectionPrefix}$ ${command}\n` }, onLog);
+
+  try {
+    for await (const chunk of running.logs()) {
+      await appendLog(logs, { stream: chunk.stream, data: chunk.data }, onLog);
+    }
+  } catch (err) {
+    const message = `(로그를 읽지 못했습니다: ${err instanceof Error ? err.message : String(err)})\n`;
+    await appendLog(logs, { stream: "stderr", data: message }, onLog);
+  }
+
+  const result = await running.wait();
+  const exitPrefix = logs.at(-1)?.endsWith("\n") ? "" : "\n";
+  await appendLog(
+    logs,
+    { stream: "stdout", data: `${exitPrefix}(exit ${result.exitCode})` },
+    onLog
+  );
+  return result;
+}
+
+async function appendLog(logs: string[], log: RunLog, onLog?: RunLogCallback) {
+  logs.push(log.data);
+  if (!onLog) return;
+
+  // 스트림 소비자(SSE/NDJSON 연결)가 끊겨도 샌드박스 실행 결과는 보존한다.
+  await Promise.resolve(onLog(log)).catch(() => {});
 }
 
 /**
@@ -169,7 +205,7 @@ async function section(command: string, result: CommandFinished) {
  * 행 하나가 비대해지고 화면도 못 버틴다. 뒤쪽(실패 요약)이 중요하므로 앞을 자른다.
  */
 function joinLogs(parts: string[]) {
-  const joined = parts.join("\n\n");
+  const joined = parts.join("");
   if (joined.length <= MAX_LOG_CHARS) return joined;
   return `… (앞부분 ${joined.length - MAX_LOG_CHARS}자 잘림)\n` + joined.slice(-MAX_LOG_CHARS);
 }

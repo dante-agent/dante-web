@@ -48,6 +48,35 @@ app.post("/runs", async (req, reply) => {
   return reply.code(200).send(result);
 });
 
+app.post("/runs/stream", async (req, reply) => {
+  const parsed = parseRunRequest(req.body);
+  if ("error" in parsed) {
+    return reply.code(400).send({ error: "invalid_request", detail: parsed.error });
+  }
+
+  // 한 줄에 JSON 이벤트 하나를 보내므로 fetch의 ReadableStream에서 줄 단위로
+  // 안전하게 파싱할 수 있다. log 이벤트 뒤 마지막으로 result 이벤트가 온다.
+  reply.hijack();
+  reply.raw.writeHead(200, {
+    "content-type": "application/x-ndjson; charset=utf-8",
+    "cache-control": "no-cache, no-transform",
+    connection: "keep-alive",
+    "x-content-type-options": "nosniff",
+  });
+
+  const writeEvent = (event: unknown) => {
+    if (!reply.raw.destroyed && !reply.raw.writableEnded) {
+      reply.raw.write(`${JSON.stringify(event)}\n`);
+    }
+  };
+
+  const result = await runTest(parsed.value, (log) => {
+    writeEvent({ type: "log", ...log });
+  });
+  writeEvent({ type: "result", result });
+  if (!reply.raw.writableEnded) reply.raw.end();
+});
+
 app.listen({ port: PORT, host: "0.0.0.0" }).catch((err) => {
   app.log.error(err);
   process.exit(1);
