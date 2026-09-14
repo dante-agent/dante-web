@@ -2,10 +2,10 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Dialog } from "@base-ui/react/dialog";
-import { AlertTriangle, Check, Copy, LoaderCircle, Sparkles } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, Copy, LoaderCircle, Sparkles } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import type { GenerateTestResult } from "@/lib/projects/test-generation";
-import { generateTest } from "../actions";
+import { generateTest, type GenerateTestActionResult } from "../actions";
 
 const ERROR_MESSAGE: Record<"budget" | "not-found" | "error" | "failed", string> = {
   budget: "You've exceeded this month's AI budget, so tests can't be generated.",
@@ -14,7 +14,7 @@ const ERROR_MESSAGE: Record<"budget" | "not-found" | "error" | "failed", string>
   failed: "Couldn't run test generation. Please try again in a moment.",
 };
 
-type State = GenerateTestResult | { ok: false; reason: "failed" } | null;
+type State = GenerateTestActionResult | { ok: false; reason: "failed" } | null;
 
 export function GenerateTestButton({
   projectRef,
@@ -111,6 +111,16 @@ export function GenerateTestButton({
               <Button type="button" variant="outline" size="sm" onClick={copy}>
                 {copied ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}
                 {copied ? "Copied" : "Copy code"}
+              </Button>
+            )}
+            {result?.ok && result.versionId && (
+              <Button
+                type="button"
+                size="sm"
+                render={<Link href={`/project/${projectRef}/recommend/${result.versionId}`} />}
+              >
+                Open session
+                <ArrowRight data-icon="inline-end" />
               </Button>
             )}
           </div>
