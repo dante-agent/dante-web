@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@dante/db": "workspace:*",
-    "@vercel/sandbox": "^3.2.2",
+    "@dante/sandbox": "workspace:*",
     "fastify": "^5.2.0"
   },
   "devDependencies": {
