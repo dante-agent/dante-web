@@ -548,8 +548,10 @@ model PullRequestJob {
   prNumber  Int    @map("pr_number")
   headSha   String @map("head_sha")
 
-  /// "queued" | "running" | "done" | "failed" | "superseded"(처리 중 새 커밋이 옴).
-  /// 문자열인 이유는 Project.testFramework 와 같다.
+  /// "queued" | "running"(생성) | "awaiting_run"(생성 끝, 샌드박스 차례 기다림) | "testing"(샌드박스 실행)
+  /// | "done" | "failed" | "superseded"(처리 중 새 커밋이 옴).
+  /// 문자열인 이유는 Project.testFramework 와 같다. 실행은 팀마다 testing 하나만 둔다
+  /// (apps/web/src/lib/notifications/test-run-queue.ts, docs/adr/0002-run-sandbox-from-web.md).
   status    String
   /// failed 일 때의 에러 원문.
   error     String?
@@ -558,8 +560,13 @@ model PullRequestJob {
   /// 마지막 실행의 runner 응답 중 로그를 뺀 부분(status·report·errorMessage·시각).
   /// PR preview 화면이 읽는다. 실행 전에 끝났으면 null.
   runResult Json?   @map("run_result")
-  /// 마지막 실행 로그. runner 가 200k 자로 자른 원문이다.
+  /// 마지막 실행 로그. packages/sandbox 가 200k 자로 자른 원문이다.
   runLogs   String? @map("run_logs")
+  /// 생성이 실행에 넘기는 값(PR 정보·컴포넌트·생성 결과 요약). 실행은 다른 함수에서 돌아서
+  /// 생성 쪽 메모리를 못 본다. 모양은 apps/web/src/lib/notifications/test-run-rules.ts 의 RunInput.
+  runInput     Json?     @map("run_input")
+  /// testing 이 된 시각. 함수가 죽어 testing 으로 남은 작업을 가려내는 데 쓴다.
+  runStartedAt DateTime? @map("run_started_at")
 
   startedAt  DateTime? @map("started_at")
   finishedAt DateTime? @map("finished_at")
@@ -571,6 +578,8 @@ model PullRequestJob {
 
   @@unique([projectId, prNumber, headSha])
   @@index([projectId, prNumber, createdAt])
+  /// 실행 차례를 정할 때 "testing·awaiting_run 인 작업" 을 찾는다. 끝난 작업이 대부분이라 상태로 좁힌다.
+  @@index([status])
   @@map("pull_request_jobs")
 }
 
