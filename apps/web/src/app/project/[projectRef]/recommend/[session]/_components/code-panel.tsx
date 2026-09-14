@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Check, ChevronDown, ChevronRight, Copy, Download } from "lucide-react";
 import { DiffView } from "./diff-view";
-import type { SessionDetail } from "../mock-data";
+import type { SessionDetail } from "../session-detail";
 
 // 우측 "Code" 패널 — 파일별 diff 리뷰. Jules 우측 컬럼 대응.
 // 목업 인터랙션: Collapse all(diff 접기/펼치기), Copy(코드 클립보드 복사).

@@ -2,7 +2,7 @@ import { formatDistanceToNow } from "date-fns";
 import { MoreHorizontal } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
-import type { AiSession, SessionStatus } from "../mock-data";
+import type { GeneratedSession, SessionStatus } from "@/lib/projects/generated-sessions";
 
 const STATUS_LABEL: Record<SessionStatus, string> = {
   needs_clarification: "Needs clarification",
@@ -21,7 +21,7 @@ export function SessionList({
   sessions,
 }: {
   projectRef: string;
-  sessions: AiSession[];
+  sessions: GeneratedSession[];
 }) {
   return (
     <ul className="flex flex-col gap-1">
