@@ -14,7 +14,7 @@ export function DiffView({ lines }: { lines: DiffLine[] }) {
         <div
           key={i}
           className={cn(
-            "flex whitespace-pre",
+            "flex w-max min-w-full whitespace-pre",
             line.kind === "add" && "bg-emerald-500/10",
             line.kind === "del" && "bg-red-500/10"
           )}

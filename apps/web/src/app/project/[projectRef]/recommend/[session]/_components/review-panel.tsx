@@ -54,7 +54,7 @@ export function ReviewPanel({
       {/* 본문 */}
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
         <p className="text-muted-foreground text-sm">
-          테스트 생성·검증·리뷰를 위한 사전 단계가 모두 완료되었습니다.
+          요청을 바탕으로 테스트 파일 초안을 생성했습니다. 변경 내용을 검토해주세요.
         </p>
 
         <p className="flex items-center gap-2 text-sm">
@@ -65,9 +65,9 @@ export function ReviewPanel({
         </p>
 
         <div>
-          <p className="text-sm font-semibold">모든 계획 단계 완료</p>
+          <p className="text-sm font-semibold">테스트 초안 생성 완료</p>
           <p className="text-muted-foreground mt-0.5 text-sm">
-            모든 계획 단계가 성공적으로 끝났습니다. 제출 준비가 되었습니다.
+            아래에서 새로 추가될 파일과 코드를 확인할 수 있습니다.
           </p>
         </div>
 
@@ -109,9 +109,11 @@ export function ReviewPanel({
               <span className="text-muted-foreground text-xs">Time: {session.timeSpent}</span>
               <button
                 type="button"
-                className="bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium"
+                disabled
+                title="GitHub PR 생성 기능은 아직 연결되지 않았습니다."
+                className="bg-primary text-primary-foreground flex cursor-not-allowed items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium opacity-50"
               >
-                PR 생성
+                PR 생성 준비 중
                 <ChevronDown className="size-3.5" />
               </button>
             </div>

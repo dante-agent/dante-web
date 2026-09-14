@@ -23,7 +23,7 @@ export function ResizableSplit({ left, right }: { left: ReactNode; right: ReactN
   return (
     <div
       ref={gridRef}
-      className="relative -m-8 grid h-[calc(100svh-47px)]"
+      className="relative grid h-[calc(100svh-47px)] min-w-0"
       style={{ gridTemplateColumns: `minmax(0, ${leftPct}%) minmax(0, ${100 - leftPct}%)` }}
     >
       <div className="flex h-full min-w-0 overflow-hidden">{left}</div>
