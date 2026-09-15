@@ -56,7 +56,8 @@ const WARN_RATIO = 0.8;
 
 // ── 서버 계약 (/api/chat, /api/chat/conversations) ─────────────────────────────
 type Role = "user" | "assistant";
-type Msg = { role: Role; content: string };
+/** filePath = 이 메시지를 보낼 때 열어 둔 파일(없으면 null). 답변의 Apply 대상이다. */
+type Msg = { role: Role; content: string; filePath: string | null };
 type Conversation = {
   id: string;
   title: string;
@@ -301,10 +302,10 @@ function ChatPanel({
     const content = text.trim();
     if (!content || pending || full) return;
 
-    const user: Msg = { role: "user", content };
+    const user: Msg = { role: "user", content, filePath: file };
     // 빈 assistant 말풍선을 먼저 놓고 조각이 올 때마다 채운다.
     // 앞서 중단된 턴(aborted)은 여기서 버린다 — 위 tail 주석 참고.
-    setTail([user, { role: "assistant", content: "" }]);
+    setTail([user, { role: "assistant", content: "", filePath: file }]);
     setInput("");
     setError(null);
     setPending(true);
@@ -353,7 +354,7 @@ function ChatPanel({
       const now = new Date().toISOString();
       const pair = [
         { ...user, createdAt: now },
-        { role: "assistant" as const, content: answer, createdAt: now },
+        { role: "assistant" as const, content: answer, filePath: file, createdAt: now },
       ];
       queryClient.setQueryData<Conversation>(conversationKey(id), (old) =>
         old
@@ -499,6 +500,8 @@ function ChatPanel({
                     <ChatMarkdown
                       text={m.content}
                       streaming={pending && i === messages.length - 1}
+                      projectRef={projectRef}
+                      applyFile={m.filePath}
                     />
                   ) : (
                     pending && <Loader2 className="text-muted-foreground size-4 animate-spin" />

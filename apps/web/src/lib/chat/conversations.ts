@@ -97,7 +97,7 @@ export type ConversationDetail = {
   title: string;
   updatedAt: Date;
   contextTokens: number;
-  messages: { role: ChatRole; content: string; createdAt: Date }[];
+  messages: { role: ChatRole; content: string; filePath: string | null; createdAt: Date }[];
 };
 
 /** 대화 하나와 메시지 전부(오래된 순). 상한이 50개라 나눠 읽지 않는다. 내 것이 아니면 null. */
@@ -117,7 +117,7 @@ export async function getConversation(
       contextTokens: true,
       messages: {
         orderBy: { createdAt: "asc" },
-        select: { role: true, content: true, createdAt: true },
+        select: { role: true, content: true, filePath: true, createdAt: true },
       },
     },
   });
@@ -130,6 +130,7 @@ export async function getConversation(
       // 저장하는 곳이 saveExchange 하나라 두 값뿐이다.
       role: m.role as ChatRole,
       content: decryptSecret(m.content),
+      filePath: m.filePath,
       createdAt: m.createdAt,
     })),
   };

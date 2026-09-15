@@ -12,11 +12,12 @@
 // - 원본 HTML: skipHtml 로 버린다. rehype-raw 같은 확장은 넣지 않는다.
 // - 링크: http(s) 만 링크로 만들고 새 탭 + noopener noreferrer.
 
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState, useTransition } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Monaco } from "@monaco-editor/react";
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, FileCheck, Loader2 } from "lucide-react";
+import { applyTestCode } from "@/app/project/[projectRef]/folder/actions";
 import { MONACO_THEME, setupMonaco } from "@/lib/monaco-theme";
 
 const REMARK_PLUGINS = [remarkGfm];
@@ -69,7 +70,64 @@ function loadMonaco(): Promise<Monaco> {
   return monacoPromise;
 }
 
-function CodeBlock({ code, lang, streaming }: { code: string; lang?: string; streaming: boolean }) {
+/** Apply 대상. 답변이 나온 파일(메시지의 filePath)이지 지금 열어 둔 파일이 아니다. */
+type ApplyTarget = { projectRef: string; filePath: string };
+
+/** 테스트 파일로 저장할 수 있는 코드펜스. 셸 명령·JSON 같은 블록엔 Apply 를 달지 않는다. */
+const isTestCode = (languageId: string | undefined) =>
+  languageId === "typescript" || languageId === "javascript";
+
+function ApplyButton({ code, target }: { code: string; target: ApplyTarget }) {
+  const [pending, startTransition] = useTransition();
+  const [state, setState] = useState<"idle" | "applied" | "failed">("idle");
+  const name = target.filePath.split("/").pop() ?? target.filePath;
+
+  const apply = () =>
+    startTransition(async () => {
+      try {
+        const result = await applyTestCode(target.projectRef, target.filePath, code);
+        setState(result.ok ? "applied" : "failed");
+      } catch {
+        setState("failed");
+      }
+    });
+
+  return (
+    <button
+      type="button"
+      onClick={apply}
+      // 적용 뒤엔 막는다 — 다시 누르면 같은 내용이 새 버전으로 또 쌓인다.
+      disabled={pending || state === "applied"}
+      title={`Save as a new version of the test for ${target.filePath}`}
+      className={
+        state === "failed"
+          ? "text-destructive hover:bg-muted flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors"
+          : "text-brand-orange hover:bg-brand-orange/10 flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors disabled:opacity-50"
+      }
+    >
+      {pending ? (
+        <Loader2 className="size-3.5 animate-spin" />
+      ) : state === "applied" ? (
+        <Check className="size-3.5" />
+      ) : (
+        <FileCheck className="size-3.5" />
+      )}
+      {state === "applied" ? "Applied" : state === "failed" ? "Apply failed" : `Apply to ${name}`}
+    </button>
+  );
+}
+
+function CodeBlock({
+  code,
+  lang,
+  streaming,
+  applyTo,
+}: {
+  code: string;
+  lang?: string;
+  streaming: boolean;
+  applyTo: ApplyTarget | null;
+}) {
   const [html, setHtml] = useState<{ code: string; value: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const languageId = lang ? FENCE_LANGUAGES[lang.toLowerCase()] : undefined;
@@ -104,17 +162,22 @@ function CodeBlock({ code, lang, streaming }: { code: string; lang?: string; str
     <div className="border-border my-2 overflow-hidden rounded-lg border bg-black">
       <div className="border-border text-muted-foreground flex h-7 items-center justify-between border-b pr-1 pl-2.5 text-xs">
         <span className="font-mono">{lang || "code"}</span>
-        <button
-          type="button"
-          onClick={() => {
-            void navigator.clipboard.writeText(code).then(() => setCopied(true));
-          }}
-          className="hover:text-foreground hover:bg-muted flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors"
-          aria-label="Copy code"
-        >
-          {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-          {copied ? "Copied" : "Copy"}
-        </button>
+        <div className="flex items-center gap-0.5">
+          {applyTo && !streaming && isTestCode(languageId) && (
+            <ApplyButton code={code} target={applyTo} />
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              void navigator.clipboard.writeText(code).then(() => setCopied(true));
+            }}
+            className="hover:text-foreground hover:bg-muted flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors"
+            aria-label="Copy code"
+          >
+            {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+            {copied ? "Copied" : "Copy"}
+          </button>
+        </div>
       </div>
       {/* 코드는 줄바꿈하지 않고 이 블록 안에서만 가로 스크롤 — 들여쓰기가 무너지지 않게. */}
       <pre className="overflow-x-auto p-3 font-mono text-xs leading-relaxed">
@@ -133,7 +196,7 @@ function CodeBlock({ code, lang, streaming }: { code: string; lang?: string; str
 const isSafeHref = (href: string | undefined): href is string =>
   !!href && /^https?:\/\//i.test(href);
 
-function buildComponents(streaming: boolean): Components {
+function buildComponents(streaming: boolean, applyTo: ApplyTarget | null): Components {
   return {
     p: ({ children }) => <p className="my-2 first:mt-0 last:mb-0">{children}</p>,
     h1: ({ children }) => (
@@ -198,7 +261,14 @@ function buildComponents(streaming: boolean): Components {
           <code className="bg-muted rounded px-1 py-0.5 font-mono text-[0.85em]">{children}</code>
         );
       }
-      return <CodeBlock code={text.replace(/\n$/, "")} lang={lang} streaming={streaming} />;
+      return (
+        <CodeBlock
+          code={text.replace(/\n$/, "")}
+          lang={lang}
+          streaming={streaming}
+          applyTo={applyTo}
+        />
+      );
     },
   };
 }
@@ -207,11 +277,19 @@ function buildComponents(streaming: boolean): Components {
 export const ChatMarkdown = memo(function ChatMarkdown({
   text,
   streaming,
+  projectRef,
+  applyFile,
 }: {
   text: string;
   streaming: boolean;
+  projectRef: string;
+  /** 이 답이 나온 파일. 있으면 테스트 코드블록에 Apply 가 붙는다. */
+  applyFile: string | null;
 }) {
-  const components = useMemo(() => buildComponents(streaming), [streaming]);
+  const components = useMemo(
+    () => buildComponents(streaming, applyFile ? { projectRef, filePath: applyFile } : null),
+    [streaming, projectRef, applyFile]
+  );
   return (
     <div className="wrap-break-word">
       <ReactMarkdown remarkPlugins={REMARK_PLUGINS} skipHtml components={components}>
