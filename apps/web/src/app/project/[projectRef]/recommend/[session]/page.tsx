@@ -1,10 +1,13 @@
 import { formatDistanceToNow } from "date-fns";
 import { notFound } from "next/navigation";
-import { requireProjectContext } from "@/lib/projects/queries";
+import { isRunnerConfigured } from "@/lib/notifications/runner-client";
 import { getGeneratedSessionDetail } from "@/lib/projects/generated-sessions";
+import { requireProjectContext } from "@/lib/projects/queries";
+import type { TestRunView } from "@/lib/projects/run-version";
 import { CodePanel } from "./_components/code-panel";
 import { ResizableSplit } from "./_components/resizable-split";
 import { ReviewPanel } from "./_components/review-panel";
+import { TestRunPanel } from "./_components/test-run-panel";
 import type { SessionDetail } from "./session-detail";
 
 // AI 추천 세션 상세. 좌측 세션 사이드바는 recommend/layout.tsx 가 제공하고,
@@ -54,12 +57,42 @@ export default async function SessionDetailPage({
     },
   };
 
+  // 마지막 실행을 터미널의 초기 상태로 넘긴다. 저장하는 status 는 passed/failed/error 뿐이라
+  // 그 밖의 값(있을 리 없지만)은 error 로 접는다.
+  const initialRun: TestRunView | null = detail.latestRun
+    ? {
+        status:
+          detail.latestRun.status === "passed"
+            ? "passed"
+            : detail.latestRun.status === "failed"
+              ? "failed"
+              : "error",
+        logs: detail.latestRun.logs,
+        errorMessage: detail.latestRun.errorMessage,
+      }
+    : null;
+  const runnerConfigured = isRunnerConfigured();
+
   // 프로젝트 셸의 p-8 을 상쇄해 패널을 화면 끝까지 붙인다. 헤더(47px) 아래를 꽉 채운다.
-  // 두 패널 사이 구분선은 드래그로 폭 조절(ResizableSplit).
+  // 두 패널 사이 구분선은 드래그로 폭 조절(ResizableSplit). 우측은 diff(위) + 실행 터미널(아래).
   return (
     <ResizableSplit
       left={<ReviewPanel projectName={project.name} projectRef={projectRef} session={session} />}
-      right={<CodePanel code={session.code} />}
+      right={
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1">
+            <CodePanel code={session.code} />
+          </div>
+          <div className="h-64 shrink-0">
+            <TestRunPanel
+              projectRef={projectRef}
+              versionId={detail.versionId}
+              initialRun={initialRun}
+              runnerConfigured={runnerConfigured}
+            />
+          </div>
+        </div>
+      }
     />
   );
 }
