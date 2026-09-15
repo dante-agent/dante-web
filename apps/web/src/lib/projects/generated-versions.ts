@@ -21,7 +21,14 @@ export async function saveGeneratedVersion(args: {
   testPath: string;
   /** 생성된 테스트 코드 전체. */
   code: string;
-}): Promise<string> {
+  /** "ai"(생성) | "repo"(레포 테스트를 가져옴). 기본 "ai". */
+  source?: "ai" | "repo";
+  /**
+   * 레포 동기화용. 켜면 최신 버전이 없거나 "레포에서 온 버전인데 내용이 다를 때"만 쌓고,
+   * 아니면 아무것도 쓰지 않고 null. AI·사용자 버전 위로 레포 내용을 덮지 않는다.
+   */
+  onlyIfRepoChanged?: boolean;
+}): Promise<string | null> {
   try {
     return await insertVersion(args);
   } catch (error) {
@@ -36,7 +43,7 @@ export async function saveGeneratedVersion(args: {
 
 // ponytail: 버전을 지우지 않고 계속 쌓는다. 생성마다 AI 원가가 들어 월 한도가 먼저 막지만,
 // 행이 문제 되면 이 트랜잭션에서 파일당 최신 N개만 남기고 지운다(실행 기록이 붙은 버전은 남길지 정할 것).
-function insertVersion(args: Parameters<typeof saveGeneratedVersion>[0]): Promise<string> {
+function insertVersion(args: Parameters<typeof saveGeneratedVersion>[0]): Promise<string | null> {
   return prisma.$transaction(async (tx) => {
     // 추천은 export 이름을 모른다(경로만 본다). 이름을 exportName 자리에 그대로 쓴다 —
     // 같은 파일을 또 생성하면 같은 Component 로 붙어 버전이 이어지게 하려는 것이다.
@@ -61,7 +68,8 @@ function insertVersion(args: Parameters<typeof saveGeneratedVersion>[0]): Promis
     const testFile = await tx.testFile.upsert({
       where: { componentId: component.id },
       create: { componentId: component.id, path: args.testPath },
-      update: { path: args.testPath },
+      // 동기화는 건너뛸 수도 있어서 경로는 실제로 쌓을 때만 바꾼다(아래).
+      update: args.onlyIfRepoChanged ? {} : { path: args.testPath },
       select: { id: true },
     });
 
@@ -70,15 +78,22 @@ function insertVersion(args: Parameters<typeof saveGeneratedVersion>[0]): Promis
     const last = await tx.testFileVersion.findFirst({
       where: { testFileId: testFile.id },
       orderBy: { version: "desc" },
-      select: { version: true },
+      select: { version: true, source: true, content: true },
     });
+    // 트랜잭션 안에서 본다 — P2002 재시도 때도 상대가 방금 넣은 버전을 보고 중복을 쌓지 않는다.
+    if (args.onlyIfRepoChanged && last && (last.source !== "repo" || last.content === args.code)) {
+      return null;
+    }
+    if (args.onlyIfRepoChanged) {
+      await tx.testFile.update({ where: { id: testFile.id }, data: { path: args.testPath } });
+    }
 
     const created = await tx.testFileVersion.create({
       data: {
         testFileId: testFile.id,
         content: args.code,
         version: (last?.version ?? 0) + 1,
-        source: "ai",
+        source: args.source ?? "ai",
       },
       select: { id: true },
     });
@@ -88,20 +103,25 @@ function insertVersion(args: Parameters<typeof saveGeneratedVersion>[0]): Promis
 }
 
 /**
- * 이 소스 파일에 저장된 가장 최근 버전. 폴더 보기가 레포에 테스트가 없을 때 대신 보여준다.
+ * 이 소스 파일에 저장된 가장 최근 버전. 폴더 보기 Test Code 칸이 이 값을 보여준다.
  * projectId 는 부르는 쪽이 소유 확인을 마친 값이어야 한다.
  */
 export async function getLatestGeneratedTest(
   projectId: string,
   sourceFilePath: string
-): Promise<{ testPath: string; code: string; version: number } | null> {
+): Promise<{ testPath: string; code: string; version: number; source: string } | null> {
   const latest = await prisma.testFileVersion.findFirst({
     where: { testFile: { component: { projectId, filePath: sourceFilePath } } },
     orderBy: { createdAt: "desc" },
-    select: { content: true, version: true, testFile: { select: { path: true } } },
+    select: { content: true, version: true, source: true, testFile: { select: { path: true } } },
   });
   return latest
-    ? { testPath: latest.testFile.path, code: latest.content, version: latest.version }
+    ? {
+        testPath: latest.testFile.path,
+        code: latest.content,
+        version: latest.version,
+        source: latest.source,
+      }
     : null;
 }
 

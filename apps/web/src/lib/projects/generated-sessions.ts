@@ -57,7 +57,8 @@ export async function getGeneratedSessions(
   if (!projectId) return [];
 
   const versions = await prisma.testFileVersion.findMany({
-    where: { testFile: { component: { projectId } } },
+    // 레포 테스트를 가져온 버전은 세션이 아니다 — 폴더 보기에서 파일을 열 때마다 생긴다.
+    where: { source: { not: "repo" }, testFile: { component: { projectId } } },
     orderBy: { createdAt: "desc" },
     take: limit,
     select: {
