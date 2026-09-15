@@ -7,9 +7,9 @@
 pnpm workspace. Turborepo/Nx 없음.
 
 ```
-apps/web      Next.js 16 (App Router, Turbopack) — BFF 포함  ← 이 디렉터리
-apps/runner   Fastify 5 — 테스트 실행 서버 (현재 껍데기, 실행 환경은 ADR-0001)
-packages/db   Prisma 6 — 스키마/클라이언트, web·runner 공유 (@dante/db)
+apps/web          Next.js 16 (App Router, Turbopack) — BFF 포함  ← 이 디렉터리
+packages/db       Prisma 6 — 스키마/클라이언트 (@dante/db)
+packages/sandbox  Vercel Sandbox 테스트 실행 (@dante/sandbox, ADR-0002). DB 를 모른다
 ```
 
 ## 명령 (리포 루트에서)
@@ -17,7 +17,6 @@ packages/db   Prisma 6 — 스키마/클라이언트, web·runner 공유 (@dante
 |                                                 |                           |
 | ----------------------------------------------- | ------------------------- |
 | `pnpm dev`                                      | web (localhost:3000)      |
-| `pnpm dev:runner`                               | runner (localhost:4000)   |
 | `pnpm build` / `pnpm lint`                      | 전체                      |
 | `pnpm db:migrate` / `db:generate` / `db:studio` | Prisma (packages/db 기준) |
 

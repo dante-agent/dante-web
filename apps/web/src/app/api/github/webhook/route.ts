@@ -11,6 +11,13 @@ import { handleWebhookEvent, verifySignature } from "@/lib/github/webhook";
 //   2xx  성공. 다시 안 보낸다
 //   그 외 실패로 보고 재시도한다 (App 설정의 Advanced 탭에서 배달 기록을 볼 수 있다)
 // 그래서 "우리가 처리하지 않는 이벤트"도 200 으로 받는다. 실패가 아니라 무관심이다.
+
+/**
+ * 응답 뒤 after() 로 PR 작업(테스트 생성·샌드박스 실행)을 돈다. 그 시간이 이 함수의 수명에
+ * 들어가서 기본 300초로는 잘린다. Pro 의 최대값이다(docs/adr/0002-run-sandbox-from-web.md).
+ */
+export const maxDuration = 800;
+
 export async function POST(request: Request) {
   // 파싱 전 원본 문자열이어야 서명이 맞는다. request.json() 을 먼저 부르면 안 된다.
   const body = await request.text();

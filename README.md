@@ -1,11 +1,11 @@
 # dante-web
 
-웹(제품 중심) + 테스트 러너. pnpm workspace. Turborepo/Nx 안 씀.
+웹(제품 중심). pnpm workspace. Turborepo/Nx 안 씀.
 
 ```
-apps/web      Next.js — BFF 포함
-apps/runner   Fastify — 테스트 실행 서버 (껍데기, 실행 환경은 ADR-0001)
-packages/db   Prisma 스키마/클라이언트 (web·runner 공유)
+apps/web          Next.js — BFF 포함, 테스트 실행도 여기서 샌드박스를 부른다
+packages/db       Prisma 스키마/클라이언트
+packages/sandbox  Vercel Sandbox 로 테스트 한 번 실행 (ADR-0001, ADR-0002)
 ```
 
 ## 기술 스택
@@ -72,12 +72,11 @@ packages/db   Prisma 스키마/클라이언트 (web·runner 공유)
 | date-fns                    | 4.4.0           | 이력 날짜 그룹핑                            |
 | eslint / eslint-config-next | 9.39.5 / 16.3.4 | 린트                                        |
 
-### apps/runner
+### packages/sandbox
 
-| 패키지  | 버전    | 용도      |
-| ------- | ------- | --------- |
-| fastify | 5.12.3  | HTTP 서버 |
-| tsx     | 4.23.13 | 실행      |
+| 패키지          | 버전  | 용도                        |
+| --------------- | ----- | --------------------------- |
+| @vercel/sandbox | 3.2.2 | 격리된 환경에서 테스트 실행 |
 
 ### packages/db
 
@@ -87,8 +86,8 @@ packages/db   Prisma 스키마/클라이언트 (web·runner 공유)
 
 ### 인프라
 
-|                |                            |
-| -------------- | -------------------------- |
-| Supabase       | Auth + Postgres + Realtime |
-| Vercel         | web 배포                   |
-| Vercel Sandbox | 테스트 실행 (ADR-0001)     |
+|                |                                  |
+| -------------- | -------------------------------- |
+| Supabase       | Auth + Postgres + Realtime       |
+| Vercel         | web 배포                         |
+| Vercel Sandbox | 테스트 실행 (ADR-0001, ADR-0002) |
