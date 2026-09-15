@@ -37,6 +37,8 @@ export async function GET(
       messages: conversation.messages.map((m) => ({
         role: m.role,
         content: m.content,
+        // 답이 어느 파일을 보며 나왔는지 — 채팅의 Apply 가 그 파일에 저장한다.
+        filePath: m.filePath,
         createdAt: m.createdAt.toISOString(),
       })),
     },

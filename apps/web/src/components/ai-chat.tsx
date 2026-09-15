@@ -51,12 +51,15 @@ const MAX_MESSAGES = 50;
 const MAX_CONTEXT_TOKENS = 50_000;
 /** 서버가 답 스트림 끝에 붙이는 구분자. 뒤에 실제 컨텍스트 토큰 수가 온다(api/chat/route.ts). */
 const USAGE_MARK = "\u001e";
+/** 서버가 대화 저장에 실패했을 때 꼬리에 붙이는 값(route.ts 에 같은 값). */
+const UNSAVED = "unsaved";
 /** 이 비율부터 게이지를 경고 톤으로. 가득 차기 전에 새 대화를 떠올리게. */
 const WARN_RATIO = 0.8;
 
 // ── 서버 계약 (/api/chat, /api/chat/conversations) ─────────────────────────────
 type Role = "user" | "assistant";
-type Msg = { role: Role; content: string };
+/** filePath = 이 메시지를 보낼 때 열어 둔 파일(없으면 null). 답변의 Apply 대상이다. */
+type Msg = { role: Role; content: string; filePath: string | null };
 type Conversation = {
   id: string;
   title: string;
@@ -68,7 +71,27 @@ type Conversation = {
 type ConversationSummary = { id: string; title: string; updatedAt: string; messageCount: number };
 type ConversationPage = { items: ConversationSummary[]; nextCursor: string | null };
 
-const conversationsKey = (projectRef: string) => ["chat", "conversations", projectRef] as const;
+/** 대화 목록은 파일마다 따로다(서버도 파일로 거른다). */
+const conversationsKey = (projectRef: string, file: string | null) =>
+  ["chat", "conversations", projectRef, file] as const;
+
+/** 이 파일의 대화 목록. 패널(이어 보기)과 기록 화면이 같은 캐시를 쓴다. */
+function useConversationList(projectRef: string, file: string | null, enabled = true) {
+  return useInfiniteQuery({
+    queryKey: conversationsKey(projectRef, file),
+    queryFn: ({ pageParam }) =>
+      getJson<ConversationPage>(
+        `/api/chat/conversations?${new URLSearchParams({
+          projectRef,
+          filePath: file ?? "",
+          ...(pageParam && { cursor: pageParam }),
+        })}`
+      ),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
+    enabled: enabled && file !== null,
+  });
+}
 const conversationKey = (id: string | null) => ["chat", "conversation", id] as const;
 
 /** 서버 상태코드를 catch 까지 들고 가려고 감싼다. fetch 는 !ok 를 throw 하지 않는다. */
@@ -174,7 +197,7 @@ export function AiChatDock({ projectRef, children }: { projectRef: string; child
 
         {/* useSearchParams 를 쓰므로 경계를 둔다(정적 렌더 이탈 방지). */}
         <Suspense fallback={null}>
-          <ChatPanel
+          <FileChatPanel
             projectRef={projectRef}
             open={open}
             width={width}
@@ -197,26 +220,53 @@ export function AiChatDock({ projectRef, children }: { projectRef: string; child
   );
 }
 
-function ChatPanel({
-  projectRef,
-  open,
-  width,
-  onClose,
-}: {
+type PanelProps = {
   projectRef: string;
   open: boolean;
   /** 사용자가 끌어서 정한 폭(px). null 이면 기본 폭 클래스. */
   width: number | null;
   onClose: () => void;
-}) {
-  const file = useSearchParams().get("file");
+};
 
+/**
+ * 대화는 파일마다 따로라, 파일이 바뀌면 패널을 새로 띄운다(key). 보던 대화·입력·기록 화면이
+ * 다른 파일로 따라가지 않는다. 진행 중인 답은 언마운트에서 끊긴다(저장되지 않음).
+ */
+function FileChatPanel(props: PanelProps) {
+  const file = useSearchParams().get("file");
+  return <ChatPanel key={file ?? ""} file={file} {...props} />;
+}
+
+function ChatPanel({
+  projectRef,
+  open,
+  width,
+  onClose,
+  file,
+}: PanelProps & { file: string | null }) {
   const queryClient = useQueryClient();
+
+  // 서버에 아직 없는 꼬리: 보내는 중인 질문과 스트리밍 중인 답. 끝나면 캐시로 옮기고 비운다.
+  // 중단된 답은 aborted 로 표시해 남긴다(저장되지 않았다고 알려주려고). 다음 전송 때 지운다
+  // — 서버 대화에 없는 턴이라 그 뒤에 새 턴이 붙으면 순서가 거짓말이 된다.
+  // unsaved = 답은 끝까지 받았지만 서버가 대화에 저장하지 못한 턴. 표시와 처리는 aborted 와 같다.
+  const [tail, setTail] = useState<(Msg & { aborted?: boolean; unsaved?: boolean })[]>([]);
+
+  // 파일로 돌아오면 그 파일의 가장 최근 대화를 이어서 연다. 목록이 처음 왔을 때 한 번만 정한다
+  // (undefined = 아직). 그 뒤 목록이 다시 받아져도(다른 탭에서 새 대화 등) 보던 화면이 튀지 않고,
+  // 그 사이 첫 질문을 이미 보냈으면(tail) 옛 대화로 넘기지 않는다. effect 대신 렌더 중에 정한다.
+  // 패널을 닫아 둔 채 파일만 옮겨 다닐 땐 받지 않는다 — 열면 그때 받아 이어 본다.
+  const list = useConversationList(projectRef, file, open);
+  const [resumeId, setResumeId] = useState<string | null | undefined>(undefined);
+  if (resumeId === undefined && list.isFetched) {
+    setResumeId(tail.length === 0 ? (list.data?.pages[0]?.items[0]?.id ?? null) : null);
+  }
 
   // 지금 보고 있는 대화의 서버 id. null = 아직 저장 안 된 새 대화.
   // 서버가 첫 답을 저장하고 id 를 돌려준 뒤에야 채운다 — 중단된 새 대화는 저장되지 않으므로
-  // id 를 미리 들고 있으면 없는 대화를 가리키게 된다.
-  const [conversationId, setConversationId] = useState<string | null>(null);
+  // id 를 미리 들고 있으면 없는 대화를 가리키게 된다. 직접 고른 게 없으면 이어 보기 대화.
+  const [chosenId, setConversationId] = useState<string | null>(null);
+  const conversationId = chosenId ?? resumeId ?? null;
   const conversation = useQuery({
     queryKey: conversationKey(conversationId),
     queryFn: () => getJson<Conversation>(`/api/chat/conversations/${conversationId}`),
@@ -225,11 +275,6 @@ function ChatPanel({
     staleTime: Infinity,
   });
   const saved = conversation.data?.messages;
-
-  // 서버에 아직 없는 꼬리: 보내는 중인 질문과 스트리밍 중인 답. 끝나면 캐시로 옮기고 비운다.
-  // 중단된 답은 aborted 로 표시해 남긴다(저장되지 않았다고 알려주려고). 다음 전송 때 지운다
-  // — 서버 대화에 없는 턴이라 그 뒤에 새 턴이 붙으면 순서가 거짓말이 된다.
-  const [tail, setTail] = useState<(Msg & { aborted?: boolean })[]>([]);
   const messages = [...(saved ?? []), ...tail];
 
   const [input, setInput] = useState("");
@@ -273,6 +318,8 @@ function ChatPanel({
   function switchTo(id: string | null) {
     abortRef.current?.abort();
     setConversationId(id);
+    // 직접 옮겼으면 이어 보기는 끝났다 — New chat 으로 비운 화면에 옛 대화가 다시 뜨지 않게.
+    setResumeId(null);
     setTail([]);
     setError(null);
     setFullFromServer(false);
@@ -287,7 +334,7 @@ function ChatPanel({
   async function removeConversation(id: string) {
     const response = await fetch(`/api/chat/conversations/${id}`, { method: "DELETE" });
     // 실패해도 목록은 다시 받는다 — 지워졌는지는 서버 목록이 말해준다.
-    void queryClient.invalidateQueries({ queryKey: conversationsKey(projectRef) });
+    void queryClient.invalidateQueries({ queryKey: conversationsKey(projectRef, file) });
     if (!response.ok) return;
     queryClient.removeQueries({ queryKey: conversationKey(id) });
     // 지금 보고 있는 대화를 지웠으면 새 대화로 비운다(목록에는 그대로 머문다).
@@ -299,12 +346,12 @@ function ChatPanel({
 
   async function send(text: string) {
     const content = text.trim();
-    if (!content || pending || full) return;
+    if (!content || pending || full || !file) return;
 
-    const user: Msg = { role: "user", content };
+    const user: Msg = { role: "user", content, filePath: file };
     // 빈 assistant 말풍선을 먼저 놓고 조각이 올 때마다 채운다.
     // 앞서 중단된 턴(aborted)은 여기서 버린다 — 위 tail 주석 참고.
-    setTail([user, { role: "assistant", content: "" }]);
+    setTail([user, { role: "assistant", content: "", filePath: file }]);
     setInput("");
     setError(null);
     setPending(true);
@@ -344,16 +391,23 @@ function ChatPanel({
           prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: shown } : m))
         );
       }
-      const [answer, usage] = raw.split(USAGE_MARK);
+      const [answer, usage, flag] = raw.split(USAGE_MARK);
       // 구분자가 안 왔으면(구버전 서버 등) 이전 값을 그대로 둔다.
       const contextTokens = usage ? Number(usage) : undefined;
+
+      // 서버에 안 남은 턴을 대화에 붙이면, 다시 열었을 때 사라져 화면이 거짓말을 한 셈이 된다.
+      // 받은 답은 보여주되 저장 안 됐다고 표시하고, 새 대화였다면 id 도 잡지 않는다.
+      if (flag === UNSAVED) {
+        setTail((prev) => prev.map((m) => (m.role === "assistant" ? { ...m, unsaved: true } : m)));
+        return;
+      }
 
       // 서버는 스트림이 끝나면 두 메시지를 저장한다. 같은 모양을 캐시에 붙여 다시 받지 않는다.
       // 캐시를 먼저 채우고 id 를 바꿔야 새 대화일 때 useQuery 가 빈 캐시로 요청을 보내지 않는다.
       const now = new Date().toISOString();
       const pair = [
         { ...user, createdAt: now },
-        { role: "assistant" as const, content: answer, createdAt: now },
+        { role: "assistant" as const, content: answer, filePath: file, createdAt: now },
       ];
       queryClient.setQueryData<Conversation>(conversationKey(id), (old) =>
         old
@@ -367,7 +421,7 @@ function ChatPanel({
       );
       setConversationId(id);
       setTail([]);
-      void queryClient.invalidateQueries({ queryKey: conversationsKey(projectRef) });
+      void queryClient.invalidateQueries({ queryKey: conversationsKey(projectRef, file) });
     } catch (e) {
       if (controller.signal.aborted) {
         // 서버는 중단된 턴을 저장하지 않는다. 받은 만큼은 보여주되 저장 안 됐다고 표시한다.
@@ -453,6 +507,7 @@ function ChatPanel({
       {showHistory ? (
         <HistoryList
           projectRef={projectRef}
+          file={file}
           currentId={conversationId}
           onOpen={switchTo}
           onRemove={(id) => void removeConversation(id)}
@@ -499,12 +554,20 @@ function ChatPanel({
                     <ChatMarkdown
                       text={m.content}
                       streaming={pending && i === messages.length - 1}
+                      projectRef={projectRef}
+                      applyFile={m.filePath}
                     />
                   ) : (
                     pending && <Loader2 className="text-muted-foreground size-4 animate-spin" />
                   )}
                   {"aborted" in m && m.aborted && (
                     <p className="text-muted-foreground mt-1 text-xs">Stopped · Not saved</p>
+                  )}
+                  {"unsaved" in m && m.unsaved && (
+                    <p role="alert" className="text-destructive mt-1 text-xs">
+                      Couldn&apos;t save this reply. It won&apos;t be here when you reopen this
+                      chat.
+                    </p>
                   )}
                 </div>
               </div>
@@ -558,7 +621,7 @@ function ChatPanel({
             <textarea
               ref={inputRef}
               rows={1}
-              disabled={full}
+              disabled={full || !file}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
@@ -586,7 +649,7 @@ function ChatPanel({
               <Button
                 type="submit"
                 size="icon-sm"
-                disabled={!input.trim() || full}
+                disabled={!input.trim() || full || !file}
                 title="Send"
                 aria-label="Send"
               >
@@ -670,26 +733,18 @@ function ContextBar({ tokens }: { tokens: number }) {
  */
 function HistoryList({
   projectRef,
+  file,
   currentId,
   onOpen,
   onRemove,
 }: {
   projectRef: string;
+  file: string | null;
   currentId: string | null;
   onOpen: (id: string) => void;
   onRemove: (id: string) => void;
 }) {
-  const list = useInfiniteQuery({
-    queryKey: conversationsKey(projectRef),
-    queryFn: ({ pageParam }) =>
-      getJson<ConversationPage>(
-        `/api/chat/conversations?${new URLSearchParams(
-          pageParam ? { projectRef, cursor: pageParam } : { projectRef }
-        )}`
-      ),
-    initialPageParam: null as string | null,
-    getNextPageParam: (last) => last.nextCursor,
-  });
+  const list = useConversationList(projectRef, file);
 
   if (list.isPending) {
     return (

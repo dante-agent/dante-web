@@ -712,6 +712,10 @@ model ChatConversation {
   /// 화면의 "컨텍스트 %"와 서버의 대화 상한(409)이 이 값을 본다.
   contextTokens Int @default(0) @map("context_tokens")
 
+  /// 이 대화가 붙은 파일(레포 루트 기준). 대화는 파일마다 따로다 — 다른 파일에서 이어 쓰지 않는다.
+  /// 파일 없이 시작한 대화(예전 데이터)는 null 이고 어느 파일 목록에도 나오지 않는다.
+  filePath String? @map("file_path")
+
   createdAt DateTime @default(now()) @map("created_at")
   /// 목록 정렬 기준. 메시지를 저장할 때 같이 갱신된다.
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -721,8 +725,8 @@ model ChatConversation {
   project  Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   messages ChatMessage[]
 
-  /// "이 프로젝트에서 내 최근 대화" 목록을 updatedAt 커서로 넘긴다.
-  @@index([userId, projectId, updatedAt])
+  /// "이 파일에서 내 최근 대화" 목록을 updatedAt 커서로 넘긴다.
+  @@index([userId, projectId, filePath, updatedAt])
   @@map("chat_conversations")
 }
 

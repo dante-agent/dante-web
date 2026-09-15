@@ -51,10 +51,11 @@ export type ConversationPage = {
   nextCursor: string | null;
 };
 
-/** 이 프로젝트에서 내 대화 목록(최근 순). 커서가 망가졌으면 null. */
+/** 이 프로젝트의 이 파일에서 내 대화 목록(최근 순). 대화는 파일마다 따로다. 커서가 망가졌으면 null. */
 export async function listConversations(
   userId: string,
   projectRef: string,
+  filePath: string,
   cursor: string | null
 ): Promise<ConversationPage | null> {
   const after = cursor ? decodeCursor(cursor) : null;
@@ -64,6 +65,7 @@ export async function listConversations(
     where: {
       userId,
       project: { ref: projectRef, ...accessibleProjectWhere(userId) },
+      filePath,
       // 정렬(updatedAt desc, id desc)에서 커서 다음 행부터.
       ...(after && {
         OR: [
@@ -94,10 +96,12 @@ export async function listConversations(
 export type ConversationDetail = {
   id: string;
   projectId: string;
+  /** 대화가 붙은 파일. 파일 없이 만든 예전 대화는 null. */
+  filePath: string | null;
   title: string;
   updatedAt: Date;
   contextTokens: number;
-  messages: { role: ChatRole; content: string; createdAt: Date }[];
+  messages: { role: ChatRole; content: string; filePath: string | null; createdAt: Date }[];
 };
 
 /** 대화 하나와 메시지 전부(오래된 순). 상한이 50개라 나눠 읽지 않는다. 내 것이 아니면 null. */
@@ -112,12 +116,13 @@ export async function getConversation(
     select: {
       id: true,
       projectId: true,
+      filePath: true,
       title: true,
       updatedAt: true,
       contextTokens: true,
       messages: {
         orderBy: { createdAt: "asc" },
-        select: { role: true, content: true, createdAt: true },
+        select: { role: true, content: true, filePath: true, createdAt: true },
       },
     },
   });
@@ -130,6 +135,7 @@ export async function getConversation(
       // 저장하는 곳이 saveExchange 하나라 두 값뿐이다.
       role: m.role as ChatRole,
       content: decryptSecret(m.content),
+      filePath: m.filePath,
       createdAt: m.createdAt,
     })),
   };
@@ -180,6 +186,7 @@ export async function saveExchange(input: {
         id: input.conversationId,
         userId: input.userId,
         projectId: input.projectId,
+        filePath: input.filePath,
         title: encryptSecret(titleOf(input.question)),
         contextTokens: input.contextTokens,
         messages,
