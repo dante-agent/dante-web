@@ -15,6 +15,8 @@ export const config = {
     //
     // api/v1 도 제외한다. 익스텐션이 쿠키 없이 Bearer 토큰으로 부르는 경로라
     // (lib/extension/auth.ts), 여기 걸리면 GET 이 전부 로그인 화면으로 튕긴다.
-    "/((?!api/github/webhook|api/v1|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    //
+    // api/internal 도 제외한다. 서버가 자기 자신을 부르는 경로라 세션이 없고, 서명으로 확인한다.
+    "/((?!api/github/webhook|api/v1|api/internal|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

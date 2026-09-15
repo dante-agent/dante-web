@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { REPORT_PATH, buildTestCommand, parseReport } from "./report.ts";
 
-// 러너 JSON 리포트 해석 규칙. 실행: pnpm --filter @dante/runner test
+// 러너 JSON 리포트 해석 규칙. 실행: pnpm --filter @dante/sandbox test
 
 const REPO = "/vercel/my-blog";
 

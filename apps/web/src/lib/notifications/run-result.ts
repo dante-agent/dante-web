@@ -17,7 +17,10 @@ export type GenerationOutcome = {
   stopped: "budget-exceeded" | "budget-unavailable" | null;
 };
 
-/** runner 응답 중 여기서 쓰는 필드만 (runner-client.ts 의 RunnerResult 와 같은 모양) */
+/**
+ * 실행 결과 중 여기서 쓰는 필드만 (packages/sandbox 의 RunResult 와 같은 모양).
+ * import 하지 않고 다시 적는 이유: 이 파일은 node --test 로 바로 도는 순수 함수라 워크스페이스 패키지를 못 읽는다.
+ */
 export type RunnerOutcome = {
   status: "passed" | "failed" | "error";
   errorMessage?: string;

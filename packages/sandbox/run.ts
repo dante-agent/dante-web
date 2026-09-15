@@ -5,9 +5,9 @@ import {
   parseReport,
   type TestFramework,
   type TestReport,
-} from "./report.js";
+} from "./report.ts";
 
-// 테스트 한 번을 격리된 환경에서 돌린다 (실행 환경 결정은 docs/adr/0001-test-runtime.md).
+// 테스트 한 번을 격리된 환경에서 돌린다 (실행 환경 결정은 docs/adr/0001-test-runtime.md, 0002).
 //
 // 이 파일은 DB 를 모른다. 무엇을 돌릴지는 전부 요청으로 받고, 결과만 돌려준다.
 // AGENTS.md 의 "DB 접근은 전부 Next.js 서버에서" 를 지키기도 하고, ADR-0001 이
@@ -16,7 +16,14 @@ import {
 
 /** 기본 상한. Vercel Sandbox 자체의 기본 타임아웃도 5분이다. */
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
-const MAX_TIMEOUT_MS = 15 * 60 * 1000;
+/**
+ * 실행 한 번 전체(클론·install·test)의 상한.
+ *
+ * 부르는 쪽이 Vercel Function 이라 함수 수명(Pro 최대 800초) 안에 샌드박스 정리까지
+ * 끝나야 한다. 10분 + 샌드박스 여유 1분이면 800초 안에 들어온다. 함수가 먼저 죽으면
+ * finally 의 stop 도 못 불러서 샌드박스가 수명 끝까지 요금을 먹는다.
+ */
+const MAX_TIMEOUT_MS = 10 * 60 * 1000;
 
 /** 로그 상한. TestRun.logs 는 TEXT 라 무제한이지만, 화면에 붙일 것이고 DB 도 붙는다. */
 const MAX_LOG_CHARS = 200_000;
@@ -30,9 +37,8 @@ export interface RunRequest {
     /**
      * GitHub 설치 토큰. private 레포를 클론하려면 있어야 한다.
      *
-     * runner 가 직접 발급하지 않는 이유: 발급에는 GitHub App private key 가
-     * 필요한데, 그걸 여기 두면 유출 면적이 프로세스 하나만큼 늘어난다.
-     * web 이 1시간짜리로 받아서 넘겨주고, 우리는 쓰고 버린다.
+     * 여기서 직접 발급하지 않는 이유: 발급은 GitHub App private key 를 쓰는
+     * 부르는 쪽의 일이다. 이 패키지는 1시간짜리를 받아서 쓰고 버린다.
      */
     token?: string;
   };
@@ -54,7 +60,7 @@ export interface RunRequest {
     /** 예: "pnpm vitest run" */
     test: string;
   };
-  /** 밀리초. 생략하면 5분, 최대 15분. */
+  /** 밀리초. 클론부터 테스트까지 합친 시간이다. 생략하면 5분, 최대 10분. */
   timeoutMs?: number;
 }
 
@@ -82,12 +88,27 @@ export interface RunResult {
 }
 
 /**
- * signal 이 끊기면(web 이 요청을 끊으면) 진행 중인 단계를 멈추고 error 로 끝낸다.
- * 샌드박스는 finally 에서 내린다. PR 에 새 커밋이 와서 옛 실행이 필요 없어졌을 때 쓴다.
+ * 샌드박스를 부를 인증이 있는지. 없으면 부르는 쪽이 실행을 건너뛴다.
+ *
+ * Vercel 에 배포된 함수는 OIDC 토큰을 요청마다 받으므로 VERCEL 만 보고 된다고 본다.
+ * 로컬은 `vercel env pull` 의 VERCEL_OIDC_TOKEN 이나 Access Token 세 값이 있어야 한다.
+ */
+export function isSandboxConfigured() {
+  if (process.env.VERCEL === "1" || process.env.VERCEL_OIDC_TOKEN) return true;
+  return Boolean(process.env.VERCEL_TOKEN);
+}
+
+/**
+ * signal 이 끊기면 진행 중인 단계를 멈추고 error 로 끝낸다. 샌드박스는 finally 에서
+ * 내린다. PR 에 새 커밋이 와서 옛 실행이 필요 없어졌을 때 쓴다.
  */
 export async function runTest(req: RunRequest, signal?: AbortSignal): Promise<RunResult> {
   const startedAt = new Date();
   const timeoutMs = Math.min(req.timeoutMs ?? DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS);
+  // 명령마다 timeoutMs 를 따로 주면 install 과 test 가 각각 상한까지 돌아 두 배가 된다.
+  // 부르는 함수의 수명을 넘기지 않게 전체 마감 하나를 두고 남은 시간만 준다.
+  const deadline = startedAt.getTime() + timeoutMs;
+  const remainingMs = () => Math.max(1_000, deadline - Date.now());
   const logs: string[] = [];
 
   const done = (
@@ -105,14 +126,14 @@ export async function runTest(req: RunRequest, signal?: AbortSignal): Promise<Ru
     finishedAt: new Date().toISOString(),
   });
 
-  // 앞 실행을 기다리는 사이에 web 이 끊었으면 샌드박스를 만들지도 않는다.
+  // 시작 전에 이미 끊겼으면 샌드박스를 만들지도 않는다.
   if (signal?.aborted) return done("error", null, "요청이 끊겨 실행하지 않았습니다");
 
   let sandbox: Sandbox | undefined;
   try {
     sandbox = await Sandbox.create({
       source: gitSource(req.repo),
-      // 샌드박스 자체의 수명. 아래 명령별 timeoutMs 보다 넉넉해야 명령 타임아웃이
+      // 샌드박스 자체의 수명. 아래 명령의 마감보다 넉넉해야 명령 타임아웃이
       // 먼저 걸리고, "설치가 오래 걸렸다" 처럼 원인이 남는다. 샌드박스가 먼저
       // 죽으면 로그도 같이 사라진다.
       timeout: timeoutMs + 60_000,
@@ -136,7 +157,7 @@ export async function runTest(req: RunRequest, signal?: AbortSignal): Promise<Ru
       cmd: "sh",
       args: ["-c", req.commands.install],
       cwd: repoDir,
-      timeoutMs,
+      timeoutMs: remainingMs(),
       signal,
     });
     logs.push(await section(req.commands.install, install));
@@ -154,7 +175,7 @@ export async function runTest(req: RunRequest, signal?: AbortSignal): Promise<Ru
       cmd: "sh",
       args: ["-c", command],
       cwd: repoDir,
-      timeoutMs,
+      timeoutMs: remainingMs(),
       signal,
     });
     logs.push(await section(command, test));
