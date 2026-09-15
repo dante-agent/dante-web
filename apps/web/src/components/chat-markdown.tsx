@@ -102,7 +102,7 @@ function ApplyButton({ code, target }: { code: string; target: ApplyTarget }) {
       title={`Save as a new version of the test for ${target.filePath}`}
       // 브랜드 컬러 캡슐. 적용 뒤엔 색을 빼 "끝남"을 보이고, 실패는 테두리만 빨갛게.
       className={cn(
-        "flex max-w-full min-w-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium shadow-sm transition-[background-color,transform] active:scale-[0.97]",
+        "flex max-w-full min-w-0 items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium shadow-sm transition-[background-color,transform] active:scale-[0.97]",
         state === "applied"
           ? "bg-muted text-muted-foreground shadow-none"
           : state === "failed"
@@ -111,11 +111,11 @@ function ApplyButton({ code, target }: { code: string; target: ApplyTarget }) {
       )}
     >
       {pending ? (
-        <Loader2 className="size-3.5 animate-spin" />
+        <Loader2 className="size-4 animate-spin" />
       ) : state === "applied" ? (
-        <Check className="size-3.5" />
+        <Check className="size-4" />
       ) : (
-        <FileCheck className="size-3.5 shrink-0" />
+        <FileCheck className="size-4 shrink-0" />
       )}
       {/* 파일명이 길면 줄이지 않고 말줄임 — 전체 경로는 title 에 있다. */}
       <span className="truncate">
@@ -201,7 +201,7 @@ function CodeBlock({
       {/* 코드블록 밖의 독립 버튼. 긴 코드가 스트리밍되는 동안 헤더는 화면 위로 지나가므로, 다 읽은
         자리(블록 아래)에 끝난 뒤에만 아래에서 올라오게 한다. 채팅은 끝날 때 맨 아래로 스크롤한다. */}
       {applyTo && !streaming && isTestCode(languageId) && (
-        <div className="animate-in fade-in slide-in-from-bottom-3 mb-3 flex justify-end duration-300 ease-out motion-reduce:animate-none">
+        <div className="animate-in fade-in slide-in-from-bottom-3 mt-1 mb-4 flex justify-center duration-300 ease-out motion-reduce:animate-none">
           <ApplyButton code={code} target={applyTo} />
         </div>
       )}
