@@ -1,15 +1,7 @@
-import {
-  ArrowLeft,
-  ChevronDown,
-  GitBranch,
-  Lock,
-  Sparkles,
-  ThumbsDown,
-  ThumbsUp,
-} from "lucide-react";
+import { ArrowLeft, GitBranch, Lock, Sparkles, ThumbsDown, ThumbsUp } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
-import type { SessionDetail } from "../mock-data";
+import type { SessionDetail } from "../session-detail";
 import { FollowUp } from "./follow-up";
 
 // 중앙 리뷰 패널 — Jules 가운데 컬럼. 계획 완료 안내 + "Ready for review" 요약 카드 + 잠긴 입력.
@@ -54,7 +46,7 @@ export function ReviewPanel({
       {/* 본문 */}
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
         <p className="text-muted-foreground text-sm">
-          All preliminary steps for test generation, verification, and review are complete.
+          AI generated a test draft from your request. Review the file on the right.
         </p>
 
         <p className="flex items-center gap-2 text-sm">
@@ -64,17 +56,10 @@ export function ReviewPanel({
           </span>
         </p>
 
-        <div>
-          <p className="text-sm font-semibold">All plan steps complete</p>
-          <p className="text-muted-foreground mt-0.5 text-sm">
-            All plan steps finished successfully. Ready to submit.
-          </p>
-        </div>
-
-        {/* Ready for review 카드 */}
+        {/* 생성 요약 카드 */}
         <div className="border-border bg-card rounded-xl border">
           <div className="border-border flex items-center justify-between border-b px-4 py-3">
-            <span className="text-sm font-semibold">Ready for review 🎉</span>
+            <span className="text-sm font-semibold">Generated draft</span>
             <span className="flex items-center gap-1.5 font-mono text-xs">
               <span className="text-emerald-400">+{session.code.additions}</span>
               {session.code.deletions > 0 && (
@@ -86,7 +71,7 @@ export function ReviewPanel({
           <div className="space-y-4 px-4 py-4">
             <div className="text-muted-foreground flex items-center gap-2 font-mono text-xs">
               <GitBranch className="size-3.5 shrink-0" />
-              <span className="truncate">{session.branch}</span>
+              <span className="truncate">{session.origin}</span>
             </div>
 
             <SummaryBlock icon="✍️" title="What" items={summary.what} />
@@ -105,16 +90,7 @@ export function ReviewPanel({
                 <ThumbsDown className="size-3.5" />
               </button>
             </div>
-            <div className="flex items-center gap-3">
-              <span className="text-muted-foreground text-xs">Time: {session.timeSpent}</span>
-              <button
-                type="button"
-                className="bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium"
-              >
-                Create PR
-                <ChevronDown className="size-3.5" />
-              </button>
-            </div>
+            <span className="text-muted-foreground text-xs">Created {session.createdLabel}</span>
           </div>
         </div>
       </div>

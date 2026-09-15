@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import type { DiffLine } from "../mock-data";
+import type { DiffLine } from "../session-detail";
 
 // 통합(unified) diff 한 벌. Jules 코드 패널처럼 [old #][new #][부호][코드] 4열.
 // 추가=초록, 삭제=빨강, 문맥=중립. mock 정적 렌더라 Monaco 없이 가볍게 그린다.
