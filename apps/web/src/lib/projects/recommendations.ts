@@ -43,8 +43,11 @@ function classify(path: string): Pick<TestRecommendation, "priority" | "reason">
 
 const PRIORITY_ORDER: Record<RecommendationPriority, number> = { high: 0, medium: 1, low: 2 };
 
-/** 경로 끝 파일명에서 확장자를 뗀 것. 예: "src/checkout/CheckoutForm.tsx" → "CheckoutForm" */
-function componentName(path: string): string {
+/**
+ * 경로 끝 파일명에서 확장자를 뗀 것. 예: "src/checkout/CheckoutForm.tsx" → "CheckoutForm"
+ * 폴더 보기 생성도 이 값을 쓴다 — 저장 키(Component.exportName)가 같아야 버전이 한 줄로 이어진다.
+ */
+export function componentName(path: string): string {
   const file = path.split("/").pop() ?? path;
   return file.replace(/\.[^./]+$/, "");
 }
