@@ -48,14 +48,14 @@ describe("finalRun", () => {
   it("runner 가 못 돌렸으면 테스트 실패가 아니라 failed 다", () => {
     const result: RunnerOutcome = {
       status: "error",
-      errorMessage: "설치 실패",
+      errorMessage: "Install failed (exit 1)",
       report: null,
       ...times,
     };
     const run = finalRun(base, { components, generation, testRun: { kind: "ran", result } });
 
     assert.equal(run.status, "failed");
-    assert.equal(run.error, "설치 실패");
+    assert.equal(run.error, "Install failed (exit 1)");
     assert.deepEqual(run.totals, { total: 0, passed: 0, failed: 0 });
   });
 

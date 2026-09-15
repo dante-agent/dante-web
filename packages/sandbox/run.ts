@@ -127,7 +127,7 @@ export async function runTest(req: RunRequest, signal?: AbortSignal): Promise<Ru
   });
 
   // 시작 전에 이미 끊겼으면 샌드박스를 만들지도 않는다.
-  if (signal?.aborted) return done("error", null, "요청이 끊겨 실행하지 않았습니다");
+  if (signal?.aborted) return done("error", null, "Request was aborted, so the tests did not run");
 
   let sandbox: Sandbox | undefined;
   try {
@@ -163,7 +163,7 @@ export async function runTest(req: RunRequest, signal?: AbortSignal): Promise<Ru
     logs.push(await section(req.commands.install, install));
     if (install.exitCode !== 0) {
       // 사용자 테스트 코드의 문제가 아니다. failed 로 접으면 안 된다.
-      return done("error", null, `설치 실패 (exit ${install.exitCode})`);
+      return done("error", null, `Install failed (exit ${install.exitCode})`);
     }
 
     const command = buildTestCommand(
@@ -190,7 +190,7 @@ export async function runTest(req: RunRequest, signal?: AbortSignal): Promise<Ru
       return done(
         "error",
         test.exitCode,
-        `테스트 러너가 결과 리포트를 남기지 않았습니다 (exit ${test.exitCode})`
+        `The test runner did not produce a report (exit ${test.exitCode})`
       );
     }
 
@@ -246,7 +246,7 @@ async function section(command: string, result: CommandFinished) {
   const output = await result.output("both").catch((err: unknown) => {
     // 명령이 유효한 Unicode 를 안 뱉으면 여기서 던진다. 결과 자체는 멀쩡하므로
     // 실행을 실패로 만들지 않고 로그만 포기한다.
-    return `(로그를 읽지 못했습니다: ${err instanceof Error ? err.message : String(err)})`;
+    return `(Could not read logs: ${err instanceof Error ? err.message : String(err)})`;
   });
   return [`$ ${command}`, output, `(exit ${result.exitCode})`].filter(Boolean).join("\n");
 }
@@ -258,7 +258,9 @@ async function section(command: string, result: CommandFinished) {
 function joinLogs(parts: string[]) {
   const joined = parts.join("\n\n");
   if (joined.length <= MAX_LOG_CHARS) return joined;
-  return `… (앞부분 ${joined.length - MAX_LOG_CHARS}자 잘림)\n` + joined.slice(-MAX_LOG_CHARS);
+  return (
+    `… (first ${joined.length - MAX_LOG_CHARS} chars truncated)\n` + joined.slice(-MAX_LOG_CHARS)
+  );
 }
 
 /**
