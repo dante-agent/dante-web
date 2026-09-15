@@ -1,5 +1,5 @@
 import { prisma } from "@dante/db";
-import { isSandboxConfigured, runTest, type RunResult } from "@dante/sandbox";
+import { isSandboxConfigured, runTest, type RunRequest, type RunResult } from "@dante/sandbox";
 import { installationToken } from "@/lib/github/pull-request";
 import { runnerFramework, withPassThroughArgs } from "@/lib/notifications/runner-request";
 import { detectRuntimeCommands } from "@/lib/projects/detect-runtime";
@@ -24,13 +24,31 @@ function preRunError(message: string): TestRunView {
   return { status: "error", logs: null, errorMessage: message };
 }
 
-export async function runTestVersion(
+/** 실행에 필요한 것을 모은 결과. 못 모으면 화면에 띄울 사유. */
+export type RunTarget =
+  | {
+      ok: true;
+      versionId: string;
+      testFile: { path: string; content: string };
+      framework: NonNullable<ReturnType<typeof runnerFramework>>;
+      repo: NonNullable<Awaited<ReturnType<typeof getProjectRepo>>>;
+      settings: ReturnType<typeof resolveRuntimeSettings>;
+    }
+  | { ok: false; view: TestRunView };
+
+/**
+ * 버전 하나를 돌리기 전에 필요한 것(소유 확인·버전·러너·레포·Runtime 설정)을 모은다.
+ * 세션 상세의 실행(runTestVersion)과 폴더 보기의 실시간 실행이 같은 규칙을 쓴다.
+ */
+export async function loadRunTarget(
   projectRef: string,
   userId: string,
   versionId: string
-): Promise<TestRunView> {
+): Promise<RunTarget> {
+  const fail = (message: string): RunTarget => ({ ok: false, view: preRunError(message) });
+
   const projectId = await getOwnedProjectId(projectRef, userId);
-  if (!projectId) return preRunError("Project not found.");
+  if (!projectId) return fail("Project not found.");
 
   const version = await prisma.testFileVersion.findFirst({
     where: { id: versionId, testFile: { component: { projectId } } },
@@ -56,42 +74,83 @@ export async function runTestVersion(
       },
     },
   });
-  if (!version) return preRunError("Session not found.");
+  if (!version) return fail("Session not found.");
 
   const settingsRow = version.testFile.component.project;
   const framework = runnerFramework(settingsRow.testFramework);
   if (!framework) {
-    return preRunError("This project has no test framework set. Choose one in Settings → Runtime.");
+    return fail("This project has no test framework set. Choose one in Settings → Runtime.");
   }
   if (!isSandboxConfigured()) {
-    return preRunError("The test runner is not configured in this environment.");
+    return fail("The test runner is not configured in this environment.");
   }
 
   const repo = await getProjectRepo(projectRef, userId);
-  if (!repo) return preRunError("Project not found.");
+  if (!repo) return fail("Project not found.");
 
   // Runtime 탭 값이 우선이고, 비어 있으면 레포에서 감지한 기본값으로 채운다(화면과 같은 규칙).
   const defaults = await detectRuntimeCommands(projectRef, repo, settingsRow.testFramework);
   const settings = resolveRuntimeSettings(settingsRow, defaults);
 
+  return {
+    ok: true,
+    versionId: version.id,
+    testFile: { path: version.testFile.path, content: version.content },
+    framework,
+    repo,
+    settings,
+  };
+}
+
+/** loadRunTarget 결과 → 러너 요청. 설치 토큰 발급은 여기서 한다(실패하면 부르는 쪽이 error 로 접는다). */
+export async function buildRunRequest(
+  target: Extract<RunTarget, { ok: true }>
+): Promise<RunRequest> {
+  const { repo, settings } = target;
+  return {
+    repo: {
+      url: `https://github.com/${repo.repoOwner}/${repo.repoName}.git`,
+      // 아직 커밋되지 않은 초안이라 기본 브랜치 위에서 이 파일만 덮어써 돌린다.
+      revision: repo.defaultBranch,
+      // private 레포 클론용. 1시간짜리라 runner 가 쓰고 버린다.
+      token: await installationToken(repo.installationId),
+    },
+    testFiles: [target.testFile],
+    framework: target.framework,
+    commands: {
+      install: settings.installCommand,
+      test: withPassThroughArgs(settings.testCommand),
+    },
+    timeoutMs: settings.timeoutMs,
+  };
+}
+
+/** 끝난 실행 1건을 남긴다. 세션 목록의 상태와 상세의 "최근 실행", 대시보드 지표가 여기서 나온다. */
+export async function saveTestRun(versionId: string, result: RunResult) {
+  await prisma.testRun.create({
+    data: {
+      testFileVersionId: versionId,
+      status: result.status,
+      exitCode: result.exitCode,
+      logs: result.logs,
+      errorMessage: result.errorMessage ?? null,
+      startedAt: new Date(result.startedAt),
+      finishedAt: new Date(result.finishedAt),
+    },
+  });
+}
+
+export async function runTestVersion(
+  projectRef: string,
+  userId: string,
+  versionId: string
+): Promise<TestRunView> {
+  const target = await loadRunTarget(projectRef, userId, versionId);
+  if (!target.ok) return target.view;
+
   let result: RunResult;
   try {
-    result = await runTest({
-      repo: {
-        url: `https://github.com/${repo.repoOwner}/${repo.repoName}.git`,
-        // 아직 커밋되지 않은 초안이라 기본 브랜치 위에서 이 파일만 덮어써 돌린다.
-        revision: repo.defaultBranch,
-        // private 레포 클론용. 1시간짜리라 runner 가 쓰고 버린다.
-        token: await installationToken(repo.installationId),
-      },
-      testFiles: [{ path: version.testFile.path, content: version.content }],
-      framework,
-      commands: {
-        install: settings.installCommand,
-        test: withPassThroughArgs(settings.testCommand),
-      },
-      timeoutMs: settings.timeoutMs,
-    });
+    result = await runTest(await buildRunRequest(target));
   } catch (error) {
     // 러너에 닿지 못한 것도 "우리 쪽이 못 돌렸다"다. 러너가 돌려주는 error 와 같은 모양으로 접는다.
     const now = new Date().toISOString();
@@ -106,18 +165,7 @@ export async function runTestVersion(
     };
   }
 
-  // 실제 실행 1건으로 남긴다. 세션 목록의 상태와 상세의 "최근 실행"이 여기서 나온다.
-  await prisma.testRun.create({
-    data: {
-      testFileVersionId: version.id,
-      status: result.status,
-      exitCode: result.exitCode,
-      logs: result.logs,
-      errorMessage: result.errorMessage ?? null,
-      startedAt: new Date(result.startedAt),
-      finishedAt: new Date(result.finishedAt),
-    },
-  });
+  await saveTestRun(target.versionId, result);
 
   return { status: result.status, logs: result.logs, errorMessage: result.errorMessage ?? null };
 }
