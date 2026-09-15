@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(pnpm db:migrate*)",
+      "Bash(npx prisma migrate dev*)",
+      "Bash(npx prisma migrate reset*)",
+      "Bash(npx prisma db push*)",
+      "Bash(prisma migrate dev*)",
+      "Bash(prisma migrate reset*)",
+      "Bash(prisma db push*)",
+      "Bash(pnpm --filter @dante/db migrate*)"
+    ],
+    "ask": [
+      "Bash(npx prisma migrate deploy*)",
+      "Bash(npx prisma migrate resolve*)",
+      "Bash(pnpm --filter @dante/db deploy*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r \".tool_input.command // \\\"\\\"\" | grep -qiE \"(prisma[^|;&]*(migrate[[:space:]]+(dev|reset)|db[[:space:]]+push|--shadow-database-url|--from-migrations|--to-migrations|--force-reset))|db:migrate|pnpm[^|;&]*[[:space:]](run[[:space:]]+)?migrate([[:space:]]|$)\" && echo \"{\\\"hookSpecificOutput\\\":{\\\"hookEventName\\\":\\\"PreToolUse\\\",\\\"permissionDecision\\\":\\\"deny\\\",\\\"permissionDecisionReason\\\":\\\"Blocked: this Prisma command can reset or push to the shared remote DB (packages/db/.env). Write migration SQL by hand, check prisma migrate status, and ask the user before prisma migrate deploy.\\\"}}\" || true",
+            "statusMessage": "Checking for destructive DB commands"
+          }
+        ]
+      }
+    ]
+  }
+}
