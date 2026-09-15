@@ -15,7 +15,7 @@ import {
 // 것이기도 하다. 여기서 Prisma 를 부르기 시작하면 그 경계가 무너진다.
 
 /** 기본 상한. Vercel Sandbox 자체의 기본 타임아웃도 5분이다. */
-const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
+export const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 /**
  * 실행 한 번 전체(클론·install·test)의 상한.
  *
@@ -23,7 +23,7 @@ const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
  * 끝나야 한다. 10분 + 샌드박스 여유 1분이면 800초 안에 들어온다. 함수가 먼저 죽으면
  * finally 의 stop 도 못 불러서 샌드박스가 수명 끝까지 요금을 먹는다.
  */
-const MAX_TIMEOUT_MS = 10 * 60 * 1000;
+export const MAX_TIMEOUT_MS = 10 * 60 * 1000;
 
 /** 로그 상한. TestRun.logs 는 TEXT 라 무제한이지만, 화면에 붙일 것이고 DB 도 붙는다. */
 const MAX_LOG_CHARS = 200_000;
@@ -212,7 +212,7 @@ export async function runTest(req: RunRequest, signal?: AbortSignal): Promise<Ru
  * 로그와 따로 읽는 이유: 리포트를 stdout 으로 받으면 사람이 읽는 출력과 섞여서
  * JSON 으로 파싱이 안 된다. 그래서 파일로 쓰게 하고 여기서 꺼낸다.
  */
-async function readReport(sandbox: Sandbox, repoDir: string): Promise<TestReport | null> {
+export async function readReport(sandbox: Sandbox, repoDir: string): Promise<TestReport | null> {
   try {
     const file = await sandbox.runCommand({ cmd: "cat", args: [REPORT_PATH], cwd: repoDir });
     if (file.exitCode !== 0) return null;
@@ -226,12 +226,12 @@ async function readReport(sandbox: Sandbox, repoDir: string): Promise<TestReport
  * git 이 클론할 때 만드는 디렉터리 이름. URL 마지막 조각에서 .git 을 뗀 것이다.
  * 예: "https://github.com/acme/web.git" → "web"
  */
-function cloneDirName(url: string) {
+export function cloneDirName(url: string) {
   const last = url.replace(/\/+$/, "").split("/").pop() ?? "";
   return last.replace(/\.git$/, "");
 }
 
-function gitSource(repo: RunRequest["repo"]) {
+export function gitSource(repo: RunRequest["repo"]) {
   const base = { type: "git" as const, url: repo.url, depth: 1, revision: repo.revision };
   if (!repo.token) return base;
   // GitHub 설치 토큰은 username 자리에 관례적으로 x-access-token 을 쓴다.
@@ -255,7 +255,7 @@ async function section(command: string, result: CommandFinished) {
  * vitest 가 실패를 길게 뱉으면 로그가 수 MB 가 되기도 한다. 그대로 DB 에 넣으면
  * 행 하나가 비대해지고 화면도 못 버틴다. 뒤쪽(실패 요약)이 중요하므로 앞을 자른다.
  */
-function joinLogs(parts: string[]) {
+export function joinLogs(parts: string[]) {
   const joined = parts.join("\n\n");
   if (joined.length <= MAX_LOG_CHARS) return joined;
   return (
@@ -271,7 +271,7 @@ function joinLogs(parts: string[]) {
  * 팀 범위 토큰으로도 로컬 runner 를 띄울 수 있게 한다. 하나라도 빠지면 SDK 가 셋을
  * 다 요구하며 던지므로, 부분 설정은 조용히 OIDC 로 떨어뜨리지 않고 그대로 넘겨 드러낸다.
  */
-function accessTokenCredentials() {
+export function accessTokenCredentials() {
   const token = process.env.VERCEL_TOKEN;
   const teamId = process.env.VERCEL_TEAM_ID;
   const projectId = process.env.VERCEL_PROJECT_ID;
