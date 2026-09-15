@@ -48,6 +48,24 @@ describe("buildTestPrompt", () => {
   });
 });
 
+describe("buildTestPrompt toolkit", () => {
+  it("adds the Dante environment line only with a known runner", () => {
+    assert.match(
+      buildTestPrompt({ ...base, testFramework: "jest", toolkit: true }),
+      /Dante 가 제공하는 환경/
+    );
+    assert.equal(buildTestPrompt({ ...base, toolkit: true }), buildTestPrompt(base));
+  });
+
+  it("leaves the prompt unchanged when toolkit is not set (PR path)", () => {
+    assert.equal(
+      buildTestPrompt({ ...base, testFramework: "vitest" }),
+      buildTestPrompt({ ...base, testFramework: "vitest", toolkit: false })
+    );
+    assert.doesNotMatch(buildTestPrompt({ ...base, testFramework: "vitest" }), /Dante/);
+  });
+});
+
 describe("buildTestPrompt dependencies", () => {
   it("설치된 패키지를 넘기면 그 목록만 import 하라는 줄이 붙는다", () => {
     const prompt = buildTestPrompt({ ...base, dependencies: ["react", "vitest"] });

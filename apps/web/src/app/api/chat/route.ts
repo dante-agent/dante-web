@@ -72,7 +72,7 @@ function systemPrompt(runner: string | null): string {
     "",
     "## Test runner",
     runner
-      ? `- This project's test runner is ${runner}. Write all test code, APIs, config and run commands for ${runner} only. Never mix in another runner's APIs or imports. If the user asks about a different runner, tell them this project uses ${runner} and answer with ${runner}.`
+      ? `- This project's test runner is ${runner}. Write all test code, APIs, config and run commands for ${runner} only. Never mix in another runner's APIs or imports. If the user asks about a different runner, tell them this project uses ${runner} and answer with ${runner}.\n- Tests run in Dante's managed environment: ${runner} with jsdom, @testing-library/react, @testing-library/user-event and @testing-library/jest-dom (matchers registered, DOM cleaned up after each test). You may import these even if the repository doesn't install them. Import any other package only if the source file already imports it.`
       : "- This project has no test runner set. Don't write test code; tell the user to finish the project setup first.",
     "",
     "## Editing the test",
