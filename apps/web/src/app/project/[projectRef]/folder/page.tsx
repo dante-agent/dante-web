@@ -63,6 +63,9 @@ export default async function FolderPage({
       testPath={latest?.testPath ?? repoTestPath}
       mode={mode}
       draftVersion={draftVersion}
+      // 실행은 저장된 버전만 돌린다. 레포 테스트도 열 때 버전으로 들어오므로 대개 있다.
+      versionId={latest?.id ?? null}
+      terminal
       content={{ source: source ?? "", test: latest?.code ?? repoTest, testDraft: null }}
     />
   );

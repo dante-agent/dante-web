@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { generateFolderTest } from "@/app/project/[projectRef]/folder/actions";
 import { iconForFile } from "@/components/file-icons";
+import { RunPanel, useLiveRun } from "@/components/run-terminal";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { MONACO_THEME as THEME, setupMonaco } from "@/lib/monaco-theme";
 import { pushRecent } from "@/lib/recent-files";
@@ -193,8 +194,14 @@ function Cell({
   return <div className={cn("border-border min-w-0", className)}>{children}</div>;
 }
 
+/** 본문 높이. 헤더 47px 만 빼면 화면 끝까지. */
+const PANE_HEIGHT = "h-[calc(100svh-47px)]";
 const GRID =
-  "border-border relative grid h-[calc(100svh-47px)] grid-cols-2 grid-rows-[2.25rem_2.25rem_minmax(0,1fr)] overflow-hidden";
+  "border-border relative grid grid-cols-2 grid-rows-[2.25rem_2.25rem_minmax(0,1fr)] overflow-hidden";
+
+/** 터미널을 펼쳤을 때 높이(px). 끌어서 바꾸되 이 범위 안에서만. 최대는 본문의 70%. */
+const TERMINAL_DEFAULT = 320;
+const TERMINAL_MIN = 120;
 
 function FileHeading({ name }: { name: string }) {
   return (
@@ -248,6 +255,8 @@ export function FileView({
   projectRef,
   testPath,
   draftVersion = null,
+  versionId = null,
+  terminal = false,
   content,
 }: {
   file: string;
@@ -256,6 +265,10 @@ export function FileView({
   testPath: string | null;
   /** Test Code 가 레포 파일이 아니라 저장된 AI 생성 버전이면 그 번호. */
   draftVersion?: number | null;
+  /** Test Code 칸에 보이는 저장된 버전의 id. 있으면 Run 으로 돌릴 수 있다. */
+  versionId?: string | null;
+  /** 하단 실행 터미널 바를 붙일지. 폴더 보기만 켠다(PR 화면은 실행이 없다). */
+  terminal?: boolean;
   content: FileContent;
 }) {
   const pathname = usePathname();
@@ -280,6 +293,22 @@ export function FileView({
     setLeftPct(Math.min(80, Math.max(20, ((e.clientX - r.left) / r.width) * 100)));
   };
 
+  // 실행 상태는 파일마다 따로다(부모가 key={file} 로 새로 띄운다). 파일을 옮기면 실행도 멈춘다.
+  const run = useLiveRun(projectRef);
+  // 하단 터미널. 접혀 있어도 바는 보인다. Run 을 누르면 펼친다.
+  const shellRef = useRef<HTMLDivElement>(null);
+  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalHeight, setTerminalHeight] = useState(TERMINAL_DEFAULT);
+  const onTerminalResizeDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const onTerminalResizeMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.buttons !== 1 || !shellRef.current) return;
+    const r = shellRef.current.getBoundingClientRect();
+    setTerminalHeight(Math.min(r.height * 0.7, Math.max(TERMINAL_MIN, r.bottom - e.clientY)));
+  };
+
   const [expanded, setExpanded] = useState<null | "left" | "right">(null);
   const toggle = (s: "left" | "right") => setExpanded((e) => (e === s ? null : s));
   const showLeft = expanded !== "right";
@@ -291,7 +320,7 @@ export function FileView({
     const draft = content.testDraft ?? original;
 
     return (
-      <div className={GRID} style={{ gridTemplateColumns: expandedCols }}>
+      <div className={cn(GRID, PANE_HEIGHT)} style={{ gridTemplateColumns: expandedCols }}>
         <Cell show={showLeft} className="bg-sidebar flex items-center border-b px-2.5 text-xs">
           <span className="font-semibold">Before</span>
         </Cell>
@@ -379,96 +408,120 @@ export function FileView({
   const cols = expanded ? "minmax(0,1fr)" : `minmax(0,${leftPct}fr) minmax(0,${100 - leftPct}fr)`;
 
   return (
-    <div ref={gridRef} className={GRID} style={{ gridTemplateColumns: cols }}>
-      <Cell
-        show={showLeft}
-        className={cn(
-          "bg-sidebar flex items-center border-b px-2.5 text-xs",
-          showRight && "border-r"
-        )}
+    <div ref={shellRef} className={cn("flex flex-col", PANE_HEIGHT)}>
+      <div
+        ref={gridRef}
+        className={cn(GRID, "min-h-0 flex-1")}
+        style={{ gridTemplateColumns: cols }}
       >
-        <span className="font-semibold">Source Code</span>
-      </Cell>
-      <Cell
-        show={showRight}
-        className="bg-sidebar flex items-center gap-1.5 border-b px-2.5 text-xs"
-      >
-        <span className="font-semibold">Test Code</span>
-        {/* draft 는 레포에 없는 파일이라 diff 기준(원본)이 없다 — 수정·실행은 레포 테스트에만 */}
-        {content.test && draftVersion === null && (
-          <div className="ml-auto flex items-center gap-0.5">
-            {/* ponytail: 실행 동작은 runner PR */}
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              disabled
-              title="Run"
-              aria-label="Run"
-              className="text-brand-orange"
-            >
-              <Play />
-            </Button>
-            <Link
-              href={editHref}
-              title="Edit"
-              aria-label="Edit"
-              className={cn(
-                buttonVariants({ variant: "ghost", size: "icon-sm" }),
-                "text-brand-orange hover:bg-brand-orange/10 hover:text-brand-orange"
+        <Cell
+          show={showLeft}
+          className={cn(
+            "bg-sidebar flex items-center border-b px-2.5 text-xs",
+            showRight && "border-r"
+          )}
+        >
+          <span className="font-semibold">Source Code</span>
+        </Cell>
+        <Cell
+          show={showRight}
+          className="bg-sidebar flex items-center gap-1.5 border-b px-2.5 text-xs"
+        >
+          <span className="font-semibold">Test Code</span>
+          {content.test && (
+            <div className="ml-auto flex items-center gap-0.5">
+              {/* 실행은 저장된 버전(레포에서 가져온 것·AI draft 모두)을 돌린다. 한 번에 하나만. */}
+              {versionId && (
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setTerminalOpen(true);
+                    void run.start(versionId);
+                  }}
+                  disabled={run.view?.running}
+                  title={run.view?.running ? "Running…" : "Run tests"}
+                  aria-label="Run tests"
+                  className="text-brand-orange"
+                >
+                  {run.view?.running ? <Loader2 className="animate-spin" /> : <Play />}
+                </Button>
               )}
-            >
-              <Pencil />
-            </Link>
-          </div>
-        )}
-      </Cell>
+              {/* draft 는 레포에 없는 파일이라 diff 기준(원본)이 없다 — 수정은 레포 테스트에만 */}
+              {draftVersion === null && (
+                <Link
+                  href={editHref}
+                  title="Edit"
+                  aria-label="Edit"
+                  className={cn(
+                    buttonVariants({ variant: "ghost", size: "icon-sm" }),
+                    "text-brand-orange hover:bg-brand-orange/10 hover:text-brand-orange"
+                  )}
+                >
+                  <Pencil />
+                </Link>
+              )}
+            </div>
+          )}
+        </Cell>
 
-      <Cell
-        show={showLeft}
-        className={cn(
-          "bg-sidebar flex items-center gap-2.5 border-b px-2.5 text-xs",
-          showRight && "border-r"
-        )}
-      >
-        <FileHeading name={file} />
-        <ReadOnlyBadge />
-        <FileActions
-          text={content.source}
-          filename={file.split("/").pop() ?? "source.txt"}
-          trailing={<ExpandButton active={expanded === "left"} onToggle={() => toggle("left")} />}
+        <Cell
+          show={showLeft}
+          className={cn(
+            "bg-sidebar flex items-center gap-2.5 border-b px-2.5 text-xs",
+            showRight && "border-r"
+          )}
+        >
+          <FileHeading name={file} />
+          <ReadOnlyBadge />
+          <FileActions
+            text={content.source}
+            filename={file.split("/").pop() ?? "source.txt"}
+            trailing={<ExpandButton active={expanded === "left"} onToggle={() => toggle("left")} />}
+          />
+        </Cell>
+        <Cell
+          show={showRight}
+          className="bg-sidebar flex items-center gap-2.5 border-b px-2.5 text-xs"
+        >
+          {content.test && (
+            <>
+              <FileHeading name={testName} />
+              {draftVersion === null ? <ReadOnlyBadge /> : <DraftBadge version={draftVersion} />}
+              <FileActions
+                text={content.test}
+                filename={testName}
+                trailing={
+                  <ExpandButton active={expanded === "right"} onToggle={() => toggle("right")} />
+                }
+              />
+            </>
+          )}
+        </Cell>
+
+        <Cell show={showLeft} className={cn("bg-black", showRight && "border-r")}>
+          <CodePane lang={lang} value={content.source} />
+        </Cell>
+        <Cell show={showRight} className="bg-black">
+          {content.test ? (
+            <CodePane lang={lang} value={content.test} />
+          ) : (
+            <GenerateTest projectRef={projectRef} file={file} />
+          )}
+        </Cell>
+
+        {!expanded && <DragDivider pct={leftPct} onDown={onDividerDown} onMove={onDividerMove} />}
+      </div>
+      {terminal && (
+        <RunPanel
+          view={run.view}
+          open={terminalOpen}
+          height={terminalHeight}
+          onToggle={() => setTerminalOpen((open) => !open)}
+          onResizeDown={onTerminalResizeDown}
+          onResizeMove={onTerminalResizeMove}
         />
-      </Cell>
-      <Cell
-        show={showRight}
-        className="bg-sidebar flex items-center gap-2.5 border-b px-2.5 text-xs"
-      >
-        {content.test && (
-          <>
-            <FileHeading name={testName} />
-            {draftVersion === null ? <ReadOnlyBadge /> : <DraftBadge version={draftVersion} />}
-            <FileActions
-              text={content.test}
-              filename={testName}
-              trailing={
-                <ExpandButton active={expanded === "right"} onToggle={() => toggle("right")} />
-              }
-            />
-          </>
-        )}
-      </Cell>
-
-      <Cell show={showLeft} className={cn("bg-black", showRight && "border-r")}>
-        <CodePane lang={lang} value={content.source} />
-      </Cell>
-      <Cell show={showRight} className="bg-black">
-        {content.test ? (
-          <CodePane lang={lang} value={content.test} />
-        ) : (
-          <GenerateTest projectRef={projectRef} file={file} />
-        )}
-      </Cell>
-
-      {!expanded && <DragDivider pct={leftPct} onDown={onDividerDown} onMove={onDividerMove} />}
+      )}
     </div>
   );
 }
