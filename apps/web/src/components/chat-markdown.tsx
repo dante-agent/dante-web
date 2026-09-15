@@ -201,7 +201,7 @@ function CodeBlock({
       {/* 코드블록 밖의 독립 버튼. 긴 코드가 스트리밍되는 동안 헤더는 화면 위로 지나가므로, 다 읽은
         자리(블록 아래)에 끝난 뒤에만 아래에서 올라오게 한다. 채팅은 끝날 때 맨 아래로 스크롤한다. */}
       {applyTo && !streaming && isTestCode(languageId) && (
-        <div className="animate-in fade-in slide-in-from-bottom-3 mt-1 mb-4 flex justify-center duration-300 ease-out motion-reduce:animate-none">
+        <div className="animate-in fade-in slide-in-from-bottom-3 mt-4 mb-4 flex justify-center duration-300 ease-out motion-reduce:animate-none">
           <ApplyButton code={code} target={applyTo} />
         </div>
       )}
