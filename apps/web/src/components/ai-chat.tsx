@@ -210,7 +210,7 @@ export function AiChatDock({ projectRef, children }: { projectRef: string; child
         <Button
           onClick={() => setOpen(true)}
           title="Open AI chat"
-          className="animate-in fade-in zoom-in-95 fixed right-8 bottom-8 z-30 h-11 gap-2 rounded-full px-4 shadow-lg duration-200"
+          className="animate-in fade-in zoom-in-95 fixed right-8 bottom-14 z-30 h-11 gap-2 rounded-full px-4 shadow-lg duration-200"
         >
           <Sparkles />
           AI Chat
