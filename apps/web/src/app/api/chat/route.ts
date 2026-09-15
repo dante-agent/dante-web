@@ -111,6 +111,15 @@ const MAX_OUTPUT_TOKENS = 16_000;
  */
 const USAGE_MARK = "\u001e";
 
+/**
+ * 대화 저장에 실패했을 때 꼬리에 한 번 더 붙는 표시(USAGE_MARK + 이 값). 답은 이미 화면에 나갔으니
+ * 스트림을 깨지 않고, 화면이 "저장 안 됨"을 알리고 이 턴을 대화에 붙이지 않게 한다(ai-chat.tsx 에 같은 값).
+ */
+const UNSAVED = "unsaved";
+
+/** 저장 결과를 기다리는 상한. onFinish 가 끝내 오지 않아도 스트림이 영영 안 닫히는 일은 없게. */
+const SAVE_WAIT_MS = 15_000;
+
 /** 이번 턴이 차지한 컨텍스트 = 모델에 넣은 것 + 받은 것. 다음 질문이 이만큼을 들고 간다. */
 const contextTokensOf = (u: LanguageModelUsage) => (u.inputTokens ?? 0) + (u.outputTokens ?? 0);
 
@@ -233,6 +242,10 @@ export async function POST(request: Request) {
   // 모델 호출과 떼어서 알아야 한다.
   let clientGone = false;
 
+  // 이번 턴이 대화에 저장됐는지. 스트림 꼬리가 이 결과를 싣는다(아래 pull).
+  let resolveSaved: (ok: boolean) => void = () => {};
+  const saved = new Promise<boolean>((resolve) => (resolveSaved = resolve));
+
   // 모델을 부르기 직전에 원가 상한을 예약한다. 위의 반환(404·409 등)을 모두 지난 뒤라
   // 예약이 정산 없이 버려지는 경로가 없다. chatModel() 도 예약 전에 불러 둔다 — 키가 없어
   // 던지면 예약이 남는다.
@@ -265,6 +278,7 @@ export async function POST(request: Request) {
     // 에러로 끝나면 onFinish 가 오지 않으므로 여기서 예약을 푼다(원가를 모르는 건으로).
     onError: async ({ error }) => {
       console.error("[chat]", error);
+      resolveSaved(false);
       await settleAiUsage(reservation, undefined);
     },
     // 생성이 끝나면 (클라이언트가 끊었어도) 온다. 사용량은 항상, 대화는 끝까지 받았을 때만 남긴다.
@@ -273,7 +287,7 @@ export async function POST(request: Request) {
     onFinish: async ({ usage, text }) => {
       await settleAiUsage(reservation, usage);
       // 빈 답이나 중단된 요청은 저장하지 않는다(중단 시 질문도 남기지 않는다).
-      if (!text || clientGone) return;
+      if (!text || clientGone) return resolveSaved(false);
       try {
         await saveExchange({
           conversationId: id,
@@ -286,9 +300,11 @@ export async function POST(request: Request) {
           askedAt,
           contextTokens: contextTokensOf(usage),
         });
+        resolveSaved(true);
       } catch (error) {
-        // 답은 이미 화면에 나갔다. 저장 실패로 스트림을 깨지 않고 로그만 남긴다.
+        // 답은 이미 화면에 나갔다. 스트림은 깨지 않고, 꼬리의 UNSAVED 로 화면에 알린다.
         console.error("[chat] 대화 저장 실패", error);
+        resolveSaved(false);
       }
     },
   });
@@ -303,9 +319,16 @@ export async function POST(request: Request) {
     async pull(controller) {
       const { done, value } = await reader.read();
       if (!done) return controller.enqueue(value);
-      // 토큰 수를 못 받으면 꼬리 없이 닫는다 — 이미 보낸 답을 에러로 깨지 않게. 화면은 이전 값을 둔다.
+      // 토큰 수를 못 받으면 숫자 자리를 비운다 — 이미 보낸 답을 에러로 깨지 않게. 화면은 이전 값을 둔다.
       const usage = await Promise.resolve(result.usage).catch(() => null);
-      if (usage) controller.enqueue(USAGE_MARK + contextTokensOf(usage));
+      // 저장이 끝나야 화면이 대화에 붙일지 안다. 상한을 넘기면 저장 안 됨으로 본다.
+      const ok = await Promise.race([
+        saved,
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), SAVE_WAIT_MS)),
+      ]);
+      controller.enqueue(
+        USAGE_MARK + (usage ? contextTokensOf(usage) : "") + (ok ? "" : USAGE_MARK + UNSAVED)
+      );
       controller.close();
     },
     cancel() {

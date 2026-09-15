@@ -51,6 +51,8 @@ const MAX_MESSAGES = 50;
 const MAX_CONTEXT_TOKENS = 50_000;
 /** 서버가 답 스트림 끝에 붙이는 구분자. 뒤에 실제 컨텍스트 토큰 수가 온다(api/chat/route.ts). */
 const USAGE_MARK = "\u001e";
+/** 서버가 대화 저장에 실패했을 때 꼬리에 붙이는 값(route.ts 에 같은 값). */
+const UNSAVED = "unsaved";
 /** 이 비율부터 게이지를 경고 톤으로. 가득 차기 전에 새 대화를 떠올리게. */
 const WARN_RATIO = 0.8;
 
@@ -247,7 +249,8 @@ function ChatPanel({
   // 서버에 아직 없는 꼬리: 보내는 중인 질문과 스트리밍 중인 답. 끝나면 캐시로 옮기고 비운다.
   // 중단된 답은 aborted 로 표시해 남긴다(저장되지 않았다고 알려주려고). 다음 전송 때 지운다
   // — 서버 대화에 없는 턴이라 그 뒤에 새 턴이 붙으면 순서가 거짓말이 된다.
-  const [tail, setTail] = useState<(Msg & { aborted?: boolean })[]>([]);
+  // unsaved = 답은 끝까지 받았지만 서버가 대화에 저장하지 못한 턴. 표시와 처리는 aborted 와 같다.
+  const [tail, setTail] = useState<(Msg & { aborted?: boolean; unsaved?: boolean })[]>([]);
 
   // 파일로 돌아오면 그 파일의 가장 최근 대화를 이어서 연다. 목록이 처음 왔을 때 한 번만 정한다
   // (undefined = 아직). 그 뒤 목록이 다시 받아져도(다른 탭에서 새 대화 등) 보던 화면이 튀지 않고,
@@ -388,9 +391,16 @@ function ChatPanel({
           prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: shown } : m))
         );
       }
-      const [answer, usage] = raw.split(USAGE_MARK);
+      const [answer, usage, flag] = raw.split(USAGE_MARK);
       // 구분자가 안 왔으면(구버전 서버 등) 이전 값을 그대로 둔다.
       const contextTokens = usage ? Number(usage) : undefined;
+
+      // 서버에 안 남은 턴을 대화에 붙이면, 다시 열었을 때 사라져 화면이 거짓말을 한 셈이 된다.
+      // 받은 답은 보여주되 저장 안 됐다고 표시하고, 새 대화였다면 id 도 잡지 않는다.
+      if (flag === UNSAVED) {
+        setTail((prev) => prev.map((m) => (m.role === "assistant" ? { ...m, unsaved: true } : m)));
+        return;
+      }
 
       // 서버는 스트림이 끝나면 두 메시지를 저장한다. 같은 모양을 캐시에 붙여 다시 받지 않는다.
       // 캐시를 먼저 채우고 id 를 바꿔야 새 대화일 때 useQuery 가 빈 캐시로 요청을 보내지 않는다.
@@ -552,6 +562,12 @@ function ChatPanel({
                   )}
                   {"aborted" in m && m.aborted && (
                     <p className="text-muted-foreground mt-1 text-xs">Stopped · Not saved</p>
+                  )}
+                  {"unsaved" in m && m.unsaved && (
+                    <p role="alert" className="text-destructive mt-1 text-xs">
+                      Couldn&apos;t save this reply. It won&apos;t be here when you reopen this
+                      chat.
+                    </p>
                   )}
                 </div>
               </div>
