@@ -1,13 +1,15 @@
 // 선택된 파일(`?file=`)을 <FileView> 로 띄운다. `?mode=edit` 이면 테스트 diff.
-// 레포에 테스트가 없으면 AI 로 만들어 저장해 둔 최신 버전을 대신 보여준다(커밋 전 draft).
+// Test Code 칸은 저장된 최신 버전을 보여준다. 레포에 테스트가 있으면 열 때 버전으로 가져온다
+// (처음이면 v1, 레포에서 바뀌었으면 다음 번호). AI 로 만든 버전은 커밋 전 draft 로 표시한다.
 import { notFound } from "next/navigation";
 import { FileView } from "@/components/file-view";
 import { FolderEmptyState } from "@/components/folder-empty-state";
 import { requireUser } from "@/lib/auth/user";
 import { getFileText } from "@/lib/github/blob";
 import { getRepoTree } from "@/lib/github/tree";
-import { getLatestGeneratedTest } from "@/lib/projects/generated-versions";
+import { getLatestGeneratedTest, saveGeneratedVersion } from "@/lib/projects/generated-versions";
 import { getOwnedProjectId, getProjectRepo } from "@/lib/projects/queries";
+import { componentName } from "@/lib/projects/recommendations";
 
 export default async function FolderPage({
   params,
@@ -25,14 +27,32 @@ export default async function FolderPage({
   if (!repo) notFound();
 
   const entries = await getRepoTree(repo); // layout 과 같은 요청 → cache 로 1회
-  const testPath = entries.find((e) => e.path === file)?.testPath ?? null;
+  const repoTestPath = entries.find((e) => e.path === file)?.testPath ?? null;
 
-  const projectId = testPath ? null : await getOwnedProjectId(projectRef, user.id);
-  const [source, test, draft] = await Promise.all([
+  const [source, repoTest, projectId] = await Promise.all([
     getFileText(repo, file),
-    testPath ? getFileText(repo, testPath) : Promise.resolve(null),
-    projectId ? getLatestGeneratedTest(projectId, file) : Promise.resolve(null),
+    repoTestPath ? getFileText(repo, repoTestPath) : Promise.resolve(null),
+    getOwnedProjectId(projectRef, user.id),
   ]);
+
+  if (projectId && repoTestPath && repoTest !== null) {
+    try {
+      await saveGeneratedVersion({
+        projectId,
+        sourceFilePath: file,
+        componentName: componentName(file),
+        testPath: repoTestPath,
+        code: repoTest,
+        source: "repo",
+        onlyIfRepoChanged: true,
+      });
+    } catch (error) {
+      // 저장이 안 돼도 레포 테스트는 보여줄 수 있다. 보기를 깨지 않고 로그만 남긴다.
+      console.error("[folder] 레포 테스트 가져오기 실패", { file, error });
+    }
+  }
+  const latest = projectId ? await getLatestGeneratedTest(projectId, file) : null;
+  const draftVersion = latest && latest.source !== "repo" ? latest.version : null;
 
   // key={file} — 파일 바뀌면 분할 비율 초기화
   return (
@@ -40,10 +60,10 @@ export default async function FolderPage({
       key={file}
       projectRef={projectRef}
       file={file}
-      testPath={testPath ?? draft?.testPath ?? null}
+      testPath={latest?.testPath ?? repoTestPath}
       mode={mode}
-      draftVersion={draft?.version ?? null}
-      content={{ source: source ?? "", test: test ?? draft?.code ?? null, testDraft: null }}
+      draftVersion={draftVersion}
+      content={{ source: source ?? "", test: latest?.code ?? repoTest, testDraft: null }}
     />
   );
 }

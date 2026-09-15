@@ -413,7 +413,7 @@ model TestFileVersion {
   /// 1 부터 증가. 화면에 "v3" 처럼 보여준다.
   version Int
 
-  /// "ai" | "user" — 누가 만든 버전인지.
+  /// "ai" | "user" | "repo" — 누가 만든 버전인지. "repo" 는 레포에 있던 테스트를 폴더 보기가 가져온 것.
   /// 문자열인 이유는 Project.testFramework 와 같다(값이 늘 때 마이그레이션 회피).
   source String
 
