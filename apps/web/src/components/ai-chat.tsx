@@ -13,7 +13,6 @@ import { Suspense, useEffect, useLayoutEffect, useRef, useState, type ReactNode 
 import { useSearchParams } from "next/navigation";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
-import { ko } from "date-fns/locale";
 import {
   History,
   Loader2,
@@ -92,7 +91,7 @@ async function toResponseError(response: Response): Promise<ResponseError> {
     code?: string;
   } | null;
   return new ResponseError(
-    body?.error ?? "응답을 받지 못했습니다.\n잠시 후 다시 시도해주세요.",
+    body?.error ?? "No response received.\nPlease try again in a moment.",
     response.status,
     body?.code
   );
@@ -157,7 +156,7 @@ export function AiChatDock({ projectRef, children }: { projectRef: string; child
           <div
             role="separator"
             aria-orientation="vertical"
-            aria-label="AI 채팅 너비 조절"
+            aria-label="Resize AI chat"
             onPointerDown={onDividerDown}
             onPointerMove={onDividerMove}
             onPointerUp={onDividerUp}
@@ -187,7 +186,7 @@ export function AiChatDock({ projectRef, children }: { projectRef: string; child
       {!open && (
         <Button
           onClick={() => setOpen(true)}
-          title="AI 채팅 열기"
+          title="Open AI chat"
           className="animate-in fade-in zoom-in-95 fixed right-8 bottom-8 z-30 h-11 gap-2 rounded-full px-4 shadow-lg duration-200"
         >
           <Sparkles />
@@ -330,7 +329,10 @@ function ChatPanel({
 
       const id = response.headers.get("x-conversation-id") ?? sentTo;
       if (!id)
-        throw new ResponseError("대화를 저장하지 못했습니다.\n새 대화로 다시 시도해주세요.", 500);
+        throw new ResponseError(
+          "Couldn't save the conversation.\nPlease try again in a new chat.",
+          500
+        );
 
       const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
       for (;;) {
@@ -381,8 +383,7 @@ function ChatPanel({
       if (e instanceof ResponseError && e.code === "conversation_full") setFullFromServer(true);
       setError({
         kind: e instanceof ResponseError && e.status === 402 ? "limit" : "error",
-        message:
-          e instanceof Error ? e.message : "요청에 실패했습니다.\n잠시 후 다시 시도해주세요.",
+        message: e instanceof Error ? e.message : "Request failed.\nPlease try again in a moment.",
       });
       // 저장되지 않은 턴은 화면에서 걷고 질문은 입력창에 돌려준다 — 다시 보내기 쉽게.
       // 보낸 것처럼 남겨두면 서버 대화와 화면이 어긋난다.
@@ -409,7 +410,7 @@ function ChatPanel({
       {/* h-9 = 왼쪽 본문 헤더 행(2.25rem)과 같은 높이 — 사이가 border-l 한 줄이라 선이 맞아야 한다 */}
       <header className="border-border flex h-9 shrink-0 items-center gap-1.5 border-b px-2.5 text-sm">
         <Sparkles className="text-brand-orange size-4" />
-        <span className="font-semibold">AI 채팅</span>
+        <span className="font-semibold">AI Chat</span>
         {file && !showHistory && (
           <span className="text-muted-foreground ml-1 truncate font-mono text-xs">
             {shortPath(file)}
@@ -421,8 +422,8 @@ function ChatPanel({
             variant="ghost"
             onClick={() => setShowHistory((v) => !v)}
             aria-pressed={showHistory}
-            title="대화 기록"
-            aria-label="대화 기록"
+            title="Chat history"
+            aria-label="Chat history"
             className={cn(showHistory && "bg-muted text-foreground")}
           >
             <History />
@@ -432,8 +433,8 @@ function ChatPanel({
             variant="ghost"
             onClick={newChat}
             disabled={conversationId === null && messages.length === 0 && !showHistory}
-            title="새 대화"
-            aria-label="새 대화"
+            title="New chat"
+            aria-label="New chat"
           >
             <SquarePen />
           </Button>
@@ -441,8 +442,8 @@ function ChatPanel({
             size="icon-sm"
             variant="ghost"
             onClick={onClose}
-            title="닫기"
-            aria-label="AI 채팅 닫기"
+            title="Close"
+            aria-label="Close AI chat"
           >
             <X />
           </Button>
@@ -471,7 +472,7 @@ function ChatPanel({
           ) : messages.length === 0 ? (
             // 안내 문구 한 줄이 전부다. 뭘 물어볼지는 사용자가 안다.
             <p className="text-muted-foreground flex h-full items-center justify-center px-6 text-center text-sm">
-              {file ? "이 파일에 대해 물어보세요." : "왼쪽에서 파일을 열면 그 파일을 같이 봅니다."}
+              {file ? "Ask about this file." : "Open a file on the left to chat about it."}
             </p>
           ) : (
             // 말풍선은 글자 수만큼만 넓어진다(flex 안에서 shrink-to-fit). 길어지면
@@ -503,7 +504,7 @@ function ChatPanel({
                     pending && <Loader2 className="text-muted-foreground size-4 animate-spin" />
                   )}
                   {"aborted" in m && m.aborted && (
-                    <p className="text-muted-foreground mt-1 text-xs">중단됨 · 저장되지 않았어요</p>
+                    <p className="text-muted-foreground mt-1 text-xs">Stopped · Not saved</p>
                   )}
                 </div>
               </div>
@@ -545,7 +546,7 @@ function ChatPanel({
           {/* 가득 찬 대화에는 더 붙일 수 없다(서버도 409). 이어 쓰려면 새 대화뿐이라 그 버튼을 바로 옆에 둔다. */}
           {full && (
             <div className="text-muted-foreground mb-2 flex items-center justify-between gap-2 text-xs">
-              <span>대화가 가득 찼어요. 새 대화에서 이어가 주세요.</span>
+              <span>This chat is full. Continue in a new chat.</span>
               <Button type="button" size="sm" variant="outline" onClick={newChat}>
                 <SquarePen />
                 New Chat
@@ -576,8 +577,8 @@ function ChatPanel({
                 size="icon-sm"
                 variant="ghost"
                 onClick={() => abortRef.current?.abort()}
-                title="중단"
-                aria-label="중단"
+                title="Stop"
+                aria-label="Stop"
               >
                 <Square />
               </Button>
@@ -586,8 +587,8 @@ function ChatPanel({
                 type="submit"
                 size="icon-sm"
                 disabled={!input.trim() || full}
-                title="보내기"
-                aria-label="보내기"
+                title="Send"
+                aria-label="Send"
               >
                 <Send />
               </Button>
@@ -630,7 +631,7 @@ function CollapsibleText({ text }: { text: string }) {
           aria-expanded={expanded}
           className="text-primary-foreground/80 hover:text-primary-foreground mt-1.5 text-xs font-semibold underline-offset-2 hover:underline"
         >
-          {expanded ? "접기" : "더보기"}
+          {expanded ? "Show less" : "Show more"}
         </button>
       )}
     </>
@@ -648,7 +649,7 @@ function ContextBar({ tokens }: { tokens: number }) {
   const warn = ratio >= WARN_RATIO;
   return (
     <div
-      title={`${tokens.toLocaleString()} / ${MAX_CONTEXT_TOKENS.toLocaleString()} 토큰`}
+      title={`${tokens.toLocaleString()} / ${MAX_CONTEXT_TOKENS.toLocaleString()} tokens`}
       className={cn(
         "mb-1.5 px-1 text-[11px] tabular-nums",
         warn ? "text-brand-orange font-semibold" : "text-muted-foreground"
@@ -709,7 +710,7 @@ function HistoryList({
   if (chats.length === 0) {
     return (
       <p className="bg-background text-muted-foreground flex-1 pt-10 text-center text-sm">
-        저장된 대화가 없습니다.
+        No saved chats.
       </p>
     );
   }
@@ -732,16 +733,16 @@ function HistoryList({
             >
               <span className="block truncate text-sm">{chat.title}</span>
               <span className="text-muted-foreground text-xs">
-                {formatDistanceToNow(new Date(chat.updatedAt), { addSuffix: true, locale: ko })} ·{" "}
-                {chat.messageCount}개 메시지
+                {formatDistanceToNow(new Date(chat.updatedAt), { addSuffix: true })} ·{" "}
+                {chat.messageCount} {chat.messageCount === 1 ? "message" : "messages"}
               </span>
             </button>
             <Button
               size="icon-sm"
               variant="ghost"
               onClick={() => onRemove(chat.id)}
-              title="삭제"
-              aria-label={`${chat.title} 삭제`}
+              title="Delete"
+              aria-label={`Delete ${chat.title}`}
               className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
             >
               <Trash2 />
@@ -759,7 +760,7 @@ function HistoryList({
             className="text-muted-foreground w-full"
           >
             {list.isFetchingNextPage && <Loader2 className="animate-spin" />}
-            더보기
+            Load more
           </Button>
         </li>
       )}

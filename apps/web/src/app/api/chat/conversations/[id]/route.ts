@@ -23,10 +23,10 @@ export async function GET(
   context: RouteContext<"/api/chat/conversations/[id]">
 ) {
   const userId = await currentUserId();
-  if (!userId) return fail(401, "로그인이 필요합니다.");
+  if (!userId) return fail(401, "Please sign in.");
 
   const conversation = await getConversation(userId, (await context.params).id);
-  if (!conversation) return fail(404, "대화를 찾을 수 없습니다.");
+  if (!conversation) return fail(404, "Conversation not found.");
 
   return NextResponse.json(
     {
@@ -49,10 +49,10 @@ export async function DELETE(
   context: RouteContext<"/api/chat/conversations/[id]">
 ) {
   const userId = await currentUserId();
-  if (!userId) return fail(401, "로그인이 필요합니다.");
+  if (!userId) return fail(401, "Please sign in.");
 
   const deleted = await deleteConversation(userId, (await context.params).id);
-  if (!deleted) return fail(404, "대화를 찾을 수 없습니다.");
+  if (!deleted) return fail(404, "Conversation not found.");
 
   return new Response(null, { status: 204, headers: NO_STORE });
 }

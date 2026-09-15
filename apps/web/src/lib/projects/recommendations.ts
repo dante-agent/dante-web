@@ -30,12 +30,15 @@ const LOW_RE = /(\/ui\/|icon|tooltip|badge|avatar|spinner|skeleton|divider|separ
 
 function classify(path: string): Pick<TestRecommendation, "priority" | "reason"> {
   if (HIGH_RE.test(path)) {
-    return { priority: "high", reason: "인증·결제 등 핵심 로직으로 보이는데 테스트 파일이 없음" };
+    return {
+      priority: "high",
+      reason: "Looks like core logic (auth, payments, etc.) but has no test file",
+    };
   }
   if (LOW_RE.test(path)) {
-    return { priority: "low", reason: "단순 UI 컴포넌트 — 테스트 우선순위 낮음" };
+    return { priority: "low", reason: "Simple UI component — low test priority" };
   }
-  return { priority: "medium", reason: "테스트 파일이 아직 없음" };
+  return { priority: "medium", reason: "No test file yet" };
 }
 
 const PRIORITY_ORDER: Record<RecommendationPriority, number> = { high: 0, medium: 1, low: 2 };

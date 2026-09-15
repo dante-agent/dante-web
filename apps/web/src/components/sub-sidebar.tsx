@@ -58,8 +58,8 @@ export function SubSidebar({ nav, children }: { nav?: ReactNode; children: React
           <button
             type="button"
             onClick={toggleSubSidebar}
-            title="서브 사이드바 접기"
-            aria-label="서브 사이드바 접기"
+            title="Collapse sub sidebar"
+            aria-label="Collapse sub sidebar"
             aria-expanded
             className="text-sidebar-foreground/70 hover:text-sidebar-foreground absolute top-2 right-1 grid h-9 w-10 place-items-center transition-colors"
           >

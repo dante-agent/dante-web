@@ -17,9 +17,9 @@ import { cn } from "@/lib/utils";
 type StatusFilter = "all" | "untested" | "tested";
 
 const FILTERS: { key: StatusFilter; label: string; title: string }[] = [
-  { key: "all", label: "All", title: "전체 파일" },
-  { key: "untested", label: "Untested", title: "테스트 없는 파일" },
-  { key: "tested", label: "Tested", title: "테스트 있는 파일" },
+  { key: "all", label: "All", title: "All files" },
+  { key: "untested", label: "Untested", title: "Files without tests" },
+  { key: "tested", label: "Tested", title: "Files with tests" },
 ];
 
 function matchesStatus(status: FileEntry["status"], filter: StatusFilter): boolean {
@@ -109,9 +109,7 @@ export function FileTree({ entries }: { entries: FileEntry[] }) {
 
       <ul className="-mx-1 min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
         {tree.length === 0 ? (
-          <li className="text-muted-foreground px-2 py-6 text-center text-xs">
-            일치하는 파일 없음
-          </li>
+          <li className="text-muted-foreground px-2 py-6 text-center text-xs">No matching files</li>
         ) : (
           tree.map((node) => (
             <Node
@@ -207,7 +205,7 @@ function Node({
 function StatusDot({ status }: { status: FileEntry["status"] }) {
   return (
     <span
-      aria-label={status === "has" ? "테스트 있음" : "테스트 없음"}
+      aria-label={status === "has" ? "Has tests" : "No tests"}
       className="ml-auto flex size-3 shrink-0 items-center justify-center"
     >
       <span

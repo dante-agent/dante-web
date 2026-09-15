@@ -110,10 +110,10 @@ function CodeBlock({ code, lang, streaming }: { code: string; lang?: string; str
             void navigator.clipboard.writeText(code).then(() => setCopied(true));
           }}
           className="hover:text-foreground hover:bg-muted flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors"
-          aria-label="코드 복사"
+          aria-label="Copy code"
         >
           {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-          {copied ? "복사됨" : "복사"}
+          {copied ? "Copied" : "Copy"}
         </button>
       </div>
       {/* 코드는 줄바꿈하지 않고 이 블록 안에서만 가로 스크롤 — 들여쓰기가 무너지지 않게. */}
@@ -175,9 +175,7 @@ function buildComponents(streaming: boolean): Components {
       ) : (
         <span>{children}</span>
       ),
-    img: ({ alt }) => (
-      <span className="text-muted-foreground">[이미지{alt ? `: ${alt}` : ""}]</span>
-    ),
+    img: ({ alt }) => <span className="text-muted-foreground">[Image{alt ? `: ${alt}` : ""}]</span>,
     table: ({ children }) => (
       <div className="my-2 overflow-x-auto">
         <table className="w-full border-collapse text-xs">{children}</table>
