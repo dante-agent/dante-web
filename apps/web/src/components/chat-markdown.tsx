@@ -19,6 +19,7 @@ import type { Monaco } from "@monaco-editor/react";
 import { Check, Copy, FileCheck, Loader2 } from "lucide-react";
 import { applyTestCode } from "@/app/project/[projectRef]/folder/actions";
 import { MONACO_THEME, setupMonaco } from "@/lib/monaco-theme";
+import { cn } from "@/lib/utils";
 
 const REMARK_PLUGINS = [remarkGfm];
 
@@ -99,11 +100,15 @@ function ApplyButton({ code, target }: { code: string; target: ApplyTarget }) {
       // 적용 뒤엔 막는다 — 다시 누르면 같은 내용이 새 버전으로 또 쌓인다.
       disabled={pending || state === "applied"}
       title={`Save as a new version of the test for ${target.filePath}`}
-      className={
-        state === "failed"
-          ? "text-destructive hover:bg-muted flex min-w-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors"
-          : "bg-brand-orange/10 text-brand-orange hover:bg-brand-orange/20 flex min-w-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-60"
-      }
+      // 브랜드 컬러 캡슐. 적용 뒤엔 색을 빼 "끝남"을 보이고, 실패는 테두리만 빨갛게.
+      className={cn(
+        "flex max-w-full min-w-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium shadow-sm transition-[background-color,transform] active:scale-[0.97]",
+        state === "applied"
+          ? "bg-muted text-muted-foreground shadow-none"
+          : state === "failed"
+            ? "border-destructive text-destructive hover:bg-destructive/10 border"
+            : "bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-70"
+      )}
     >
       {pending ? (
         <Loader2 className="size-3.5 animate-spin" />
@@ -166,39 +171,41 @@ function CodeBlock({
   const colored = !streaming && html?.code === code ? html.value : null;
 
   return (
-    <div className="border-border my-2 overflow-hidden rounded-lg border bg-black">
-      <div className="border-border text-muted-foreground flex h-7 items-center justify-between border-b pr-1 pl-2.5 text-xs">
-        <span className="font-mono">{lang || "code"}</span>
-        <button
-          type="button"
-          onClick={() => {
-            void navigator.clipboard.writeText(code).then(() => setCopied(true));
-          }}
-          className="hover:text-foreground hover:bg-muted flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors"
-          aria-label="Copy code"
-        >
-          {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-          {copied ? "Copied" : "Copy"}
-        </button>
+    <>
+      <div className="border-border my-2 overflow-hidden rounded-lg border bg-black">
+        <div className="border-border text-muted-foreground flex h-7 items-center justify-between border-b pr-1 pl-2.5 text-xs">
+          <span className="font-mono">{lang || "code"}</span>
+          <button
+            type="button"
+            onClick={() => {
+              void navigator.clipboard.writeText(code).then(() => setCopied(true));
+            }}
+            className="hover:text-foreground hover:bg-muted flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors"
+            aria-label="Copy code"
+          >
+            {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+            {copied ? "Copied" : "Copy"}
+          </button>
+        </div>
+        {/* 코드는 줄바꿈하지 않고 이 블록 안에서만 가로 스크롤 — 들여쓰기가 무너지지 않게. */}
+        <pre className="overflow-x-auto p-3 font-mono text-xs leading-relaxed">
+          {colored ? (
+            // Monaco colorize 는 토큰 글자를 이스케이프한 <span> 만 돌려준다. 답변 원문을 HTML 로
+            // 넣는 게 아니라 Monaco 가 만든 색 마크업만 넣는다.
+            <code dangerouslySetInnerHTML={{ __html: colored }} />
+          ) : (
+            <code>{code}</code>
+          )}
+        </pre>
       </div>
-      {/* 코드는 줄바꿈하지 않고 이 블록 안에서만 가로 스크롤 — 들여쓰기가 무너지지 않게. */}
-      <pre className="overflow-x-auto p-3 font-mono text-xs leading-relaxed">
-        {colored ? (
-          // Monaco colorize 는 토큰 글자를 이스케이프한 <span> 만 돌려준다. 답변 원문을 HTML 로
-          // 넣는 게 아니라 Monaco 가 만든 색 마크업만 넣는다.
-          <code dangerouslySetInnerHTML={{ __html: colored }} />
-        ) : (
-          <code>{code}</code>
-        )}
-      </pre>
-      {/* 코드를 다 읽은 자리(블록 끝)에 둔다 — 긴 코드가 스트리밍되며 헤더는 이미 화면 위로 지나간다.
-          스트리밍이 끝나야 나타나고, 아래에서 살짝 올라온다. 채팅은 끝날 때 맨 아래로 스크롤한다. */}
+      {/* 코드블록 밖의 독립 버튼. 긴 코드가 스트리밍되는 동안 헤더는 화면 위로 지나가므로, 다 읽은
+        자리(블록 아래)에 끝난 뒤에만 아래에서 올라오게 한다. 채팅은 끝날 때 맨 아래로 스크롤한다. */}
       {applyTo && !streaming && isTestCode(languageId) && (
-        <div className="border-border animate-in fade-in slide-in-from-bottom-2 flex justify-end border-t px-2 py-1.5 duration-300 motion-reduce:animate-none">
+        <div className="animate-in fade-in slide-in-from-bottom-3 mb-3 flex justify-end duration-300 ease-out motion-reduce:animate-none">
           <ApplyButton code={code} target={applyTo} />
         </div>
       )}
-    </div>
+    </>
   );
 }
 
