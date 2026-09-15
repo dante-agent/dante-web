@@ -6,9 +6,19 @@ import {
   getAiTestRecommendations,
   type AiRecommendationResult,
 } from "@/lib/projects/ai-recommendations";
+import { saveGeneratedVersion } from "@/lib/projects/generated-versions";
 import { getOwnedProjectId, getProjectRepo } from "@/lib/projects/queries";
 import { getTestRecommendations } from "@/lib/projects/recommendations";
-import { generateTestForFile, type GenerateTestResult } from "@/lib/projects/test-generation";
+import { generateTestForFile } from "@/lib/projects/test-generation";
+
+/**
+ * generateTest 의 결과. 생성 성공분은 버전으로 저장하고 그 id 를 얹어 준다 —
+ * 화면이 세션 상세(`/recommend/{versionId}`)로 넘어갈 수 있게. 소유 프로젝트 확인이
+ * 안 돼 저장을 건너뛰었으면 versionId 는 null(미리보기만 가능).
+ */
+export type GenerateTestActionResult =
+  | { ok: true; filePath: string; testPath: string; code: string; versionId: string | null }
+  | { ok: false; reason: "budget" | "not-found" | "error" };
 
 /**
  * "AI 로 정렬" 버튼이 부른다. 초기 화면은 공짜 휴리스틱으로 뜨고, 이 액션을
@@ -26,21 +36,43 @@ export async function rerankRecommendations(projectRef: string): Promise<AiRecom
   return getAiTestRecommendations({ repo, userId: user.id, projectId });
 }
 
-/** 추천 목록에서 사용자가 고른 파일 하나의 테스트 코드를 만든다. */
+/** 추천 목록에서 사용자가 고른 파일 하나의 테스트 코드를 만들고 버전으로 저장한다. */
 export async function generateTest(
   projectRef: string,
   filePath: string
-): Promise<GenerateTestResult> {
+): Promise<GenerateTestActionResult> {
   const user = await requireUser();
   const repo = await getProjectRepo(projectRef, user.id);
   if (!repo) notFound();
 
   // Server Action 인자는 신뢰할 수 없다. 현재 추천 후보에 있는 경로만 파일 본문을 읽는다.
   const recommendations = await getTestRecommendations(repo);
-  if (!recommendations.some((recommendation) => recommendation.filePath === filePath)) {
+  const match = recommendations.find((recommendation) => recommendation.filePath === filePath);
+  if (!match) {
     return { ok: false, reason: "not-found" };
   }
 
   const projectId = await getOwnedProjectId(projectRef, user.id);
-  return generateTestForFile({ repo, userId: user.id, projectId, filePath });
+  const result = await generateTestForFile({ repo, userId: user.id, projectId, filePath });
+  if (!result.ok) return result;
+
+  // 생성 성공분을 버전으로 남겨 세션 상세에서 다시 열고 실행할 수 있게 한다.
+  // projectId 가 없으면 저장할 곳이 없으니 미리보기(versionId: null)로만 돌려준다.
+  const versionId = projectId
+    ? await saveGeneratedVersion({
+        projectId,
+        sourceFilePath: result.filePath,
+        componentName: match.componentName,
+        testPath: result.testPath,
+        code: result.code,
+      })
+    : null;
+
+  return {
+    ok: true,
+    filePath: result.filePath,
+    testPath: result.testPath,
+    code: result.code,
+    versionId,
+  };
 }
