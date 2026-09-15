@@ -1,6 +1,6 @@
 import { formatDistanceToNow } from "date-fns";
 import { notFound } from "next/navigation";
-import { isRunnerConfigured } from "@/lib/notifications/runner-client";
+import { isSandboxConfigured } from "@dante/sandbox";
 import { getGeneratedSessionDetail } from "@/lib/projects/generated-sessions";
 import { requireProjectContext } from "@/lib/projects/queries";
 import type { TestRunView } from "@/lib/projects/run-version";
@@ -71,7 +71,7 @@ export default async function SessionDetailPage({
         errorMessage: detail.latestRun.errorMessage,
       }
     : null;
-  const runnerConfigured = isRunnerConfigured();
+  const runnerConfigured = isSandboxConfigured();
 
   // 프로젝트 셸의 p-8 을 상쇄해 패널을 화면 끝까지 붙인다. 헤더(47px) 아래를 꽉 채운다.
   // 두 패널 사이 구분선은 드래그로 폭 조절(ResizableSplit). 우측은 diff(위) + 실행 터미널(아래).

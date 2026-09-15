@@ -1,10 +1,6 @@
 import { prisma } from "@dante/db";
+import { isSandboxConfigured, runTest, type RunResult } from "@dante/sandbox";
 import { installationToken } from "@/lib/github/pull-request";
-import {
-  callRunner,
-  isRunnerConfigured,
-  type RunnerResult,
-} from "@/lib/notifications/runner-client";
 import { runnerFramework, withPassThroughArgs } from "@/lib/notifications/runner-request";
 import { detectRuntimeCommands } from "@/lib/projects/detect-runtime";
 import { getOwnedProjectId, getProjectRepo } from "@/lib/projects/queries";
@@ -67,7 +63,7 @@ export async function runTestVersion(
   if (!framework) {
     return preRunError("This project has no test framework set. Choose one in Settings → Runtime.");
   }
-  if (!isRunnerConfigured()) {
+  if (!isSandboxConfigured()) {
     return preRunError("The test runner is not configured in this environment.");
   }
 
@@ -78,9 +74,9 @@ export async function runTestVersion(
   const defaults = await detectRuntimeCommands(projectRef, repo, settingsRow.testFramework);
   const settings = resolveRuntimeSettings(settingsRow, defaults);
 
-  let result: RunnerResult;
+  let result: RunResult;
   try {
-    result = await callRunner({
+    result = await runTest({
       repo: {
         url: `https://github.com/${repo.repoOwner}/${repo.repoName}.git`,
         // 아직 커밋되지 않은 초안이라 기본 브랜치 위에서 이 파일만 덮어써 돌린다.
