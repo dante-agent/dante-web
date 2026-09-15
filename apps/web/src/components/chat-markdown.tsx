@@ -101,8 +101,8 @@ function ApplyButton({ code, target }: { code: string; target: ApplyTarget }) {
       title={`Save as a new version of the test for ${target.filePath}`}
       className={
         state === "failed"
-          ? "text-destructive hover:bg-muted flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors"
-          : "text-brand-orange hover:bg-brand-orange/10 flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors disabled:opacity-50"
+          ? "text-destructive hover:bg-muted flex min-w-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors"
+          : "bg-brand-orange/10 text-brand-orange hover:bg-brand-orange/20 flex min-w-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-60"
       }
     >
       {pending ? (
@@ -110,9 +110,16 @@ function ApplyButton({ code, target }: { code: string; target: ApplyTarget }) {
       ) : state === "applied" ? (
         <Check className="size-3.5" />
       ) : (
-        <FileCheck className="size-3.5" />
+        <FileCheck className="size-3.5 shrink-0" />
       )}
-      {state === "applied" ? "Applied" : state === "failed" ? "Apply failed" : `Apply to ${name}`}
+      {/* 파일명이 길면 줄이지 않고 말줄임 — 전체 경로는 title 에 있다. */}
+      <span className="truncate">
+        {state === "applied"
+          ? "Applied"
+          : state === "failed"
+            ? "Apply failed · Retry"
+            : `Apply to ${name}`}
+      </span>
     </button>
   );
 }
@@ -162,22 +169,17 @@ function CodeBlock({
     <div className="border-border my-2 overflow-hidden rounded-lg border bg-black">
       <div className="border-border text-muted-foreground flex h-7 items-center justify-between border-b pr-1 pl-2.5 text-xs">
         <span className="font-mono">{lang || "code"}</span>
-        <div className="flex items-center gap-0.5">
-          {applyTo && !streaming && isTestCode(languageId) && (
-            <ApplyButton code={code} target={applyTo} />
-          )}
-          <button
-            type="button"
-            onClick={() => {
-              void navigator.clipboard.writeText(code).then(() => setCopied(true));
-            }}
-            className="hover:text-foreground hover:bg-muted flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors"
-            aria-label="Copy code"
-          >
-            {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-            {copied ? "Copied" : "Copy"}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => {
+            void navigator.clipboard.writeText(code).then(() => setCopied(true));
+          }}
+          className="hover:text-foreground hover:bg-muted flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors"
+          aria-label="Copy code"
+        >
+          {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+          {copied ? "Copied" : "Copy"}
+        </button>
       </div>
       {/* 코드는 줄바꿈하지 않고 이 블록 안에서만 가로 스크롤 — 들여쓰기가 무너지지 않게. */}
       <pre className="overflow-x-auto p-3 font-mono text-xs leading-relaxed">
@@ -189,6 +191,13 @@ function CodeBlock({
           <code>{code}</code>
         )}
       </pre>
+      {/* 코드를 다 읽은 자리(블록 끝)에 둔다 — 긴 코드가 스트리밍되며 헤더는 이미 화면 위로 지나간다.
+          스트리밍이 끝나야 나타나고, 아래에서 살짝 올라온다. 채팅은 끝날 때 맨 아래로 스크롤한다. */}
+      {applyTo && !streaming && isTestCode(languageId) && (
+        <div className="border-border animate-in fade-in slide-in-from-bottom-2 flex justify-end border-t px-2 py-1.5 duration-300 motion-reduce:animate-none">
+          <ApplyButton code={code} target={applyTo} />
+        </div>
+      )}
     </div>
   );
 }
