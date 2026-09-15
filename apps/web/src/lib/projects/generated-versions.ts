@@ -109,14 +109,27 @@ function insertVersion(args: Parameters<typeof saveGeneratedVersion>[0]): Promis
 export async function getLatestGeneratedTest(
   projectId: string,
   sourceFilePath: string
-): Promise<{ testPath: string; code: string; version: number; source: string } | null> {
+): Promise<{
+  id: string;
+  testPath: string;
+  code: string;
+  version: number;
+  source: string;
+} | null> {
   const latest = await prisma.testFileVersion.findFirst({
     where: { testFile: { component: { projectId, filePath: sourceFilePath } } },
     orderBy: { createdAt: "desc" },
-    select: { content: true, version: true, source: true, testFile: { select: { path: true } } },
+    select: {
+      id: true,
+      content: true,
+      version: true,
+      source: true,
+      testFile: { select: { path: true } },
+    },
   });
   return latest
     ? {
+        id: latest.id,
         testPath: latest.testFile.path,
         code: latest.content,
         version: latest.version,

@@ -62,6 +62,8 @@ export async function generateTestForFile(args: {
       filePath: args.filePath,
       source,
       testFramework: project?.testFramework,
+      // 폴더 보기·추천 화면에서 만든 테스트는 Dante 전용 환경으로 돈다(ADR-0003).
+      toolkit: true,
     });
     if (!generated) return { ok: false, reason: "budget" };
 
@@ -92,6 +94,8 @@ export async function generateTestCode(args: {
   source: string;
   /** 넘기면 프롬프트에 러너 지시가 붙는다 */
   testFramework?: string | null;
+  /** 넘기면 Dante 전용 환경의 도구를 프롬프트에 알린다. PR 경로는 넘기지 않는다 */
+  toolkit?: boolean;
   /** 넘기면 이 패키지만 import 하라는 지시가 붙는다 */
   dependencies?: string[] | null;
   /** 만들 테스트 경로. 생략하면 `foo.test.tsx`(testPathFor). PR 은 겹치지 않는 경로를 넘긴다 */
@@ -103,6 +107,7 @@ export async function generateTestCode(args: {
     testPath,
     source: args.source,
     testFramework: args.testFramework,
+    toolkit: args.toolkit,
     dependencies: args.dependencies,
   });
   // 키가 없어 던지면 예약이 남으므로 예약 전에 불러 둔다.
