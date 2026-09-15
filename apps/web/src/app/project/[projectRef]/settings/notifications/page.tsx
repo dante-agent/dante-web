@@ -21,6 +21,9 @@ import { notificationBadges } from "@/lib/notifications/status";
 import { recentDeliveries } from "@/lib/notifications/store";
 import type { ProjectRepo } from "@/lib/projects/queries";
 
+/** 전달 로그의 재시도 서버 액션이 after() 로 PR 작업을 돈다. api/github/webhook/route.ts 와 같은 이유 */
+export const maxDuration = 800;
+
 // 알림 — 언제, 어디로 알릴지.
 //
 // 지금은 GitHub 만 있다. Slack 은 두 층으로 나뉜다 — 워크스페이스를 붙이는

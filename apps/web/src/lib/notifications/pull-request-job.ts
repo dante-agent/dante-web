@@ -20,10 +20,17 @@ import { payerOutcome, type Payer } from "@/lib/notifications/pr-author-rules";
 import {
   generatePullRequestTests,
   savePullRequestTests,
+  type GeneratedPullRequestTest,
   type PullRequestSource,
 } from "@/lib/notifications/pr-test-generation";
-import { runPullRequestTests } from "@/lib/notifications/pr-test-run";
+import {
+  runPullRequestTests,
+  testRunSkipReason,
+  type PullRequestTestRun,
+} from "@/lib/notifications/pr-test-run";
 import { finalRun, type LocatedComponent } from "@/lib/notifications/run-result";
+import { dispatchTestRuns } from "@/lib/notifications/test-run-queue";
+import { parseRunInput, type RunInput } from "@/lib/notifications/test-run-rules";
 import { packageDependencies } from "@/lib/projects/test-generation-prompt";
 import { queuedRun, type RunSummary } from "@/lib/notifications/run-summary";
 
@@ -39,6 +46,11 @@ import { queuedRun, type RunSummary } from "@/lib/notifications/run-summary";
 // waitUntil 로 응답 뒤에도 함수가 살아 있다. 대신 함수가 중간에 죽으면 자동 재시도가
 // 없다. 그래서 작업 상태를 DB 에 적는다 — 멈춘 작업이 "running" 으로 남아 보이고,
 // 체크의 Re-run 버튼으로 다시 돌릴 수 있다. 실행 시간 상한은 라우트의 maxDuration 이다.
+//
+// 생성과 샌드박스 실행은 다른 함수에서 돈다(docs/adr/0002-run-sandbox-from-web.md).
+//   queued → running(생성) → awaiting_run → testing(샌드박스) → done / failed / superseded
+// 샌드박스 실행은 같은 팀 안에서 하나씩이다. 차례는 test-run-queue.ts 가 정하고, 차례가 온 작업은
+// api/internal/pr-test-run 이 새 함수에서 runQueuedTestRun 으로 돌린다.
 
 /** 작업을 돌리는 데 필요한 프로젝트 쪽 사실. deliver.ts 의 NotifiableProject 와 같다. */
 export type JobProject = {
@@ -48,7 +60,7 @@ export type JobProject = {
   repoName: string;
   defaultBranch: string;
   installationId: bigint;
-  /** PR 작성자가 이 팀의 멤버인지 볼 때 쓴다 */
+  /** PR 작성자가 이 팀의 멤버인지 볼 때, 실행 차례를 팀마다 나눌 때 쓴다 */
   teamId: string;
   /** 생성 프롬프트의 러너 지시. 고르지 않았으면 null */
   testFramework: string | null;
@@ -57,6 +69,21 @@ export type JobProject = {
   testCommand: string | null;
   testTimeoutMs: number | null;
 };
+
+/** 실행 함수가 프로젝트를 DB 에서 다시 읽을 때. JobProject 와 같은 필드다 */
+const JOB_PROJECT_SELECT = {
+  id: true,
+  ref: true,
+  repoOwner: true,
+  repoName: true,
+  defaultBranch: true,
+  installationId: true,
+  teamId: true,
+  testFramework: true,
+  installCommand: true,
+  testCommand: true,
+  testTimeoutMs: true,
+} satisfies Prisma.ProjectSelect;
 
 /**
  * 작업을 적고 응답 뒤에 돌린다.
@@ -75,7 +102,14 @@ export async function enqueuePullRequestJob(
   const job = await prisma.pullRequestJob.upsert({
     where: { projectId_prNumber_headSha: key },
     create: { ...key, status: "queued" },
-    update: { status: "queued", error: null, startedAt: null, finishedAt: null },
+    update: {
+      status: "queued",
+      error: null,
+      startedAt: null,
+      finishedAt: null,
+      runInput: Prisma.DbNull,
+      runStartedAt: null,
+    },
     select: { id: true },
   });
 
@@ -93,15 +127,16 @@ async function runPullRequestJob(
     data: { status: "running", startedAt: new Date(), attempts: { increment: 1 } },
   });
 
-  // 생성·실행은 분 단위라 단계마다 같은 코멘트·체크를 고쳐 쓴다(generating → running).
-  // 그사이 새 커밋이 왔으면 옛 작업의 진행 상태로 새 작업의 코멘트를 덮지 않는다.
-  const progress = async (run: RunSummary) => {
-    if (await isSuperseded(jobId, project.id, pr.number)) return;
-    await deliverRunSummary(project, pr, run);
-  };
+  const progress = progressReporter(jobId, project, pr);
 
   try {
     const run = await pullRequestRun(jobId, project, pr, payer, progress);
+
+    // 샌드박스 실행 줄에 세웠다. 결과 전달과 마무리는 차례가 오면 runQueuedTestRun 이 한다.
+    if (run === "awaiting-run") {
+      await dispatchTestRuns(project.teamId);
+      return;
+    }
 
     // 처리하는 사이에 새 커밋이 푸시됐으면 옛 결과로 코멘트를 덮지 않는다.
     // sticky 코멘트는 PR 에 하나라, 늦게 끝난 옛 작업이 새 결과를 지워버린다.
@@ -113,25 +148,167 @@ async function runPullRequestJob(
     await deliverRunSummary(project, pr, run);
     await finish(jobId, "done");
   } catch (error) {
-    // deliverRunSummary 는 던지지 않으니 여기 오는 건 DB 나 예상 못 한 실패다.
-    // 응답은 이미 나갔으므로 GitHub 재시도에 기댈 수 없다. 흔적을 남기는 게 전부다.
-    console.error(`[pull-request-job] ${jobId} failed for #${pr.number}`, error);
-    await finish(jobId, "failed", error instanceof Error ? error.message : String(error)).catch(
-      () => {}
+    await failJob(jobId, project, pr, progress, error, (message) =>
+      finish(jobId, "failed", message)
     );
-    // 진행 상태(generating·running)를 이미 보냈으면 체크가 in_progress 로 남아 영원히 돈다.
-    // 결론을 채워 닫는다. 이것마저 실패하면 할 수 있는 게 없다.
-    await progress({
-      ...queuedRun(danteLinks(project.ref, pr.number)),
-      status: "failed",
-      error: "Dante stopped before it could finish this run. Re-run to try again.",
-    }).catch(() => {});
   }
+}
+
+/**
+ * 차례가 온 작업의 샌드박스 실행. api/internal/pr-test-run 이 새 함수에서 부른다.
+ *
+ * 생성 쪽 메모리에 있던 값(PR 정보·컴포넌트)은 runInput 에서, 테스트 본문은 PullRequestTest 에서 읽는다.
+ * 끝나면 결과와 상관없이 같은 팀의 다음 작업을 넘긴다. 안 넘기면 줄이 멈춘다.
+ */
+export async function runQueuedTestRun(jobId: string) {
+  const job = await prisma.pullRequestJob.findUnique({
+    where: { id: jobId },
+    select: {
+      status: true,
+      headSha: true,
+      runInput: true,
+      project: { select: JOB_PROJECT_SELECT },
+      tests: {
+        orderBy: { testPath: "asc" },
+        select: { filePath: true, testPath: true, code: true },
+      },
+    },
+  });
+  if (!job) return;
+
+  try {
+    // 넘겨받기 전에 Re-run 으로 다시 queued 가 됐다. 그 흐름이 생성부터 다시 한다.
+    if (job.status !== "testing") return;
+
+    const input = parseRunInput(job.runInput);
+    if (!input) {
+      console.error(`[pull-request-job] ${jobId} has no usable run input`);
+      await finishTestRun(jobId, "failed", "The run input for this job is missing or malformed.");
+      return;
+    }
+
+    await runTestStage(jobId, job.project, job.headSha, job.tests, input);
+  } finally {
+    await dispatchTestRuns(job.project.teamId);
+  }
+}
+
+async function runTestStage(
+  jobId: string,
+  project: JobProject,
+  headSha: string,
+  tests: GeneratedPullRequestTest[],
+  input: RunInput
+) {
+  const { pr } = input;
+  const progress = progressReporter(jobId, project, pr);
+  const stillCurrent = () => isCurrentTestRun(jobId, project.id, pr.number);
+
+  try {
+    // 줄에서 기다리는 사이에 새 커밋이 왔으면 샌드박스를 띄우지 않는다.
+    if (!(await stillCurrent())) {
+      await finishTestRun(jobId, "superseded");
+      return;
+    }
+
+    const watch = watchStillCurrent(stillCurrent);
+    const testRun = await runPullRequestTests({
+      project,
+      headSha,
+      tests,
+      signal: watch.signal,
+    }).finally(watch.stop);
+
+    // 실행 중에 새 커밋이 오거나 Re-run 이 눌려 끊었다. 끊긴 결과(error)를 저장하거나 코멘트로 보내지 않는다.
+    if (watch.signal.aborted) {
+      console.info(`[pull-request-job] test run for #${pr.number} stopped by a newer job`);
+      await finishTestRun(jobId, "superseded");
+      return;
+    }
+
+    console.info(
+      `[pull-request-job] test run for #${pr.number}`,
+      testRun.kind === "ran"
+        ? {
+            status: testRun.result.status,
+            totals: testRun.result.report?.totals ?? null,
+            errorMessage: testRun.result.errorMessage ?? null,
+          }
+        : { notRun: testRun.reason }
+    );
+
+    // 끝나는 사이에 새 커밋이 왔으면 옛 결과로 코멘트·화면을 덮지 않는다.
+    if (!(await stillCurrent())) {
+      await finishTestRun(jobId, "superseded");
+      return;
+    }
+
+    await saveRunResult(jobId, pr.number, testRun);
+    const run = finalRun(queuedRun(danteLinks(project.ref, pr.number)), {
+      components: input.components,
+      generation: { tests, failedFiles: input.failedFiles, stopped: input.stopped },
+      testRun,
+    });
+    await deliverRunSummary(project, pr, run);
+    await finishTestRun(jobId, "done");
+  } catch (error) {
+    await failJob(jobId, project, pr, progress, error, (message) =>
+      finishTestRun(jobId, "failed", message)
+    );
+  }
+}
+
+/**
+ * 생성·실행은 분 단위라 단계마다 같은 코멘트·체크를 고쳐 쓴다(generating → running).
+ * 그사이 새 커밋이 왔으면 옛 작업의 진행 상태로 새 작업의 코멘트를 덮지 않는다.
+ */
+function progressReporter(jobId: string, project: JobProject, pr: PullRequestContext) {
+  return async (run: RunSummary) => {
+    if (await isSuperseded(jobId, project.id, pr.number)) return;
+    await deliverRunSummary(project, pr, run);
+  };
+}
+
+/**
+ * 예상 못 한 실패로 작업을 닫는다.
+ *
+ * deliverRunSummary 는 던지지 않으니 여기 오는 건 DB 나 예상 못 한 실패다.
+ * 응답은 이미 나갔으므로 GitHub 재시도에 기댈 수 없다. 흔적을 남기는 게 전부다.
+ */
+async function failJob(
+  jobId: string,
+  project: JobProject,
+  pr: PullRequestContext,
+  progress: (run: RunSummary) => Promise<void>,
+  error: unknown,
+  close: (message: string) => Promise<unknown>
+) {
+  console.error(`[pull-request-job] ${jobId} failed for #${pr.number}`, error);
+  await close(error instanceof Error ? error.message : String(error)).catch(() => {});
+  // 진행 상태(generating·running)를 이미 보냈으면 체크가 in_progress 로 남아 영원히 돈다.
+  // 결론을 채워 닫는다. 이것마저 실패하면 할 수 있는 게 없다.
+  await progress({
+    ...queuedRun(danteLinks(project.ref, pr.number)),
+    status: "failed",
+    error: "Dante stopped before it could finish this run. Re-run to try again.",
+  }).catch(() => {});
 }
 
 function finish(jobId: string, status: "done" | "failed" | "superseded", error?: string) {
   return prisma.pullRequestJob.update({
     where: { id: jobId },
+    data: { status, error: error ?? null, finishedAt: new Date() },
+  });
+}
+
+/**
+ * 실행 단계의 마무리. 아직 testing 일 때만 적는다.
+ *
+ * 실행하는 사이에 Re-run 으로 같은 작업이 queued 로 돌아갔으면 그 흐름이 이 행의 주인이다. 덮지 않는다.
+ */
+function finishTestRun(jobId: string, status: "done" | "failed" | "superseded", error?: string) {
+  return prisma.pullRequestJob.updateMany({
+    where: { id: jobId, status: "testing" },
     data: { status, error: error ?? null, finishedAt: new Date() },
   });
 }
@@ -146,29 +323,62 @@ async function isSuperseded(jobId: string, projectId: string, prNumber: number) 
   return latest !== null && latest.id !== jobId;
 }
 
-/** 실행 중 새 커밋을 확인하는 주기. 끊기까지 최대 이만큼 늦는다. */
-const SUPERSEDED_POLL_MS = 5_000;
+/** 실행 단계의 작업이 아직 유효한지. 새 커밋이 왔거나 Re-run 으로 다시 queued 가 됐으면 아니다. */
+async function isCurrentTestRun(jobId: string, projectId: string, prNumber: number) {
+  if (await isSuperseded(jobId, projectId, prNumber)) return false;
+  const job = await prisma.pullRequestJob.findUnique({
+    where: { id: jobId },
+    select: { status: true },
+  });
+  return job?.status === "testing";
+}
+
+/** 실행 중 작업이 아직 유효한지 확인하는 주기. 끊기까지 최대 이만큼 늦는다. */
+const STILL_CURRENT_POLL_MS = 5_000;
 
 /**
- * 실행하는 동안 새 작업이 들어왔는지 주기적으로 보고, 들어오면 signal 을 끊는다.
+ * 실행하는 동안 작업이 아직 유효한지 주기적으로 보고, 아니면 signal 을 끊는다.
  *
- * runner 실행은 분 단위라 끝날 때까지 기다리면 옛 커밋의 샌드박스 요금이 그대로 나간다.
+ * 샌드박스 실행은 분 단위라 끝날 때까지 기다리면 옛 커밋의 샌드박스 요금이 그대로 나간다.
  * 확인이 실패하면 끊지 않는다. 모르는데 끊으면 최신 커밋의 실행을 버리게 된다.
  */
-function watchSuperseded(jobId: string, projectId: string, prNumber: number) {
+function watchStillCurrent(stillCurrent: () => Promise<boolean>) {
   const controller = new AbortController();
   const timer = setInterval(() => {
-    isSuperseded(jobId, projectId, prNumber)
-      .then((superseded) => {
-        if (superseded) controller.abort();
+    stillCurrent()
+      .then((current) => {
+        if (!current) controller.abort();
       })
       .catch(() => {});
-  }, SUPERSEDED_POLL_MS);
+  }, STILL_CURRENT_POLL_MS);
   return { signal: controller.signal, stop: () => clearInterval(timer) };
 }
 
 /**
- * 이 PR 의 최종 결과. 바뀐 컴포넌트가 없으면 여기서 바로 끝난다(unchanged).
+ * preview 화면이 읽는다. 로그는 크니 따로 둔다. 실행하지 않았으면 이전 결과를 지운다 —
+ * Re-run 한 같은 커밋에 옛 결과가 남으면 지금 코멘트와 화면이 어긋난다.
+ * 저장이 실패해도 PR 에는 결과를 보낸다. 화면 하나 때문에 코멘트·체크가 멈추면 안 된다.
+ */
+async function saveRunResult(jobId: string, prNumber: number, testRun: PullRequestTestRun) {
+  const { logs, ...runResult } = testRun.kind === "ran" ? testRun.result : { logs: null };
+  await prisma.pullRequestJob
+    .update({
+      where: { id: jobId },
+      data: {
+        runResult: testRun.kind === "ran" ? runResult : Prisma.DbNull,
+        runLogs: logs,
+      },
+    })
+    .catch((error) => {
+      console.error(`[pull-request-job] saving run result failed for #${prNumber}`, error);
+    });
+}
+
+/**
+ * 이 PR 의 생성 결과. 바뀐 컴포넌트가 없으면 여기서 바로 끝난다(unchanged).
+ *
+ * 샌드박스를 띄울 테스트가 있으면 실행 줄에 세우고 "awaiting-run" 을 돌려준다. 결과는 실행 쪽이 보낸다.
+ * 못 돌리는 경우(테스트 없음·러너 미선택·샌드박스 미설정)는 여기서 최종 결과를 만든다.
  *
  * 파일 목록을 못 읽으면 unchanged 로 접지 않고 failed 로 둔다.
  * 모르는데 "바뀐 게 없다"고 적으면 실제로 컴포넌트를 고친 PR 에서 코멘트가
@@ -180,7 +390,7 @@ async function pullRequestRun(
   pr: PullRequestContext,
   payer: Payer,
   progress: (run: RunSummary) => Promise<void>
-): Promise<RunSummary> {
+): Promise<RunSummary | "awaiting-run"> {
   const { number: prNumber, headSha } = pr;
   const run = queuedRun(danteLinks(project.ref, prNumber));
   const ref = { owner: project.repoOwner, repo: project.repoName };
@@ -241,48 +451,27 @@ async function pullRequestRun(
     tests: generation.tests,
   });
 
-  if (generation.tests.length > 0) await progress({ ...run, status: "running", components });
-
-  const watch = watchSuperseded(jobId, project.id, prNumber);
-  const testRun = await runPullRequestTests({
-    project,
-    headSha,
-    tests: generation.tests,
-    signal: watch.signal,
-  }).finally(watch.stop);
-
-  // 실행 중에 새 커밋이 와서 끊었다. 끊긴 결과(error)를 저장하거나 코멘트로 보내지 않는다.
-  if (watch.signal.aborted) {
-    console.info(`[pull-request-job] test run for #${prNumber} stopped by a newer commit`);
-    return run;
+  // 샌드박스를 띄울 작업이면 팀의 실행 줄에 세운다. 이 함수에서 이어 돌리지 않는다 —
+  // 생성에 이미 시간을 썼고, 같은 팀의 앞 실행이 끝날 때까지 기다리며 함수를 붙잡을 수도 없다.
+  const skip = testRunSkipReason(project, generation.tests);
+  if (skip === null) {
+    await progress({ ...run, status: "running", components });
+    const input: RunInput = {
+      pr,
+      components: located,
+      failedFiles: generation.failedFiles,
+      stopped: generation.stopped,
+    };
+    await prisma.pullRequestJob.update({
+      where: { id: jobId },
+      data: { status: "awaiting_run", runInput: input },
+    });
+    return "awaiting-run";
   }
 
-  console.info(
-    `[pull-request-job] test run for #${prNumber}`,
-    testRun.kind === "ran"
-      ? {
-          status: testRun.result.status,
-          totals: testRun.result.report?.totals ?? null,
-          errorMessage: testRun.result.errorMessage ?? null,
-        }
-      : { notRun: testRun.reason }
-  );
-
-  // preview 화면이 읽는다. 로그는 크니 따로 둔다. 실행하지 않았으면 이전 결과를 지운다 —
-  // Re-run 한 같은 커밋에 옛 결과가 남으면 지금 코멘트와 화면이 어긋난다.
-  // 저장이 실패해도 PR 에는 결과를 보낸다. 화면 하나 때문에 코멘트·체크가 멈추면 안 된다.
-  const { logs, ...runResult } = testRun.kind === "ran" ? testRun.result : { logs: null };
-  await prisma.pullRequestJob
-    .update({
-      where: { id: jobId },
-      data: {
-        runResult: testRun.kind === "ran" ? runResult : Prisma.DbNull,
-        runLogs: logs,
-      },
-    })
-    .catch((error) => {
-      console.error(`[pull-request-job] saving run result failed for #${prNumber}`, error);
-    });
+  const testRun: PullRequestTestRun = { kind: "not-run", reason: skip };
+  console.info(`[pull-request-job] test run for #${prNumber}`, { notRun: skip });
+  await saveRunResult(jobId, prNumber, testRun);
 
   return finalRun(run, { components: located, generation, testRun });
 }
