@@ -23,7 +23,7 @@ export function pullRequestTestPathFor(filePath: string): string {
 /**
  * 러너별로 한 줄 덧붙일 지시. 모르는 값이거나 없으면 덧붙이지 않는다.
  *
- * 추천 화면은 러너를 넘기지 않는다 — 그쪽 프롬프트는 이 기능 전과 글자 하나 다르지 않다.
+ * 추천·폴더 보기도 프로젝트 러너를 넘긴다(test-generation.ts). 설치 패키지 목록은 PR 에서만 넘긴다.
  * PR 에서는 만든 테스트를 러너로 바로 돌리므로, 러너 API 를 섞어 쓰면 실행에서 깨진다.
  */
 const FRAMEWORK_INSTRUCTIONS: Record<string, string> = {

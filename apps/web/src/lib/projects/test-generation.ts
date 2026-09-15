@@ -2,9 +2,10 @@
 // 후보 목록을 AI 에 한꺼번에 보내지 않는다. 파일 본문이 토큰을 크게 쓰므로,
 // 실제로 "테스트 생성"을 누른 한 파일만 이 함수에 들어온다.
 //
-// 두 곳이 쓴다. 추천 화면(generateTestForFile)은 기본 브랜치에서 파일을 읽고,
+// 두 곳이 쓴다. 추천·폴더 보기(generateTestForFile)는 기본 브랜치에서 파일을 읽고,
 // PR 파이프라인은 PR head 커밋에서 읽은 본문을 generateTestCode 에 바로 넘긴다.
 
+import { prisma } from "@dante/db";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { getMonthlyBudgetStatus, reserveAiBudget } from "@/lib/ai/budget";
@@ -41,7 +42,18 @@ export async function generateTestForFile(args: {
     const budget = await getMonthlyBudgetStatus(args.userId);
     if (budget.exceeded) return { ok: false, reason: "budget" };
 
-    const source = await getFileText(args.repo, args.filePath);
+    // 프로젝트 러너를 넘긴다. 없으면 모델이 흔한 jest 로 쓰고, vitest 프로젝트에서 실행이 깨진다.
+    // package.json(설치 패키지)은 넘기지 않는다 — 루트만 읽어서 모노레포에선 필요한 패키지가 빠진
+    // 목록이 "이것만 import 하라"로 들어간다. 가까운 package.json 을 찾게 되면 PR 생성과 같이 바꾼다.
+    const [source, project] = await Promise.all([
+      getFileText(args.repo, args.filePath),
+      args.projectId
+        ? prisma.project.findUnique({
+            where: { id: args.projectId },
+            select: { testFramework: true },
+          })
+        : null,
+    ]);
     if (source === null) return { ok: false, reason: "not-found" };
 
     const generated = await generateTestCode({
@@ -49,6 +61,7 @@ export async function generateTestForFile(args: {
       projectId: args.projectId,
       filePath: args.filePath,
       source,
+      testFramework: project?.testFramework,
     });
     if (!generated) return { ok: false, reason: "budget" };
 
@@ -77,9 +90,9 @@ export async function generateTestCode(args: {
   projectId: string | null;
   filePath: string;
   source: string;
-  /** 넘기면 프롬프트에 러너 지시가 붙는다. 추천 화면은 넘기지 않는다 */
+  /** 넘기면 프롬프트에 러너 지시가 붙는다 */
   testFramework?: string | null;
-  /** 넘기면 이 패키지만 import 하라는 지시가 붙는다. 추천 화면은 넘기지 않는다 */
+  /** 넘기면 이 패키지만 import 하라는 지시가 붙는다 */
   dependencies?: string[] | null;
   /** 만들 테스트 경로. 생략하면 `foo.test.tsx`(testPathFor). PR 은 겹치지 않는 경로를 넘긴다 */
   testPath?: string;

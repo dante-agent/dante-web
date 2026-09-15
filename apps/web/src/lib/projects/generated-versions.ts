@@ -1,4 +1,4 @@
-import { prisma } from "@dante/db";
+import { Prisma, prisma } from "@dante/db";
 
 // AI 가 만든 테스트 코드를 한 "버전"으로 저장한다 (서버 전용).
 //
@@ -22,6 +22,21 @@ export async function saveGeneratedVersion(args: {
   /** 생성된 테스트 코드 전체. */
   code: string;
 }): Promise<string> {
+  try {
+    return await insertVersion(args);
+  } catch (error) {
+    // 같은 파일을 두 곳(추천·폴더 보기)에서 동시에 저장하면 둘 다 같은 번호(또는 첫 Component)를
+    // 잡아 한쪽이 unique 제약으로 P2002 가 난다. 상대가 커밋을 끝냈으니 한 번 더 하면 다음 번호로 들어간다.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return insertVersion(args);
+    }
+    throw error;
+  }
+}
+
+// ponytail: 버전을 지우지 않고 계속 쌓는다. 생성마다 AI 원가가 들어 월 한도가 먼저 막지만,
+// 행이 문제 되면 이 트랜잭션에서 파일당 최신 N개만 남기고 지운다(실행 기록이 붙은 버전은 남길지 정할 것).
+function insertVersion(args: Parameters<typeof saveGeneratedVersion>[0]): Promise<string> {
   return prisma.$transaction(async (tx) => {
     // 추천은 export 이름을 모른다(경로만 본다). 이름을 exportName 자리에 그대로 쓴다 —
     // 같은 파일을 또 생성하면 같은 Component 로 붙어 버전이 이어지게 하려는 것이다.
@@ -70,4 +85,31 @@ export async function saveGeneratedVersion(args: {
 
     return created.id;
   });
+}
+
+/**
+ * 이 소스 파일에 저장된 가장 최근 버전. 폴더 보기가 레포에 테스트가 없을 때 대신 보여준다.
+ * projectId 는 부르는 쪽이 소유 확인을 마친 값이어야 한다.
+ */
+export async function getLatestGeneratedTest(
+  projectId: string,
+  sourceFilePath: string
+): Promise<{ testPath: string; code: string; version: number } | null> {
+  const latest = await prisma.testFileVersion.findFirst({
+    where: { testFile: { component: { projectId, filePath: sourceFilePath } } },
+    orderBy: { createdAt: "desc" },
+    select: { content: true, version: true, testFile: { select: { path: true } } },
+  });
+  return latest
+    ? { testPath: latest.testFile.path, code: latest.content, version: latest.version }
+    : null;
+}
+
+/** 저장된 생성 버전이 있는 소스 경로. 폴더 보기 트리가 레포 테스트와 함께 "테스트 있음"으로 칠한다. */
+export async function getGeneratedSourcePaths(projectId: string): Promise<Set<string>> {
+  const rows = await prisma.component.findMany({
+    where: { projectId, testFiles: { some: { versions: { some: {} } } } },
+    select: { filePath: true },
+  });
+  return new Set(rows.map((row) => row.filePath));
 }
