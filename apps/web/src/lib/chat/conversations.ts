@@ -51,10 +51,11 @@ export type ConversationPage = {
   nextCursor: string | null;
 };
 
-/** 이 프로젝트에서 내 대화 목록(최근 순). 커서가 망가졌으면 null. */
+/** 이 프로젝트의 이 파일에서 내 대화 목록(최근 순). 대화는 파일마다 따로다. 커서가 망가졌으면 null. */
 export async function listConversations(
   userId: string,
   projectRef: string,
+  filePath: string,
   cursor: string | null
 ): Promise<ConversationPage | null> {
   const after = cursor ? decodeCursor(cursor) : null;
@@ -64,6 +65,7 @@ export async function listConversations(
     where: {
       userId,
       project: { ref: projectRef, ...accessibleProjectWhere(userId) },
+      filePath,
       // 정렬(updatedAt desc, id desc)에서 커서 다음 행부터.
       ...(after && {
         OR: [
@@ -94,6 +96,8 @@ export async function listConversations(
 export type ConversationDetail = {
   id: string;
   projectId: string;
+  /** 대화가 붙은 파일. 파일 없이 만든 예전 대화는 null. */
+  filePath: string | null;
   title: string;
   updatedAt: Date;
   contextTokens: number;
@@ -112,6 +116,7 @@ export async function getConversation(
     select: {
       id: true,
       projectId: true,
+      filePath: true,
       title: true,
       updatedAt: true,
       contextTokens: true,
@@ -181,6 +186,7 @@ export async function saveExchange(input: {
         id: input.conversationId,
         userId: input.userId,
         projectId: input.projectId,
+        filePath: input.filePath,
         title: encryptSecret(titleOf(input.question)),
         contextTokens: input.contextTokens,
         messages,

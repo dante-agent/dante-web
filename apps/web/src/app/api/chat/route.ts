@@ -172,6 +172,8 @@ export async function POST(request: Request) {
   // (projectRef 는 클라이언트가 보낸 값이다). 없음과 권한 없음을 구분하지 않는다.
   const project = await getOwnedChatProject(projectRef, user.id);
   if (!project) return fail(404, "Project not found.");
+  // 대화는 파일마다 따로 저장한다. 파일 없이 만든 대화는 어느 목록에도 안 나오므로 받지 않는다.
+  if (!file) return fail(400, "Open a file on the left to chat about it.");
   // DB 값이라도 목록에 있는 러너만 프롬프트에 넣는다(표시 이름으로).
   const runner = TEST_FRAMEWORKS.find((f) => f.id === project.testFramework)?.name ?? null;
 
@@ -183,7 +185,8 @@ export async function POST(request: Request) {
   let history: ModelMessage[] = [];
   if (!isNew) {
     const conversation = await getConversation(user.id, id);
-    if (!conversation || conversation.projectId !== project.id) {
+    // 다른 파일의 대화에 이어 쓰지 않는다 — 대화 목록·Apply 대상이 파일 단위라 섞이면 어긋난다.
+    if (!conversation || conversation.projectId !== project.id || conversation.filePath !== file) {
       return fail(
         404,
         "Conversation not found.\nPlease start a new chat.",
