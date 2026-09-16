@@ -411,7 +411,11 @@ export function RunPanel({
   );
 }
 
-function TerminalBody({ view }: { view: RunView }) {
+/**
+ * 실행 단계(setup→install→toolkit→test)와 러너 출력을 실시간으로 그린다. 폴더 보기의 RunPanel 과
+ * 세션 상세 실행 패널이 함께 쓴다 — 접힘·리사이즈 같은 셸은 각자 두고 본문만 공유한다.
+ */
+export function TerminalBody({ view }: { view: RunView }) {
   // 설치 로그(레포 의존성·Dante 도구)는 수백 줄이라 접어 둔다. 실패했을 때만 원인을 보라고 펼친다.
   const [installOpen, setInstallOpen] = useState(false);
   const [toolkitOpen, setToolkitOpen] = useState(false);
