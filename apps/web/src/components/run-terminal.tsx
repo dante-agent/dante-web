@@ -141,6 +141,27 @@ export function useLiveRun(projectRef: string) {
   return { view, start };
 }
 
+/**
+ * AI 채팅이 테스트 실행을 요청할 때 쓰는 창 이벤트. 채팅(layout)과 터미널(page 의 FileView)은
+ * 서로 다른 트리라 props 로 이을 수 없다. 받는 쪽은 열려 있는 파일이 같을 때만 돈다.
+ */
+const RUN_REQUEST = "dante:run-test";
+type RunRequest = { file: string; versionId: string };
+
+export function requestTestRun(request: RunRequest) {
+  window.dispatchEvent(new CustomEvent<RunRequest>(RUN_REQUEST, { detail: request }));
+}
+
+/** 이 파일에 대한 실행 요청을 받는다. 해제 함수를 돌려준다(useEffect 정리용). */
+export function onTestRunRequest(file: string, run: (versionId: string) => void) {
+  const listener = (event: Event) => {
+    const { detail } = event as CustomEvent<RunRequest>;
+    if (detail.file === file) run(detail.versionId);
+  };
+  window.addEventListener(RUN_REQUEST, listener);
+  return () => window.removeEventListener(RUN_REQUEST, listener);
+}
+
 /** ANSI 색이 섞인 텍스트를 색 조각 span 으로 그린다. */
 const AnsiText = memo(function AnsiText({ text }: { text: string }) {
   const parts = useMemo(() => Anser.ansiToJson(text, { remove_empty: true }), [text]);

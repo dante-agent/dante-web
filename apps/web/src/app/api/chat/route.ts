@@ -1,10 +1,13 @@
 import { after, NextResponse } from "next/server";
 import {
   createTextStreamResponse,
+  isStepCount,
   streamText,
+  tool,
   type LanguageModelUsage,
   type ModelMessage,
 } from "ai";
+import { z } from "zod";
 import { getMonthlyBudgetStatus, reserveAiBudget } from "@/lib/ai/budget";
 import { chatModel, MODEL } from "@/lib/ai/chat-model";
 import { maxCostUsd } from "@/lib/ai/pricing";
@@ -16,9 +19,10 @@ import {
   MAX_MESSAGES,
   saveExchange,
 } from "@/lib/chat/conversations";
+import { encodeTail } from "@/lib/chat/stream-tail";
 import { getFileText } from "@/lib/github/blob";
 import { TEST_FRAMEWORKS } from "@/lib/projects/frameworks";
-import { getLatestGeneratedTest } from "@/lib/projects/generated-versions";
+import { getLatestGeneratedTest, saveTestCode } from "@/lib/projects/generated-versions";
 import { getOwnedChatProject, getProjectRepo } from "@/lib/projects/queries";
 import { createClient } from "@/lib/supabase/server";
 
@@ -59,7 +63,7 @@ const REFUSAL =
  * 이 제약은 모델이 "대체로" 지키는 층이다. 반드시 막아야 하는 것(비밀 파일 전송)은
  * 위 SENSITIVE_FILE 처럼 코드에서 막는다.
  */
-function systemPrompt(runner: string | null): string {
+function systemPrompt(runner: string | null, tools: boolean): string {
   return [
     "You are Dante's testing assistant. Answer in English, and only about the code and tests in the GitHub repository the user connected to Dante.",
     "",
@@ -75,8 +79,16 @@ function systemPrompt(runner: string | null): string {
       ? `- This project's test runner is ${runner}. Write all test code, APIs, config and run commands for ${runner} only. Never mix in another runner's APIs or imports. If the user asks about a different runner, tell them this project uses ${runner} and answer with ${runner}.\n- Tests run in Dante's managed environment: ${runner} with jsdom, @testing-library/react, @testing-library/user-event and @testing-library/jest-dom (matchers registered, DOM cleaned up after each test). You may import these even if the repository doesn't install them. Import any other package only if the source file already imports it.`
       : "- This project has no test runner set. Don't write test code; tell the user to finish the project setup first.",
     "",
-    "## Editing the test",
-    "- When you write or change the test for the file the user is viewing, reply with the complete test file in a single code block, never a partial snippet or diff. The user applies it by replacing the whole test file.",
+    "## Editing and running the test",
+    ...(tools
+      ? [
+          "- When the user asks you to write, fix or change the test for the file they are viewing, call updateTestFile with the complete test file, never a partial snippet or diff. Don't also paste the code in your reply; say in a few lines what you changed.",
+          "- When the user asks you to run the test, call runTests. If you change the test in the same reply, call updateTestFile first. The run starts in the terminal below the editor after your reply, so never guess or report its result.",
+          "- Call these tools only when the user asks for it.",
+        ]
+      : [
+          "- When you write or change the test for the file the user is viewing, reply with the complete test file in a single code block, never a partial snippet or diff. The user applies it by replacing the whole test file.",
+        ]),
     "- Start from the current test file when one is given, and keep the parts the user didn't ask to change.",
     "",
     "## File contents",
@@ -106,16 +118,10 @@ const MAX_MESSAGE = 20_000;
 const MAX_OUTPUT_TOKENS = 16_000;
 
 /**
- * 답 스트림 맨 끝에 붙이는 구분자. 뒤에 이번 턴의 컨텍스트 토큰 수(숫자)가 온다(ai-chat.tsx 에 같은 값).
- * 헤더는 본문보다 먼저 나가서 끝나야 아는 토큰 수를 실을 수 없다. 모델 답에 나올 일 없는 제어문자(RS).
+ * 도구를 쓸 때 모델 호출 상한. 수정(updateTestFile) → 실행(runTests) → 마무리 답이 차례로 오면 3번이다.
+ * 이보다 길게 돌면 끊는다 — 도구 호출이 되풀이되며 원가를 쓰지 않게.
  */
-const USAGE_MARK = "\u001e";
-
-/**
- * 대화 저장에 실패했을 때 꼬리에 한 번 더 붙는 표시(USAGE_MARK + 이 값). 답은 이미 화면에 나갔으니
- * 스트림을 깨지 않고, 화면이 "저장 안 됨"을 알리고 이 턴을 대화에 붙이지 않게 한다(ai-chat.tsx 에 같은 값).
- */
-const UNSAVED = "unsaved";
+const MAX_STEPS = 3;
 
 /** 저장 결과를 기다리는 상한. onFinish 가 끝내 오지 않아도 스트림이 영영 안 닫히는 일은 없게. */
 const SAVE_WAIT_MS = 15_000;
@@ -212,14 +218,15 @@ export async function POST(request: Request) {
     history = conversation.messages.map(({ role, content }) => ({ role, content }));
   }
 
-  // 열어둔 파일을 컨텍스트로 붙인다.
+  // 열어둔 파일을 컨텍스트로 붙인다. 비밀일 수 있는 파일이면 레포도 읽지 않는다 — 도구도 붙이지 않는다.
+  const sensitive = SENSITIVE_FILE.test(file);
+  const repo = sensitive ? null : await getProjectRepo(projectRef, user.id);
   let context = "";
   if (file) {
-    if (SENSITIVE_FILE.test(file)) {
+    if (sensitive) {
       // 본문은 읽지도 않는다. 모델에는 "볼 수 없는 파일"이라는 사실만 준다.
       context = `\n\nThe file the user is viewing may contain secrets, so its contents are hidden: ${JSON.stringify(file)}. Tell the user you can't answer about this file's contents.`;
     } else {
-      const repo = await getProjectRepo(projectRef, user.id);
       // 테스트는 폴더 보기가 보여주는 것과 같은 값(저장된 최신 버전)을 붙인다. 레포 테스트도
       // 파일을 열 때 버전으로 들어오므로 여기서 GitHub 을 한 번 더 읽지 않는다.
       const [text, test] = await Promise.all([
@@ -237,6 +244,68 @@ export async function POST(request: Request) {
     }
   }
 
+  // 채팅이 파일에 한 일. 끝나면 답 꼬리에 실어 화면이 Test Code 를 다시 읽고 실행을 시작한다.
+  let edited: { version: number } | null = null;
+  let runVersionId: string | null = null;
+  const updates: Promise<unknown>[] = [];
+
+  // 러너가 없으면 테스트를 쓰지 말라고 했으니 도구도 없다. 수정은 새 버전으로 쌓일 뿐 이전 버전은 남고,
+  // 실행은 격리된 샌드박스에서 사용자 본인 테스트만 돈다 — 파일 속 문구로 모델이 불러도 되돌릴 수 있는 범위다.
+  const tools =
+    repo && runner
+      ? {
+          updateTestFile: tool({
+            description:
+              "Save new complete contents for the test file of the file the user is viewing, as a new version. The editor shows it right away.",
+            inputSchema: z.object({
+              code: z.string().describe("The complete test file. Never a snippet or a diff."),
+            }),
+            execute: async ({ code }) => {
+              const pending = saveTestCode({
+                repo,
+                projectId: project.id,
+                filePath: file,
+                code,
+                source: "ai",
+              });
+              updates.push(pending);
+              const result = await pending;
+              if (!result.ok) return { ok: false, error: "The test could not be saved." };
+              edited = { version: result.version };
+              return { ok: true, version: result.version };
+            },
+          }),
+          runTests: tool({
+            description:
+              "Run the saved test file of the file the user is viewing in Dante's test environment. The run starts in the terminal below the editor after your reply; you will not see the result.",
+            inputSchema: z.object({}),
+            execute: async () => {
+              // 같은 답에서 수정도 불렀으면 저장이 끝난 뒤의 최신 버전을 돌린다.
+              // ponytail: 같은 단계의 도구 호출은 함께 시작한다. runTests 가 먼저 시작되면 수정 전 버전을
+              // 잡을 수 있어 프롬프트로 순서를 요구한다 — 어긋나면 실행 전에 저장을 기다리는 줄이 필요하다.
+              await Promise.allSettled(updates);
+              const latest = await getLatestGeneratedTest(project.id, file);
+              if (!latest)
+                return { ok: false, error: "This file has no test yet. Write one first." };
+              runVersionId = latest.id;
+              return { ok: true, version: latest.version };
+            },
+          }),
+        }
+      : undefined;
+
+  /** 도구가 한 일을 답 끝에 적는다. 대화에도 같이 저장돼 다시 열었을 때도 남는다. */
+  const actionNote = () =>
+    [
+      edited && `_Saved the test as v${edited.version}._`,
+      runVersionId && "_Started the test run in the terminal below._",
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+  // 이번 턴의 컨텍스트 토큰. onFinish 가 마지막 호출 기준으로 채운다(여러 번 부르면 합계는 입력을 겹쳐 센다).
+  let contextTokens: number | null = null;
+
   // 클라이언트가 중단했거나 창을 닫았는지. 응답 스트림이 cancel 되면 켜진다.
   // request.signal 대신 직접 드는 이유: 아래처럼 생성을 끝까지 돌리므로 "끊겼는가"를
   // 모델 호출과 떼어서 알아야 한다.
@@ -250,17 +319,19 @@ export async function POST(request: Request) {
   // 예약이 정산 없이 버려지는 경로가 없다. chatModel() 도 예약 전에 불러 둔다 — 키가 없어
   // 던지면 예약이 남는다.
   const model = chatModel();
-  const system = systemPrompt(runner) + context;
+  const system = systemPrompt(runner, tools !== undefined) + context;
   const messages: ModelMessage[] = [...history, { role: "user", content: message }];
   const reserved = await reserveAiBudget({
     userId: user.id,
     projectId: project.id,
     surface: "chat",
     // 메시지는 JSON 으로 센다. 모양이 무엇이든 본문 바이트 이상이 된다(이스케이프는 늘리기만 한다).
-    estimateUsd: maxCostUsd(MODEL, {
-      prompt: system + JSON.stringify(messages),
-      maxOutputTokens: MAX_OUTPUT_TOKENS,
-    }),
+    // 도구를 쓰면 모델을 최대 MAX_STEPS 번 부른다. 매번 입력을 다시 보내고 출력 상한까지 쓸 수 있어 그만큼 곱한다.
+    estimateUsd:
+      maxCostUsd(MODEL, {
+        prompt: system + JSON.stringify(messages),
+        maxOutputTokens: MAX_OUTPUT_TOKENS,
+      }) * (tools ? MAX_STEPS : 1),
   });
   if (!reserved.ok) return budgetExceeded(reserved.budget.limitUsd);
   const { reservation } = reserved;
@@ -270,6 +341,8 @@ export async function POST(request: Request) {
     system,
     messages,
     maxOutputTokens: MAX_OUTPUT_TOKENS,
+    tools,
+    stopWhen: isStepCount(MAX_STEPS),
     // abortSignal 을 넘기지 않는다. 넘기면 중단 시 onFinish 가 오지 않고(onAbort 는 토큰 수를
     // 주지 않는다) 이미 쓴 토큰이 사용량에 안 남는다 — 답이 거의 끝날 때마다 중단을 누르면
     // 월 한도를 우회해 원가를 쓸 수 있다. 그래서 중단돼도 생성은 끝까지 가고, 그 비용은
@@ -284,8 +357,11 @@ export async function POST(request: Request) {
     // 생성이 끝나면 (클라이언트가 끊었어도) 온다. 사용량은 항상, 대화는 끝까지 받았을 때만 남긴다.
     // projectId 는 위 권한 확인을 통과한 프로젝트다 — 클라이언트가 보낸 projectRef 를
     // 그대로 믿으면 남의 프로젝트에 사용량을 붙일 수 있다.
-    onFinish: async ({ usage, text }) => {
+    onFinish: async ({ usage, steps, finalStep }) => {
       await settleAiUsage(reservation, usage);
+      contextTokens = contextTokensOf(finalStep.usage);
+      // 화면에 흘려보낸 것과 같은 모양으로 저장한다 — 호출마다의 답을 빈 줄로 잇고 도구 기록을 붙인다.
+      const text = [...steps.map((step) => step.text), actionNote()].filter(Boolean).join("\n\n");
       // 빈 답이나 중단된 요청은 저장하지 않는다(중단 시 질문도 남기지 않는다).
       if (!text || clientGone) return resolveSaved(false);
       try {
@@ -302,7 +378,7 @@ export async function POST(request: Request) {
         });
         resolveSaved(true);
       } catch (error) {
-        // 답은 이미 화면에 나갔다. 스트림은 깨지 않고, 꼬리의 UNSAVED 로 화면에 알린다.
+        // 답은 이미 화면에 나갔다. 스트림은 깨지 않고, 꼬리의 저장 표시로 화면에 알린다.
         console.error("[chat] 대화 저장 실패", error);
         resolveSaved(false);
       }
@@ -314,20 +390,36 @@ export async function POST(request: Request) {
   // 함수가 응답을 보낸 뒤에도 이 읽기가 끝날 때까지 살아 있게 한다(maxDuration 안에서).
   after(Promise.resolve(result.consumeStream()));
 
-  const reader = result.textStream.getReader();
+  // 글자만 흘려보낸다. 모델을 여러 번 부르면(도구) 호출마다의 답 사이에 빈 줄을 넣는다 — onFinish 의 저장과 같은 규칙.
+  const reader = result.stream.getReader();
+  let emitted = false;
+  let newStep = false;
   const stream = new ReadableStream<string>({
     async pull(controller) {
-      const { done, value } = await reader.read();
-      if (!done) return controller.enqueue(value);
-      // 토큰 수를 못 받으면 숫자 자리를 비운다 — 이미 보낸 답을 에러로 깨지 않게. 화면은 이전 값을 둔다.
-      const usage = await Promise.resolve(result.usage).catch(() => null);
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value.type === "start-step") newStep = true;
+        if (value.type !== "text-delta" || !value.text) continue;
+        const gap = newStep && emitted ? "\n\n" : "";
+        newStep = false;
+        emitted = true;
+        return controller.enqueue(gap + value.text);
+      }
       // 저장이 끝나야 화면이 대화에 붙일지 안다. 상한을 넘기면 저장 안 됨으로 본다.
+      // 토큰 수를 못 받았으면(에러) 숫자 자리를 비운다 — 이미 보낸 답을 에러로 깨지 않게.
       const ok = await Promise.race([
         saved,
         new Promise<boolean>((resolve) => setTimeout(() => resolve(false), SAVE_WAIT_MS)),
       ]);
+      const note = actionNote();
       controller.enqueue(
-        USAGE_MARK + (usage ? contextTokensOf(usage) : "") + (ok ? "" : USAGE_MARK + UNSAVED)
+        (note ? (emitted ? "\n\n" : "") + note : "") +
+          encodeTail({
+            contextTokens,
+            saved: ok,
+            actions: { edited: edited !== null, runVersionId },
+          })
       );
       controller.close();
     },
