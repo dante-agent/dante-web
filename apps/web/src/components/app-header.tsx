@@ -2,14 +2,14 @@
 
 // 최상단 헤더 (project 스코프). 로고 / owner / repo 브레드크럼 · 검색 · Feedback · 프로필.
 // 데이터는 project layout 이 넘겨준다. 파일 검색 목록은 PR B(레포 트리)에서 연결.
-// 프로필은 드롭다운(user-menu). Feedback 은 문의 모달(feedback-dialog).
+// 프로필은 드롭다운(user-menu). Feedback 은 구글폼 설문을 새 탭으로 연다.
 
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Blocks, Box, Plus } from "lucide-react";
 import danteLogo from "@/assets/dante-logo.png";
-import { FeedbackDialog } from "@/components/feedback-dialog";
+import { FeedbackLink } from "@/components/feedback-link";
 import { FileSearch } from "@/components/file-search";
 import { HeaderSwitcher, SwitcherRow } from "@/components/header-switcher";
 import { TeamSwitcher } from "@/components/team-switcher";
@@ -103,7 +103,7 @@ export function AppHeader({
       </div>
 
       <div className="ml-auto flex shrink-0 items-center gap-2">
-        <FeedbackDialog />
+        <FeedbackLink />
         <UserMenu user={user} />
       </div>
     </header>

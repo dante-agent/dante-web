@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@dante/db";
 import danteLogo from "@/assets/dante-logo.png";
 import { AccountSidebar } from "@/components/account/account-sidebar";
-import { FeedbackDialog } from "@/components/feedback-dialog";
+import { FeedbackLink } from "@/components/feedback-link";
 import { SettingsShell } from "@/components/settings/settings-shell";
 import { TeamSwitcher } from "@/components/team-switcher";
 import { UserMenu } from "@/components/user-menu";
@@ -52,7 +52,7 @@ export default async function TeamSettingsLayout({
         </div>
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
-          <FeedbackDialog />
+          <FeedbackLink />
           <UserMenu user={headerUser} />
         </div>
       </header>
