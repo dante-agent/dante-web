@@ -1,21 +1,34 @@
 "use client";
 
-import { useState } from "react";
 import { Loader2, Play, RotateCcw } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { TerminalBody, useLiveRun, type RunView } from "@/components/run-terminal";
 import type { TestRunView } from "@/lib/projects/run-version";
+import { cn } from "@/lib/utils";
 
-// 우측 코드 패널 아래의 실행 결과 영역. main 러너는 동기(비스트리밍)라 버튼을 누르면
-// 완료까지 기다렸다가 최종 로그·상태를 한 번에 보여준다. xterm 없이 단순 로그 뷰다
-// (라이브 스트림이 없어 터미널 에뮬레이터가 필요 없다).
+// 우측 코드 패널 아래의 실행 결과 영역. 폴더 보기와 같은 실시간 실행(/runs/live, NDJSON)을 쓴다 —
+// 버튼을 누르면 단계(샌드박스 준비 → 설치 → 도구 → 테스트)와 러너 출력이 실시간으로 흐르고, 끝나면
+// 개수 요약이 뜬다. 스트림 처리·표시(useLiveRun/TerminalBody)는 run-terminal 의 것을 그대로 쓴다.
+//
+// 처음 열 때는 저장된 마지막 실행(initialRun)의 로그를 보여준다 — 그건 단계 정보가 없는 blob 이라
+// 단순 로그로 찍고, 새로 실행을 돌리면 그때부터 단계별 뷰(TerminalBody)로 바뀐다.
 
 type Display = TestRunView["status"] | "idle" | "running";
 
 // vitest/jest 로그의 색상 코드(SGR)만 걷어낸다 — <pre> 는 escape 를 그대로 글자로 찍는다.
-const ANSI_SGR = /\[[0-9;]*m/g;
+const ANSI_SGR = /\[[0-9;]*m/g;
 
 function stripAnsi(text: string): string {
   return text.replace(ANSI_SGR, "");
+}
+
+/** 라이브 실행 뷰 → 헤더 상태 라벨. 실행 전이면 initialRun, 그것도 없으면 idle. */
+function displayStatus(view: RunView | null, initialRun: TestRunView | null): Display {
+  if (view) {
+    if (view.running || !view.result) return "running";
+    const { status } = view.result;
+    return status === "passed" || status === "failed" ? status : "error";
+  }
+  return initialRun?.status ?? "idle";
 }
 
 export function TestRunPanel({
@@ -29,76 +42,60 @@ export function TestRunPanel({
   initialRun: TestRunView | null;
   runnerConfigured: boolean;
 }) {
-  const [run, setRun] = useState<TestRunView | null>(initialRun);
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function trigger() {
-    if (pending) return;
-    setPending(true);
-    setError(null);
-    try {
-      const response = await fetch(`/api/projects/${encodeURIComponent(projectRef)}/runs`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ versionId }),
-      });
-      if (!response.ok) {
-        const detail = (await response.json().catch(() => ({}))) as { error?: string };
-        throw new Error(detail.error ?? `Run request failed (${response.status}).`);
-      }
-      setRun((await response.json()) as TestRunView);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "The run request failed.");
-    } finally {
-      setPending(false);
-    }
-  }
-
-  const status: Display = pending ? "running" : (run?.status ?? "idle");
-  const message = error ?? run?.errorMessage ?? null;
-  const logs = run?.logs ? stripAnsi(run.logs).trimEnd() : "";
+  const { view, start } = useLiveRun(projectRef);
+  const running = view?.running ?? false;
+  const status = displayStatus(view, initialRun);
+  // 한 번이라도 돈 적이 있으면(라이브 뷰 또는 저장된 실행) 버튼은 "Re-run".
+  const ran = Boolean(view) || Boolean(initialRun);
+  const initialLogs = initialRun?.logs ? stripAnsi(initialRun.logs).trimEnd() : "";
+  const initialMessage = initialRun?.errorMessage ?? null;
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[#121014]">
+    <div className="flex h-full min-h-0 flex-col bg-black">
       <div className="border-border flex h-10 shrink-0 items-center gap-3 border-b px-3">
         <StatusLabel status={status} />
-        {message && (
-          <span className="text-destructive min-w-0 flex-1 truncate text-xs" title={message}>
-            {message}
+        {!view && initialMessage && (
+          <span className="text-destructive min-w-0 flex-1 truncate text-xs" title={initialMessage}>
+            {initialMessage}
           </span>
         )}
         <button
           type="button"
-          onClick={trigger}
-          disabled={pending || !runnerConfigured}
+          onClick={() => {
+            if (!running && runnerConfigured) start(versionId);
+          }}
+          disabled={running || !runnerConfigured}
           title={
             runnerConfigured ? undefined : "The test runner is not configured in this environment."
           }
           className="bg-primary text-primary-foreground ml-auto flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {pending ? (
+          {running ? (
             <Loader2 className="size-3.5 animate-spin" />
-          ) : run ? (
+          ) : ran ? (
             <RotateCcw className="size-3.5" />
           ) : (
             <Play className="size-3.5" />
           )}
-          {pending ? "Running" : run ? "Re-run" : "Run tests"}
+          {running ? "Running" : ran ? "Re-run" : "Run tests"}
         </button>
       </div>
 
-      <pre className="min-h-0 flex-1 overflow-auto p-3 font-mono text-xs leading-relaxed text-[#eeedf0]">
-        {logs ? (
-          logs
-        ) : (
-          <span className="text-[#8a8790]">
-            {runnerConfigured
-              ? "Run the tests to see install and test logs here."
-              : "The test runner is not configured in this environment."}
-          </span>
-        )}
-      </pre>
+      {view ? (
+        <TerminalBody view={view} />
+      ) : (
+        <pre className="min-h-0 flex-1 overflow-auto p-3 font-mono text-xs leading-relaxed text-[#eeedf0]">
+          {initialLogs ? (
+            initialLogs
+          ) : (
+            <span className="text-[#8a8790]">
+              {runnerConfigured
+                ? "Run the tests to see live install and test logs here."
+                : "The test runner is not configured in this environment."}
+            </span>
+          )}
+        </pre>
+      )}
     </div>
   );
 }

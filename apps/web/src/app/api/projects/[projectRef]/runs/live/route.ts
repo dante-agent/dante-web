@@ -3,10 +3,10 @@ import { runTestLive, type LiveEvent, type LiveResult } from "@dante/sandbox";
 import { getAuthUser } from "@/lib/auth/user";
 import { buildRunRequest, loadRunTarget, saveTestRun } from "@/lib/projects/run-version";
 
-// 저장된 테스트 버전을 돌리며 진행을 실시간으로 흘려보낸다. 폴더 보기 터미널이 부른다.
+// 저장된 테스트 버전을 돌리며 진행을 실시간으로 흘려보낸다. 폴더 보기 터미널과 세션 상세 실행
+// 패널이 함께 부른다(둘 다 run-terminal 의 useLiveRun 을 쓴다).
 //
 // 응답은 NDJSON — 한 줄에 이벤트 하나. 단계 시작·끝(step), 러너 출력 조각(log), 마지막에 결과(result).
-// 세션 상세의 실행(../route.ts)은 끝난 뒤 한 번에 받는 방식 그대로 둔다.
 //
 // 브라우저가 연결을 끊으면(탭 닫기·새로고침·이동) 샌드박스를 멈추고 결과를 남기지 않는다.
 
