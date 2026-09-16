@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { Dialog } from "@base-ui/react/dialog";
 import { AlertTriangle, ArrowRight, LoaderCircle, Sparkles } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { unstable_rethrow, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   generatePlannedTests,
@@ -53,7 +53,9 @@ export function PromptInput({ projectRef }: { projectRef: string }) {
         const result = await planTestGeneration(projectRef, trimmed);
         if (result.ok) setPlan(result);
         else setError(ERROR_MESSAGE[result.reason]);
-      } catch {
+      } catch (error) {
+        // redirect()/notFound() 같은 프레임워크 신호는 삼키지 않고 되던져 실제로 이동하게 한다.
+        unstable_rethrow(error);
         setError(ERROR_MESSAGE.failed);
       }
     });
@@ -73,7 +75,9 @@ export function PromptInput({ projectRef }: { projectRef: string }) {
           return;
         }
         setError(ERROR_MESSAGE[result.reason]);
-      } catch {
+      } catch (error) {
+        // redirect()/notFound() 같은 프레임워크 신호는 삼키지 않고 되던져 실제로 이동하게 한다.
+        unstable_rethrow(error);
         setError(ERROR_MESSAGE.failed);
       }
     });
