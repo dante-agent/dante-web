@@ -1,5 +1,5 @@
 import { prisma } from "@dante/db";
-import { isSandboxConfigured, runTest, type RunRequest, type RunResult } from "@dante/sandbox";
+import { isSandboxConfigured, type RunRequest, type RunResult } from "@dante/sandbox";
 import { installationToken } from "@/lib/github/pull-request";
 import { runnerFramework, withPassThroughArgs } from "@/lib/notifications/runner-request";
 import { detectRuntimeCommands } from "@/lib/projects/detect-runtime";
@@ -38,7 +38,7 @@ export type RunTarget =
 
 /**
  * 버전 하나를 돌리기 전에 필요한 것(소유 확인·버전·러너·레포·Runtime 설정)을 모은다.
- * 세션 상세의 실행(runTestVersion)과 폴더 보기의 실시간 실행이 같은 규칙을 쓴다.
+ * 세션 상세와 폴더 보기의 실시간 실행(runs/live)이 같은 규칙을 쓴다.
  */
 export async function loadRunTarget(
   projectRef: string,
@@ -138,34 +138,4 @@ export async function saveTestRun(versionId: string, result: RunResult) {
       finishedAt: new Date(result.finishedAt),
     },
   });
-}
-
-export async function runTestVersion(
-  projectRef: string,
-  userId: string,
-  versionId: string
-): Promise<TestRunView> {
-  const target = await loadRunTarget(projectRef, userId, versionId);
-  if (!target.ok) return target.view;
-
-  let result: RunResult;
-  try {
-    result = await runTest(await buildRunRequest(target));
-  } catch (error) {
-    // 러너에 닿지 못한 것도 "우리 쪽이 못 돌렸다"다. 러너가 돌려주는 error 와 같은 모양으로 접는다.
-    const now = new Date().toISOString();
-    result = {
-      status: "error",
-      exitCode: null,
-      logs: "",
-      errorMessage: error instanceof Error ? error.message : String(error),
-      report: null,
-      startedAt: now,
-      finishedAt: now,
-    };
-  }
-
-  await saveTestRun(target.versionId, result);
-
-  return { status: result.status, logs: result.logs, errorMessage: result.errorMessage ?? null };
 }
