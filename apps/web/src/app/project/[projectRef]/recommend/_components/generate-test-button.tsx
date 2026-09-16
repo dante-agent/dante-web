@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { Dialog } from "@base-ui/react/dialog";
 import { AlertTriangle, ArrowRight, Check, Copy, LoaderCircle, Sparkles } from "lucide-react";
 import Link from "next/link";
+import { unstable_rethrow } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { generateTest, type GenerateTestActionResult } from "../actions";
 
@@ -40,7 +41,9 @@ export function GenerateTestButton({
     startTransition(async () => {
       try {
         setResult(await generateTest(projectRef, filePath));
-      } catch {
+      } catch (error) {
+        // redirect()/notFound() 같은 프레임워크 신호는 삼키지 않고 되던진다.
+        unstable_rethrow(error);
         setResult({ ok: false, reason: "failed" });
       }
     });
