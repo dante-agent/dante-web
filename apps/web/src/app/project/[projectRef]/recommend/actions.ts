@@ -63,7 +63,7 @@ export async function generateTest(
 
 /**
  * 파일 하나를 생성(generateTestForFile)하고 성공분을 버전으로 저장(saveGeneratedVersion)한다.
- * generateTest 와 프롬프트 배치 생성(generateTestsFromPrompt)이 함께 쓴다 — 저장 규칙을 한
+ * generateTest 와 프롬프트 배치 생성(generatePlannedTests)이 함께 쓴다 — 저장 규칙을 한
  * 곳에 둔다. projectId 가 없으면(소유자 아님) 저장을 건너뛰고 versionId: null(미리보기만).
  */
 async function generateAndSave(args: {
