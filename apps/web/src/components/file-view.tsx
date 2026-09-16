@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { generateFolderTest, saveTestEdit } from "@/app/project/[projectRef]/folder/actions";
 import { iconForFile } from "@/components/file-icons";
-import { RunPanel, useLiveRun } from "@/components/run-terminal";
+import { onTestRunRequest, RunPanel, useLiveRun } from "@/components/run-terminal";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { MONACO_THEME as THEME, setupMonaco } from "@/lib/monaco-theme";
 import { pushRecent } from "@/lib/recent-files";
@@ -306,6 +306,15 @@ export function FileView({
   const shellRef = useRef<HTMLDivElement>(null);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [terminalHeight, setTerminalHeight] = useState(TERMINAL_DEFAULT);
+  // AI 채팅의 "실행해줘". 터미널은 보기 모드에만 있으니 수정 중에는 받지 않는다.
+  const { start } = run;
+  useEffect(() => {
+    if (!terminal || mode !== "view") return;
+    return onTestRunRequest(file, (id) => {
+      setTerminalOpen(true);
+      void start(id);
+    });
+  }, [terminal, mode, file, start]);
   const onTerminalResizeDown = (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);

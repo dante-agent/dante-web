@@ -10,7 +10,7 @@
 // 읽는다. 클라이언트가 보낸 대화를 믿으면 "AI 가 하지 않은 말"을 끼워 넣을 수 있다.
 
 import { Suspense, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import {
@@ -25,7 +25,9 @@ import {
   X,
 } from "lucide-react";
 import { ChatMarkdown } from "@/components/chat-markdown";
+import { requestTestRun } from "@/components/run-terminal";
 import { Button } from "@/components/ui/button";
+import { splitStream } from "@/lib/chat/stream-tail";
 import { cn } from "@/lib/utils";
 
 /** 본문과 같은 높이(헤더 47px 만 빼면 화면 끝까지). file-view / folder-empty-state 와 같은 값. */
@@ -49,10 +51,6 @@ const MAX_MESSAGES = 50;
  * 서버(lib/chat/conversations.ts)와 같은 값 — 왜 5만인지는 거기 적었다.
  */
 const MAX_CONTEXT_TOKENS = 50_000;
-/** 서버가 답 스트림 끝에 붙이는 구분자. 뒤에 실제 컨텍스트 토큰 수가 온다(api/chat/route.ts). */
-const USAGE_MARK = "\u001e";
-/** 서버가 대화 저장에 실패했을 때 꼬리에 붙이는 값(route.ts 에 같은 값). */
-const UNSAVED = "unsaved";
 /** 이 비율부터 게이지를 경고 톤으로. 가득 차기 전에 새 대화를 떠올리게. */
 const WARN_RATIO = 0.8;
 
@@ -245,6 +243,7 @@ function ChatPanel({
   file,
 }: PanelProps & { file: string | null }) {
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   // 서버에 아직 없는 꼬리: 보내는 중인 질문과 스트리밍 중인 답. 끝나면 캐시로 옮기고 비운다.
   // 중단된 답은 aborted 로 표시해 남긴다(저장되지 않았다고 알려주려고). 다음 전송 때 지운다
@@ -362,7 +361,7 @@ function ChatPanel({
     const sentTo = conversationId;
 
     // 받은 스트림을 따로 모아둔다 — 캐시에 붙일 때 state 가 반영되길 기다리지 않으려고.
-    // 끝에 USAGE_MARK + 토큰 수가 붙어 오므로 화면에는 그 앞까지만 쓴다.
+    // 끝에 꼬리(토큰 수·저장 여부·채팅이 한 일)가 붙어 오므로 화면에는 그 앞까지만 쓴다(stream-tail.ts).
     let raw = "";
 
     try {
@@ -386,18 +385,25 @@ function ChatPanel({
         const { done, value } = await reader.read();
         if (done) break;
         raw += value;
-        const shown = raw.split(USAGE_MARK)[0];
+        const shown = splitStream(raw).answer;
         setTail((prev) =>
           prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: shown } : m))
         );
       }
-      const [answer, usage, flag] = raw.split(USAGE_MARK);
-      // 구분자가 안 왔으면(구버전 서버 등) 이전 값을 그대로 둔다.
-      const contextTokens = usage ? Number(usage) : undefined;
+      const { answer, tail } = splitStream(raw);
+      // 토큰 수를 못 받았으면 이전 값을 그대로 둔다.
+      const contextTokens = tail?.contextTokens ?? undefined;
+
+      // 채팅이 테스트를 고쳤으면 Test Code 칸을 다시 읽고, 실행을 부탁받았으면 터미널에서 돌린다.
+      // 대화 저장과 상관없이 이미 일어난 일이라 먼저 처리한다.
+      if (tail?.actions.edited) router.refresh();
+      if (tail?.actions.runVersionId) {
+        requestTestRun({ file, versionId: tail.actions.runVersionId });
+      }
 
       // 서버에 안 남은 턴을 대화에 붙이면, 다시 열었을 때 사라져 화면이 거짓말을 한 셈이 된다.
       // 받은 답은 보여주되 저장 안 됐다고 표시하고, 새 대화였다면 id 도 잡지 않는다.
-      if (flag === UNSAVED) {
+      if (tail && !tail.saved) {
         setTail((prev) => prev.map((m) => (m.role === "assistant" ? { ...m, unsaved: true } : m)));
         return;
       }
