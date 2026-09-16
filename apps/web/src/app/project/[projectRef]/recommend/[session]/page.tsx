@@ -15,8 +15,11 @@ import type { SessionDetail } from "./session-detail";
 // session 파라미터 = 저장된 TestFileVersion 의 id.
 export default async function SessionDetailPage({
   params,
+  searchParams,
 }: PageProps<"/project/[projectRef]/recommend/[session]">) {
   const { projectRef, session: versionId } = await params;
+  // 재생성 직후 이동에 붙는 ?run=1 — 새 버전을 열자마자 한 번 자동 실행한다.
+  const autoRun = (await searchParams).run === "1";
   const { user, project } = await requireProjectContext(projectRef);
 
   const detail = await getGeneratedSessionDetail(projectRef, user.id, versionId);
@@ -89,6 +92,7 @@ export default async function SessionDetailPage({
               versionId={detail.versionId}
               initialRun={initialRun}
               runnerConfigured={runnerConfigured}
+              autoRun={autoRun}
             />
           </div>
         </div>
