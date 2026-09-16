@@ -52,7 +52,8 @@ export default async function FolderPage({
     }
   }
   const latest = projectId ? await getLatestGeneratedTest(projectId, file) : null;
-  const draftVersion = latest && latest.source !== "repo" ? latest.version : null;
+  const draft =
+    latest && latest.source !== "repo" ? { version: latest.version, source: latest.source } : null;
 
   // key={file} — 파일 바뀌면 분할 비율 초기화
   return (
@@ -62,10 +63,11 @@ export default async function FolderPage({
       file={file}
       testPath={latest?.testPath ?? repoTestPath}
       mode={mode}
-      draftVersion={draftVersion}
+      draft={draft}
       // 실행은 저장된 버전만 돌린다. 레포 테스트도 열 때 버전으로 들어오므로 대개 있다.
       versionId={latest?.id ?? null}
       terminal
+      saveable
       content={{ source: source ?? "", test: latest?.code ?? repoTest, testDraft: null }}
     />
   );

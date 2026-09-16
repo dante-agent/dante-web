@@ -1,4 +1,8 @@
 import { Prisma, prisma } from "@dante/db";
+import { getRepoTree } from "@/lib/github/tree";
+import type { ProjectRepo } from "@/lib/projects/queries";
+import { componentName } from "@/lib/projects/recommendations";
+import { testPathFor } from "@/lib/projects/test-generation-prompt";
 
 // AI 가 만든 테스트 코드를 한 "버전"으로 저장한다 (서버 전용).
 //
@@ -21,8 +25,8 @@ export async function saveGeneratedVersion(args: {
   testPath: string;
   /** 생성된 테스트 코드 전체. */
   code: string;
-  /** "ai"(생성) | "repo"(레포 테스트를 가져옴). 기본 "ai". */
-  source?: "ai" | "repo";
+  /** "ai"(생성) | "user"(사용자가 직접 고침) | "repo"(레포 테스트를 가져옴). 기본 "ai". */
+  source?: "ai" | "user" | "repo";
   /**
    * 레포 동기화용. 켜면 최신 버전이 없거나 "레포에서 온 버전인데 내용이 다를 때"만 쌓고,
    * 아니면 아무것도 쓰지 않고 null. AI·사용자 버전 위로 레포 내용을 덮지 않는다.
@@ -145,4 +149,47 @@ export async function getGeneratedSourcePaths(projectId: string): Promise<Set<st
     select: { filePath: true },
   });
   return new Set(rows.map((row) => row.filePath));
+}
+
+/** 한 번에 받는 코드 상한(글자). 테스트 파일 하나로는 넉넉하고, 조작된 요청이 거대한 행을 못 넣게. */
+const MAX_TEST_CODE = 200_000;
+
+export type SaveTestCodeResult =
+  { ok: true; versionId: string; version: number } | { ok: false; reason: "not-found" | "invalid" };
+
+/**
+ * 이 소스 파일의 테스트를 통째로 바꿔 새 버전으로 저장한다. 채팅 Apply·채팅 수정 도구·폴더 보기
+ * 직접 수정이 같은 규칙을 쓴다. 화면 갱신(refresh)은 부르는 쪽 몫이다 — 라우트 핸들러에서도 부른다.
+ *
+ * code 도 filePath 도 사용자·모델이 보낸 값이다. 레포 트리에 있는 소스 경로만 받는다 —
+ * 없는 경로로 Component 행이 생기지 않게. 내용은 검사하지 않는다(사용자 자신의 draft).
+ * repo·projectId 는 부르는 쪽이 소유 확인을 마친 값이어야 한다.
+ */
+export async function saveTestCode(args: {
+  repo: ProjectRepo;
+  projectId: string;
+  filePath: string;
+  code: unknown;
+  source: "ai" | "user";
+}): Promise<SaveTestCodeResult> {
+  const { repo, projectId, filePath, code, source } = args;
+  if (typeof code !== "string" || !code.trim() || code.length > MAX_TEST_CODE) {
+    return { ok: false, reason: "invalid" };
+  }
+  const entry = (await getRepoTree(repo)).find((e) => e.path === filePath);
+  if (!entry) return { ok: false, reason: "not-found" };
+
+  // 경로는 지금 보여주는 테스트의 것을 잇는다. 처음이면 레포 규칙대로.
+  const latest = await getLatestGeneratedTest(projectId, filePath);
+  const versionId = await saveGeneratedVersion({
+    projectId,
+    sourceFilePath: filePath,
+    componentName: componentName(filePath),
+    testPath: latest?.testPath ?? entry.testPath ?? testPathFor(filePath),
+    code,
+    source,
+  });
+  // onlyIfRepoChanged 를 켜지 않았으니 항상 쌓인다.
+  if (!versionId) return { ok: false, reason: "invalid" };
+  return { ok: true, versionId, version: (latest?.version ?? 0) + 1 };
 }
