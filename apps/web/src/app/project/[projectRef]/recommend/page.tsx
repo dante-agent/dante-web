@@ -26,7 +26,7 @@ export default async function RecommendPage({
 
   return (
     <div className="mx-auto flex w-2/3 flex-col gap-8 p-8">
-      <PromptInput />
+      <PromptInput projectRef={projectRef} />
 
       <RecommendTabs projectRef={projectRef} active={activeTab} />
 
