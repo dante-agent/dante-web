@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import danteLogo from "@/assets/dante-logo.png";
 import { AccountSidebar } from "@/components/account/account-sidebar";
-import { FeedbackDialog } from "@/components/feedback-dialog";
+import { FeedbackLink } from "@/components/feedback-link";
 import { UserMenu } from "@/components/user-menu";
 import { avatarUrl, displayName, requireUser } from "@/lib/auth/user";
 
@@ -29,7 +29,7 @@ export default async function AccountLayout({ children }: LayoutProps<"/account"
         </div>
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
-          <FeedbackDialog />
+          <FeedbackLink />
           <UserMenu user={headerUser} />
         </div>
       </header>
