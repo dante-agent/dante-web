@@ -73,8 +73,8 @@ export default async function SessionDetailPage({
     : null;
   const runnerConfigured = isSandboxConfigured();
 
-  // 프로젝트 셸의 p-8 을 상쇄해 패널을 화면 끝까지 붙인다. 헤더(47px) 아래를 꽉 채운다.
-  // 두 패널 사이 구분선은 드래그로 폭 조절(ResizableSplit). 우측은 diff(위) + 실행 터미널(아래).
+  // 패널을 화면 끝까지 붙여 헤더(47px) 아래를 꽉 채운다(ResizableSplit).
+  // 두 패널 사이 구분선은 드래그로 폭 조절. 우측은 diff(위) + 실행 터미널(아래).
   return (
     <ResizableSplit
       left={<ReviewPanel projectName={project.name} projectRef={projectRef} session={session} />}
