@@ -78,6 +78,28 @@ describe("buildTestPrompt dependencies", () => {
   });
 });
 
+describe("buildTestPrompt regenerate", () => {
+  it("previousCode 를 넘기면 이전 테스트와 실패 로그로 고치라는 지시가 붙는다", () => {
+    const prompt = buildTestPrompt({
+      ...base,
+      previousCode: "test('old', () => {})",
+      failureLogs: "Expected 1 but got 2",
+    });
+    assert.match(prompt, /통과하도록 고쳐라/);
+    assert.match(prompt, /<previous_test>\ntest\('old', \(\) => \{\}\)\n<\/previous_test>/);
+    assert.match(prompt, /<failure_log>\nExpected 1 but got 2\n<\/failure_log>/);
+  });
+
+  it("실패 로그가 없으면 placeholder 를 넣는다", () => {
+    const prompt = buildTestPrompt({ ...base, previousCode: "x" });
+    assert.match(prompt, /<failure_log>\n\(no logs captured\)\n<\/failure_log>/);
+  });
+
+  it("previousCode 가 없으면 붙이지 않는다 (일반 생성 프롬프트 그대로)", () => {
+    assert.equal(buildTestPrompt({ ...base, failureLogs: "ignored" }), buildTestPrompt(base));
+  });
+});
+
 describe("packageDependencies", () => {
   it("세 의존성 필드를 합쳐 정렬한다", () => {
     const json = JSON.stringify({
