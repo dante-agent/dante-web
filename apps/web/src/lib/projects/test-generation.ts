@@ -36,6 +36,9 @@ export async function generateTestForFile(args: {
   userId: string;
   projectId: string | null;
   filePath: string;
+  /** 넘기면 새로 짜는 대신 실패한 이전 테스트를 실패 로그 근거로 고친다(재생성). */
+  previousCode?: string;
+  failureLogs?: string;
 }): Promise<GenerateTestResult> {
   try {
     // 락 없는 사전 검사. 막힐 요청에 GitHub API 를 태우지 않으려고 파일을 읽기 전에 본다.
@@ -64,6 +67,8 @@ export async function generateTestForFile(args: {
       testFramework: project?.testFramework,
       // 폴더 보기·추천 화면에서 만든 테스트는 Dante 전용 환경으로 돈다(ADR-0003).
       toolkit: true,
+      previousCode: args.previousCode,
+      failureLogs: args.failureLogs,
     });
     if (!generated) return { ok: false, reason: "budget" };
 
@@ -100,6 +105,9 @@ export async function generateTestCode(args: {
   dependencies?: string[] | null;
   /** 만들 테스트 경로. 생략하면 `foo.test.tsx`(testPathFor). PR 은 겹치지 않는 경로를 넘긴다 */
   testPath?: string;
+  /** 넘기면 새로 짜는 대신 실패한 이전 테스트를 실패 로그 근거로 고친다(재생성) */
+  previousCode?: string;
+  failureLogs?: string;
 }): Promise<{ testPath: string; code: string } | null> {
   const testPath = args.testPath ?? testPathFor(args.filePath);
   const prompt = buildTestPrompt({
@@ -109,6 +117,8 @@ export async function generateTestCode(args: {
     testFramework: args.testFramework,
     toolkit: args.toolkit,
     dependencies: args.dependencies,
+    previousCode: args.previousCode,
+    failureLogs: args.failureLogs,
   });
   // 키가 없어 던지면 예약이 남으므로 예약 전에 불러 둔다.
   const model = chatModel();

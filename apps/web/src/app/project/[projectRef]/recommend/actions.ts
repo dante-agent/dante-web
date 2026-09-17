@@ -7,6 +7,7 @@ import {
   getAiTestRecommendations,
   type AiRecommendationResult,
 } from "@/lib/projects/ai-recommendations";
+import { getGeneratedSessionDetail } from "@/lib/projects/generated-sessions";
 import { saveGeneratedVersion } from "@/lib/projects/generated-versions";
 import { getOwnedProjectId, getProjectRepo, type ProjectRepo } from "@/lib/projects/queries";
 import { getTestRecommendations, type TestRecommendation } from "@/lib/projects/recommendations";
@@ -214,4 +215,60 @@ export async function generatePlannedTests(
   if (firstVersionId) return { ok: true, versionId: firstVersionId, generated };
   if (generated > 0) return { ok: false, reason: "preview" }; // 만들었지만 저장 못함(소유자 아님)
   return { ok: false, reason: lastFailure === "budget" ? "budget" : "error" };
+}
+
+/** 프롬프트에 싣는 실패 로그 상한(글자). 실패 원인은 대개 로그 끝에 있어 뒤에서 자른다. */
+const MAX_FAILURE_LOG = 6_000;
+
+export type RegenerateResult =
+  | { ok: true; versionId: string }
+  | { ok: false; reason: "budget" | "not-found" | "not-failed" | "error" };
+
+/**
+ * 세션 상세에서 "Regenerate & retry" 가 부른다. 실패한 버전의 이전 코드 + 실패 로그를 AI 에
+ * 넘겨 통과하도록 고친 버전을 만들고 새 TestFileVersion 으로 저장한다(saveGeneratedVersion).
+ *
+ * 실패한 실행이 있을 때만 돈다 — 통과했거나 실행 전이면 고칠 근거(로그)가 없다.
+ * versionId 는 클라이언트에서 오므로 믿지 않고, getGeneratedSessionDetail 이 소유·존재를 거른다.
+ */
+export async function regenerateFromFailure(
+  projectRef: string,
+  versionId: string
+): Promise<RegenerateResult> {
+  const user = await requireUser();
+  const detail = await getGeneratedSessionDetail(projectRef, user.id, versionId);
+  if (!detail) return { ok: false, reason: "not-found" };
+
+  const run = detail.latestRun;
+  if (!run || (run.status !== "failed" && run.status !== "error")) {
+    return { ok: false, reason: "not-failed" };
+  }
+
+  const repo = await getProjectRepo(projectRef, user.id);
+  if (!repo) notFound();
+  const projectId = await getOwnedProjectId(projectRef, user.id);
+  if (!projectId) return { ok: false, reason: "not-found" };
+
+  // 실패 원인은 로그 끝에 있어 뒤에서 자른다. 로그가 없으면 errorMessage 라도 준다.
+  const failureLogs = (run.logs ?? run.errorMessage ?? "").slice(-MAX_FAILURE_LOG);
+  const result = await generateTestForFile({
+    repo,
+    userId: user.id,
+    projectId,
+    filePath: detail.targetFile,
+    previousCode: detail.content,
+    failureLogs,
+  });
+  if (!result.ok) return result.reason === "not-found" ? { ok: false, reason: "error" } : result;
+
+  const newVersionId = await saveGeneratedVersion({
+    projectId,
+    sourceFilePath: result.filePath,
+    componentName: detail.componentName,
+    testPath: result.testPath,
+    code: result.code,
+  });
+  if (!newVersionId) return { ok: false, reason: "error" };
+
+  return { ok: true, versionId: newVersionId };
 }
