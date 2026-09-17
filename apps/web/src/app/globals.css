@@ -24,6 +24,9 @@
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
   --color-chart-5: var(--chart-5);
+  --color-chart-violet: var(--chart-violet);
+  --color-chart-amber: var(--chart-amber);
+  --color-chart-gray: var(--chart-gray);
   --color-chart-4: var(--chart-4);
   --color-chart-3: var(--chart-3);
   --color-chart-2: var(--chart-2);
@@ -94,6 +97,11 @@
   --chart-3: var(--brand-cobalt);
   --chart-4: #ff801f; /* Orange 10 */
   --chart-5: #95afff; /* Cobalt 11 */
+  /* 카테고리 구분 전용(대시보드 AI spend 의 사용처). 상태 표시(통과·실패·실행 중)에는 쓰지 않는다 —
+     민트·오렌지·코발트와 겹치지 않게 고른 색이다. 카드(Mauve 2) 대비 보라 7.6 · 호박 10.3 · 회색 8.4 :1 (DESIGN.md §2). */
+  --chart-violet: #b79cf2;
+  --chart-amber: #e6c35c;
+  --chart-gray: #b5b2b9; /* Mauve 11 */
   /* Supabase 대시보드 실측: 카드·패널 8px, 버튼 6px.
      0.5rem 을 기준으로 두면 --radius-lg(=8px)가 카드, --radius-md(=6.4px)가
      버튼에 그대로 맞는다. shadcn 기본값은 0.625rem(10px)이었다. */

@@ -48,6 +48,13 @@ const MONTH_LABEL = new Intl.DateTimeFormat("en-US", {
   year: "numeric",
 });
 
+/** 좁은 자리에 쓰는 초기화 날짜. "Oct 1". 시각·시간대는 뺀다 — 전체는 resetsLabel. */
+const RESET_DAY_LABEL = new Intl.DateTimeFormat("en-US", {
+  timeZone: BILLING_TIME_ZONE,
+  month: "short",
+  day: "numeric",
+});
+
 /** "October 1, 2026 at 12:00 AM GMT+9" — 한도가 초기화되는 순간. 시간대를 붙여 보는 사람 기기와 헷갈리지 않게 한다. */
 const RESET_LABEL = new Intl.DateTimeFormat("en-US", {
   timeZone: BILLING_TIME_ZONE,
@@ -117,6 +124,8 @@ export type BillingPeriod = {
   label: string;
   /** end 를 사람이 읽는 말로. 한도가 다시 열리는 시각이다. */
   resetsLabel: string;
+  /** 같은 순간의 날짜만. "Oct 1". 대시보드처럼 한 줄에 붙이는 자리용. */
+  resetsDayLabel: string;
 };
 
 /**
@@ -138,5 +147,6 @@ export function currentBillingPeriod(now: Date = new Date()): BillingPeriod {
     end,
     label: MONTH_LABEL.format(start),
     resetsLabel: zone ? `${RESET_LABEL.format(end)} ${zone}` : RESET_LABEL.format(end),
+    resetsDayLabel: RESET_DAY_LABEL.format(end),
   };
 }

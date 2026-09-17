@@ -26,20 +26,7 @@ function sourceCandidates(testPath: string): string[] {
   return ["ts", "tsx", "js", "jsx", "mjs", "cjs"].map((e) => `${base}.${e}`);
 }
 
-/** 대시보드 지표용 집계. 트리와 같은 응답에서 함께 뽑는다. */
-export type RepoStats = {
-  /** 소스 파일 수(테스트 제외). SuitePanel 의 "Components". */
-  components: number;
-  /** 테스트 파일 수(대응 소스를 못 찾은 것 포함). SuitePanel 의 "Tests". */
-  testFiles: number;
-  /** 대응 테스트가 있는 소스 수. tested ≤ components — 커버리지 비율 계산용. */
-  tested: number;
-};
-
-/**
- * blob 목록을 한 번 받아 트리 엔트리와 집계를 같이 만든다. cache 로 요청 1회 —
- * getRepoTree·getRepoStats 가 같은 페이지에서 불려도 GitHub 는 한 번만 친다.
- */
+/** blob 목록을 한 번 받아 트리 엔트리를 만든다. cache 로 같은 요청 안에서는 GitHub 를 한 번만 친다. */
 const loadTree = cache(async (repo: ProjectRepo) => {
   const octokit = await githubApp().getInstallationOctokit(Number(repo.installationId));
   const { data } = await octokit.request("GET /repos/{owner}/{repo}/git/trees/{tree_sha}", {
@@ -69,19 +56,8 @@ const loadTree = cache(async (repo: ProjectRepo) => {
     return testPath ? { path, status: "has", testPath } : { path, status: "none" };
   });
 
-  const stats: RepoStats = {
-    components: sources.length,
-    testFiles: tests.length,
-    tested: testBySource.size,
-  };
-
-  return { entries, stats };
+  return entries;
 });
 
 /** 연결된 레포의 소스 파일 트리 (테스트 유무를 status 로 얹은 것). */
-export const getRepoTree = async (repo: ProjectRepo): Promise<FileEntry[]> =>
-  (await loadTree(repo)).entries;
-
-/** 같은 트리에서 뽑은 소스·테스트 파일 집계. 대시보드 SuitePanel 용. */
-export const getRepoStats = async (repo: ProjectRepo): Promise<RepoStats> =>
-  (await loadTree(repo)).stats;
+export const getRepoTree = async (repo: ProjectRepo): Promise<FileEntry[]> => loadTree(repo);
