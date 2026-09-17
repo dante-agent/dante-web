@@ -9,6 +9,7 @@
 
 import { getRepoTree } from "@/lib/github/tree";
 import type { ProjectRepo } from "@/lib/projects/queries";
+import { isTestTarget } from "@/lib/projects/test-targets";
 
 export type RecommendationPriority = "high" | "medium" | "low";
 
@@ -58,18 +59,21 @@ const MAX = 30;
 /** 테스트가 없는 소스 파일을 우선순위(높음→낮음) 순으로. */
 export async function getTestRecommendations(repo: ProjectRepo): Promise<TestRecommendation[]> {
   const entries = await getRepoTree(repo);
-  return entries
-    .filter((entry) => entry.status === "none")
-    .map((entry) => ({
-      id: entry.path,
-      componentName: componentName(entry.path),
-      filePath: entry.path,
-      ...classify(entry.path),
-    }))
-    .sort(
-      (a, b) =>
-        PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority] ||
-        a.filePath.localeCompare(b.filePath)
-    )
-    .slice(0, MAX);
+  return (
+    entries
+      // 설정·테스트 준비 파일은 테스트를 만들 대상이 아니다(test-targets.ts).
+      .filter((entry) => entry.status === "none" && isTestTarget(entry.path))
+      .map((entry) => ({
+        id: entry.path,
+        componentName: componentName(entry.path),
+        filePath: entry.path,
+        ...classify(entry.path),
+      }))
+      .sort(
+        (a, b) =>
+          PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority] ||
+          a.filePath.localeCompare(b.filePath)
+      )
+      .slice(0, MAX)
+  );
 }
