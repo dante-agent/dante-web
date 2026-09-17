@@ -19,6 +19,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { generateFolderTest, saveTestEdit } from "@/app/project/[projectRef]/folder/actions";
+import { useReportHasTest } from "@/components/ai-chat";
 import { iconForFile } from "@/components/file-icons";
 import { onTestRunRequest, RunPanel, useLiveRun } from "@/components/run-terminal";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -287,6 +288,7 @@ export function FileView({
   useEffect(() => {
     pushRecent(projectRef, file);
   }, [projectRef, file]);
+  useReportHasTest(content.test !== null);
 
   const gridRef = useRef<HTMLDivElement>(null);
   const [leftPct, setLeftPct] = useState(50);

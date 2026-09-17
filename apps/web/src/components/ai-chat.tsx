@@ -9,7 +9,16 @@
 // react-query 캐시에서 읽는다. 전송할 때도 과거 메시지는 보내지 않는다 — 서버가 DB 에서
 // 읽는다. 클라이언트가 보낸 대화를 믿으면 "AI 가 하지 않은 말"을 끼워 넣을 수 있다.
 
-import { Suspense, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  Suspense,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
@@ -53,6 +62,24 @@ const MAX_MESSAGES = 50;
 const MAX_CONTEXT_TOKENS = 50_000;
 /** 이 비율부터 게이지를 경고 톤으로. 가득 차기 전에 새 대화를 떠올리게. */
 const WARN_RATIO = 0.8;
+/** 빈 대화에 띄우는 질문. 서버 도구(updateTestFile·runTests)로 할 수 있는 일을 보여준다. 테스트가 없으면 설명·실행할 게 없다. */
+const suggestedPrompts = (hasTest: boolean) =>
+  hasTest
+    ? [
+        "Explain the test code for this file",
+        "Update the tests for this file",
+        "Run the tests for this file",
+      ]
+    : ["Write tests for this file"];
+
+/** 본문이 지금 연 파일에 테스트가 있는지 알리는 통로. dock 밖(PR 화면)에서는 아무 일도 안 한다. */
+const HasTestContext = createContext<(hasTest: boolean) => void>(() => {});
+
+/** 본문(FileView)이 부른다. 채팅은 본문과 형제라 테스트 유무를 따로 받아오지 않고 이렇게 전해 받는다. */
+export function useReportHasTest(hasTest: boolean) {
+  const report = useContext(HasTestContext);
+  useEffect(() => report(hasTest), [report, hasTest]);
+}
 
 // ── 서버 계약 (/api/chat, /api/chat/conversations) ─────────────────────────────
 type Role = "user" | "assistant";
@@ -131,6 +158,7 @@ const MAX_RATIO = 0.6;
 
 export function AiChatDock({ projectRef, children }: { projectRef: string; children: ReactNode }) {
   const [open, setOpen] = useState(false);
+  const [hasTest, setHasTest] = useState(false);
 
   // null = 아직 끌지 않음 → 기본 폭(22rem / xl 26rem) 클래스를 쓴다. 끈 뒤에는 px.
   // 저장하지 않는다 — 새로고침하면 기본 폭으로 돌아간다.
@@ -156,7 +184,9 @@ export function AiChatDock({ projectRef, children }: { projectRef: string; child
 
   return (
     <div ref={dockRef} className="flex">
-      <div className="min-w-0 flex-1">{children}</div>
+      <div className="min-w-0 flex-1">
+        <HasTestContext value={setHasTest}>{children}</HasTestContext>
+      </div>
 
       {/* 패널은 계속 붙어 있고 폭만 0 ↔ 기본 폭으로 움직인다. 그래야 본문이 같이
           부드럽게 줄고(늘고), 닫았다 열어도 대화가 남는다. 본문과는 border-l 한 줄로만
@@ -199,6 +229,7 @@ export function AiChatDock({ projectRef, children }: { projectRef: string; child
             projectRef={projectRef}
             open={open}
             width={width}
+            hasTest={hasTest}
             onClose={() => setOpen(false)}
           />
         </Suspense>
@@ -223,6 +254,8 @@ type PanelProps = {
   open: boolean;
   /** 사용자가 끌어서 정한 폭(px). null 이면 기본 폭 클래스. */
   width: number | null;
+  /** 지금 연 파일에 테스트가 있는지. 추천 질문이 달라진다. */
+  hasTest: boolean;
   onClose: () => void;
 };
 
@@ -239,6 +272,7 @@ function ChatPanel({
   projectRef,
   open,
   width,
+  hasTest,
   onClose,
   file,
 }: PanelProps & { file: string | null }) {
@@ -531,10 +565,31 @@ function ChatPanel({
               {conversation.error.message}
             </p>
           ) : messages.length === 0 ? (
-            // 안내 문구 한 줄이 전부다. 뭘 물어볼지는 사용자가 안다.
-            <p className="text-muted-foreground flex h-full items-center justify-center px-6 text-center text-sm">
-              {file ? "Ask about this file." : "Open a file on the left to chat about it."}
-            </p>
+            file ? (
+              // 채팅이 테스트를 쓰고 돌릴 수 있다는 걸 모르는 사용자가 많아서, 누르면 바로 보내는 질문을 둔다.
+              // ponytail: 러너가 없는 레포에서도 같은 질문이다. 그때는 모델이 셋업부터 하라고 안내한다.
+              <div className="flex h-full flex-col items-center justify-center gap-3 px-6">
+                <p className="text-muted-foreground text-center text-sm">Ask about this file.</p>
+                <div className="flex flex-col items-stretch gap-2">
+                  {suggestedPrompts(hasTest).map((prompt) => (
+                    <Button
+                      key={prompt}
+                      variant="outline"
+                      size="sm"
+                      disabled={pending || full}
+                      onClick={() => void send(prompt)}
+                      className="animate-in fade-in slide-in-from-bottom-1 justify-start rounded-full duration-200"
+                    >
+                      {prompt}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-muted-foreground flex h-full items-center justify-center px-6 text-center text-sm">
+                Open a file on the left to chat about it.
+              </p>
+            )
           ) : (
             // 말풍선은 글자 수만큼만 넓어진다(flex 안에서 shrink-to-fit). 길어지면
             // max-w 에서 멈추고 줄바꿈으로 아래로 늘어난다. wrap-break-word 는
