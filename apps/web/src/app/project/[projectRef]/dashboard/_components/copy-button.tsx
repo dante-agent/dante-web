@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-/** 레포 주소 복사. 성공 표시는 1.5초 뒤 원래대로 돌아간다. */
+/** 레포 주소 복사. 메타 줄 안에 들어가는 아이콘 버튼이다. 성공 표시는 1.5초 뒤 원래대로 돌아간다. */
 export function CopyButton({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -22,9 +22,15 @@ export function CopyButton({ value }: { value: string }) {
   }
 
   return (
-    <Button variant="outline" size="sm" onClick={copy}>
-      {copied ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}
-      {copied ? "Copied" : "Copy"}
+    <Button
+      variant="ghost"
+      size="icon-xs"
+      onClick={copy}
+      title={copied ? "Copied" : "Copy repository URL"}
+      aria-label={copied ? "Copied" : "Copy repository URL"}
+      className="text-muted-foreground hover:text-foreground"
+    >
+      {copied ? <Check /> : <Copy />}
     </Button>
   );
 }
