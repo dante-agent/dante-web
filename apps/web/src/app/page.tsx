@@ -2,6 +2,8 @@ import Image from "next/image";
 import Link from "next/link";
 import danteLogo from "@/assets/dante-logo.png";
 import { SocialLoginButtons } from "@/components/auth/social-login-buttons";
+import { Button } from "@/components/ui/button";
+import { isDemoEnabled, signInAsDemo } from "@/app/auth/actions";
 import { safeNext } from "@/lib/auth/redirect";
 
 // /auth/callback 이 실패하면 ?error=<코드> 를 달고 여기로 돌려보낸다.
@@ -9,6 +11,7 @@ import { safeNext } from "@/lib/auth/redirect";
 const ERROR_MESSAGES: Record<string, string> = {
   denied: "Sign in was cancelled.",
   exchange: "Sign in failed. Please try again.",
+  demo: "Preview is unavailable right now.",
 };
 
 export default async function LoginPage({ searchParams }: PageProps<"/">) {
@@ -55,6 +58,15 @@ export default async function LoginPage({ searchParams }: PageProps<"/">) {
             )}
 
             <SocialLoginButtons next={safeNext(next)} />
+
+            {/* 심사용. DEMO_EMAIL·DEMO_PASSWORD env 가 없으면 버튼 자체가 없다. */}
+            {(await isDemoEnabled()) && (
+              <form action={signInAsDemo} className="mt-3">
+                <Button type="submit" size="lg" className="h-10 w-full">
+                  Preview with demo account
+                </Button>
+              </form>
+            )}
           </div>
         </div>
 

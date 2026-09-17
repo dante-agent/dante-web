@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@dante/db";
+import { DEMO_BLOCKED_MESSAGE, isDemoUser } from "@/lib/auth/demo";
 import { requireUser } from "@/lib/auth/user";
 import { accessibleProjectWhere, getTeamRole } from "@/lib/teams/access";
 
@@ -29,6 +30,7 @@ export async function deleteProject(
   formData: FormData
 ): Promise<DeleteProjectResult> {
   const user = await requireUser();
+  if (isDemoUser(user)) return { message: DEMO_BLOCKED_MESSAGE };
   const projectRef = String(formData.get("projectRef") ?? "");
   const confirmation = String(formData.get("confirmation") ?? "");
 

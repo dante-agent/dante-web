@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@dante/db";
+import { DEMO_BLOCKED_MESSAGE, isDemoUser } from "@/lib/auth/demo";
 import { requireUser } from "@/lib/auth/user";
 import { accessibleProjectWhere } from "@/lib/teams/access";
 import { invalidateRepoLookups } from "@/lib/github/lookup-cache";
@@ -42,6 +43,8 @@ export async function saveRuntimeSettings(
   _prev: SaveState,
   formData: FormData
 ): Promise<SaveState> {
+  // 실행 명령을 망가뜨리면 이후 데모의 테스트 실행이 전부 실패한다.
+  if (isDemoUser(await requireUser())) return { error: DEMO_BLOCKED_MESSAGE };
   const projectRef = String(formData.get("projectRef") ?? "");
 
   let project;

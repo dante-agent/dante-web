@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { DEMO_BLOCKED_MESSAGE, isDemoUser } from "@/lib/auth/demo";
 import { displayName, requireUser } from "@/lib/auth/user";
 import { isTeamId } from "@/lib/teams/access";
 import * as invites from "@/lib/teams/invites";
@@ -16,6 +17,7 @@ import * as manage from "@/lib/teams/manage";
 export type TeamFormState = { ok: boolean; message: string; link?: string } | null;
 
 const NOT_FOUND: TeamFormState = { ok: false, message: "Team not found." };
+const DEMO_STATE: TeamFormState = { ok: false, message: DEMO_BLOCKED_MESSAGE };
 
 function field(formData: FormData, key: string) {
   return String(formData.get(key) ?? "");
@@ -24,8 +26,10 @@ function field(formData: FormData, key: string) {
 async function begin(formData: FormData) {
   const user = await requireUser();
   const teamId = field(formData, "teamId");
+  // 데모 계정은 팀을 바꾸지 못한다. teamId 를 비워 모든 액션이 blocked 를 돌려주게 한다.
+  if (isDemoUser(user)) return { user, teamId: null, blocked: DEMO_STATE };
   // UUID 모양이 아니면 DB 에 묻지 않는다. Prisma 가 예외를 던져 500 이 된다.
-  return { user, teamId: isTeamId(teamId) ? teamId : null };
+  return { user, teamId: isTeamId(teamId) ? teamId : null, blocked: null };
 }
 
 function settle(teamId: string, result: manage.TeamChange, message: string): TeamFormState {
@@ -35,16 +39,16 @@ function settle(teamId: string, result: manage.TeamChange, message: string): Tea
 }
 
 export async function renameTeam(_prev: TeamFormState, formData: FormData) {
-  const { user, teamId } = await begin(formData);
-  if (!teamId) return NOT_FOUND;
+  const { user, teamId, blocked } = await begin(formData);
+  if (!teamId) return blocked ?? NOT_FOUND;
 
   const result = await manage.renameTeam(user.id, teamId, field(formData, "name"));
   return settle(teamId, result, "Saved.");
 }
 
 export async function changeMemberRole(_prev: TeamFormState, formData: FormData) {
-  const { user, teamId } = await begin(formData);
-  if (!teamId) return NOT_FOUND;
+  const { user, teamId, blocked } = await begin(formData);
+  if (!teamId) return blocked ?? NOT_FOUND;
 
   const role = field(formData, "role");
   if (role !== "owner" && role !== "member") return { ok: false, message: "Unknown role." };
@@ -54,16 +58,16 @@ export async function changeMemberRole(_prev: TeamFormState, formData: FormData)
 }
 
 export async function removeMember(_prev: TeamFormState, formData: FormData) {
-  const { user, teamId } = await begin(formData);
-  if (!teamId) return NOT_FOUND;
+  const { user, teamId, blocked } = await begin(formData);
+  if (!teamId) return blocked ?? NOT_FOUND;
 
   const result = await manage.removeMember(user.id, teamId, field(formData, "userId"));
   return settle(teamId, result, "Removed.");
 }
 
 export async function inviteMember(_prev: TeamFormState, formData: FormData) {
-  const { user, teamId } = await begin(formData);
-  if (!teamId) return NOT_FOUND;
+  const { user, teamId, blocked } = await begin(formData);
+  if (!teamId) return blocked ?? NOT_FOUND;
 
   const actor = { id: user.id, name: displayName(user) };
   const result = await invites.createInvite(actor, teamId, field(formData, "email"));
@@ -81,8 +85,8 @@ export async function inviteMember(_prev: TeamFormState, formData: FormData) {
 }
 
 export async function revokeInvite(_prev: TeamFormState, formData: FormData) {
-  const { user, teamId } = await begin(formData);
-  if (!teamId) return NOT_FOUND;
+  const { user, teamId, blocked } = await begin(formData);
+  if (!teamId) return blocked ?? NOT_FOUND;
 
   // 초대 id 도 uuid 컬럼이다. 모양이 틀리면 DB 에 묻지 않는다(isTeamId 는 UUID 모양만 본다).
   const inviteId = field(formData, "inviteId");
@@ -94,8 +98,8 @@ export async function revokeInvite(_prev: TeamFormState, formData: FormData) {
 
 /** 성공하면 그 팀 설정은 더 볼 수 없으므로 프로젝트 목록으로 보낸다. */
 export async function leaveTeam(_prev: TeamFormState, formData: FormData) {
-  const { user, teamId } = await begin(formData);
-  if (!teamId) return NOT_FOUND;
+  const { user, teamId, blocked } = await begin(formData);
+  if (!teamId) return blocked ?? NOT_FOUND;
 
   const result = await manage.leaveTeam(user.id, teamId);
   if (!result.ok) return { ok: false, message: result.message };
@@ -105,8 +109,8 @@ export async function leaveTeam(_prev: TeamFormState, formData: FormData) {
 }
 
 export async function deleteTeam(_prev: TeamFormState, formData: FormData) {
-  const { user, teamId } = await begin(formData);
-  if (!teamId) return NOT_FOUND;
+  const { user, teamId, blocked } = await begin(formData);
+  if (!teamId) return blocked ?? NOT_FOUND;
 
   const result = await manage.deleteTeam(user.id, teamId, field(formData, "confirmation"));
   if (!result.ok) return { ok: false, message: result.message };
