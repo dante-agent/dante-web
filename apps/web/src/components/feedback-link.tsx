@@ -9,9 +9,12 @@ const FORM_URL =
 
 export function FeedbackLink() {
   return (
+    // <a> 로 그리므로 nativeButton 을 꺼야 한다 — 켜두면 Base UI 가
+    // "버튼 시맨틱이 사라진다"고 콘솔에 경고한다.
     <Button
       variant="ghost"
       size="sm"
+      nativeButton={false}
       render={<a href={FORM_URL} target="_blank" rel="noreferrer noopener" />}
     >
       Feedback

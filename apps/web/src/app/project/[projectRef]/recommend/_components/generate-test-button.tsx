@@ -118,8 +118,8 @@ export function GenerateTestButton({
             )}
             {result?.ok && result.versionId && (
               <Button
-                type="button"
                 size="sm"
+                nativeButton={false}
                 render={<Link href={`/project/${projectRef}/recommend/${result.versionId}`} />}
               >
                 Open session
