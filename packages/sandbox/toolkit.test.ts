@@ -163,6 +163,9 @@ describe("toolkitFiles", () => {
     assert.match(command, /--outputFile\.json=\/tmp\/r\.json 'src\/a\.test\.tsx'$/);
     const setup = files.find((f) => f.path.endsWith("setup.mjs"))!.content;
     assert.match(setup, /afterEach\(\(\) => cleanup\(\)\)/);
+    // React 가 없는 레포에서도 setup 이 터지지 않게 testing-library/react 는 동적으로 불러온다.
+    assert.doesNotMatch(setup, /^import .*@testing-library\/react/m);
+    assert.match(setup, /await import\("@testing-library\/react"\)/);
     assert.match(setup, /jest-dom\/vitest/);
   });
 });

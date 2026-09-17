@@ -218,11 +218,15 @@ export function toolkitFiles(args: {
         },
         {
           path: `${TOOLKIT_DIR}/setup.mjs`,
+          // React 가 없는 레포(순수 TS·Node)도 돈다. testing-library/react 는 레포 React 를 빌려 쓰므로
+          // (toolkitInstallCommand 가 도구 쪽 React 를 지운다) 못 불러오면 cleanup 만 건너뛴다.
           content: [
             'import { afterEach } from "vitest";',
-            'import { cleanup } from "@testing-library/react";',
             'import "@testing-library/jest-dom/vitest";',
-            "afterEach(() => cleanup());",
+            "try {",
+            '  const { cleanup } = await import("@testing-library/react");',
+            "  afterEach(() => cleanup());",
+            "} catch {}",
             "",
           ].join("\n"),
         },
