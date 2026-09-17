@@ -1,17 +1,23 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
+import { getMonthlyBudgetStatus } from "@/lib/ai/budget";
+import {
+  getMonthlyProjectAiUsage,
+  getMonthlyProjectAiUsageBySurface,
+} from "@/lib/ai/usage-queries";
 import { requireUser } from "@/lib/auth/user";
 import { getRecentPullRequests, getRecentRuns } from "@/lib/projects/dashboard-queries";
 import { getDashboardProject, getOwnedProjectId, getProjectRepo } from "@/lib/projects/queries";
+import { AiSpendSection } from "./_components/ai-spend-section";
 import { CoverageSection, CoverageSkeleton } from "./_components/coverage-section";
 import { ProjectHeader } from "./_components/project-header";
 import { PullRequestsSection } from "./_components/pull-requests-section";
 import { RecentRunsSection } from "./_components/recent-runs-section";
 import { UpNextSection, UpNextSkeleton } from "./_components/up-next-section";
 
-// 프로젝트 대시보드. 위에서부터 프로젝트 한 줄 → 커버리지 → 최근 실행 | 다음에 할 것 → PR.
+// 프로젝트 대시보드. 위에서부터 프로젝트 한 줄 → 커버리지 → 최근 실행 | 다음에 할 것 → AI 지출 | PR.
 //
-// DB 에서 오는 섹션(최근 실행·PR)은 페이지와 함께 그린다. GitHub 트리를 기다리는
+// DB 에서 오는 섹션(최근 실행·AI 지출·PR)은 페이지와 함께 그린다. GitHub 트리를 기다리는
 // 섹션(커버리지·다음에 할 것)만 Suspense 로 감싸 뼈대를 먼저 보낸다 — 둘은 같은 요청 캐시로
 // GitHub 을 한 번만 부른다(lib/github/tree.ts).
 export default async function DashboardPage({
@@ -33,9 +39,13 @@ export default async function DashboardPage({
   // GitHub 트리는 연결이 정상일 때만 읽는다 — 앱이 지워졌거나 정지되면 설치 토큰 호출이 실패한다.
   const repo = project.connection === "ok" ? await getProjectRepo(projectRef, user.id) : null;
 
-  const [runs, pulls] = await Promise.all([
+  const [runs, pulls, usage, bySurface, budget] = await Promise.all([
     getRecentRuns(projectId),
     getRecentPullRequests(projectId),
+    getMonthlyProjectAiUsage(projectId),
+    getMonthlyProjectAiUsageBySurface(projectId),
+    // 한도는 사람마다(모든 프로젝트 합계) 걸린다. 이 프로젝트 금액과 섞지 않고 따로 적는다.
+    getMonthlyBudgetStatus(user.id),
   ]);
 
   // p-8: 프로젝트 셸의 <main> 이 여백을 주지 않는다 (폴더 보기가 화면을 꽉 써야 해서)
@@ -59,7 +69,9 @@ export default async function DashboardPage({
         )}
       </div>
 
+      {/* 보조 정보 둘. 위의 두 목록과 같은 격자라 전체 폭 → 두 칸 → 두 칸으로 리듬이 일정하다. */}
       <div className="grid gap-11 lg:grid-cols-2 lg:gap-6">
+        <AiSpendSection usage={usage} bySurface={bySurface} budget={budget} />
         <PullRequestsSection projectRef={projectRef} pulls={pulls} />
       </div>
     </div>
