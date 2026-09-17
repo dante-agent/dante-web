@@ -142,6 +142,18 @@ export async function getLatestGeneratedTest(
     : null;
 }
 
+/**
+ * 이 버전의 마지막으로 끝난 실행(진행 중인 건 뺀다). 채팅이 실패 원인을 보고 고치도록 붙인다.
+ * versionId 는 부르는 쪽이 소유 확인을 마친 버전이어야 한다.
+ */
+export async function getLastFinishedRun(versionId: string) {
+  return prisma.testRun.findFirst({
+    where: { testFileVersionId: versionId, status: { in: ["passed", "failed", "error"] } },
+    orderBy: { createdAt: "desc" },
+    select: { status: true, logs: true, errorMessage: true },
+  });
+}
+
 /** 저장된 생성 버전이 있는 소스 경로. 폴더 보기 트리가 레포 테스트와 함께 "테스트 있음"으로 칠한다. */
 export async function getGeneratedSourcePaths(projectId: string): Promise<Set<string>> {
   const rows = await prisma.component.findMany({
