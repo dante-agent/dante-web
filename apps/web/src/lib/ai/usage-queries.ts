@@ -13,6 +13,8 @@ export type MonthlyAiUsage = {
   periodEnd: Date;
   /** "September 2026". 화면 문구를 여기서 만들어 두 화면이 같은 말을 쓰게 한다. */
   periodLabel: string;
+  /** 한도가 다시 열리는 날. "Oct 1". */
+  resetsDayLabel: string;
   /** 호출 건수. 원가·토큰을 모르는 건까지 전부 센다. */
   calls: number;
   /**
@@ -85,6 +87,7 @@ async function summarize(
     periodStart: period.start,
     periodEnd: period.end,
     periodLabel: period.label,
+    resetsDayLabel: period.resetsDayLabel,
     calls: count._all,
     // Decimal → number. 한 달 지출은 달러 단위라 double 로 표현해도 화면에서
     // 틀릴 만큼 오차가 나지 않는다. 다만 한도 판정처럼 "넘었는지"를 가리는
@@ -96,4 +99,43 @@ async function summarize(
     unknownCostCalls: count._all - count.costUsd,
     unknownTokenCalls,
   };
+}
+
+/** AiUsage.surface — 어디서 AI 를 불렀나. 화면에 보이는 순서대로. */
+export const USAGE_SURFACES = ["test-generation", "chat", "recommend"] as const;
+
+export type SurfaceUsage = {
+  surface: (typeof USAGE_SURFACES)[number];
+  /** 원가를 아는 건들의 합(USD). */
+  costUsd: number;
+  calls: number;
+};
+
+/**
+ * 이 프로젝트의 이번 달 사용량을 어디서 불렀는지로 나눈다. 대시보드 AI spend 의 사용처 막대·범례.
+ *
+ * 쓴 적이 없는 곳도 0 으로 채워 늘 같은 줄 수를 돌려준다 — 화면이 줄 수로 흔들리지 않게.
+ * PR 자동 테스트는 테스트 생성 기능을 같이 써서 "test-generation" 에 합쳐진다.
+ * 구간·스코프 규칙은 getMonthlyProjectAiUsage 와 같다(userId 로 좁히지 않는다).
+ */
+export async function getMonthlyProjectAiUsageBySurface(
+  projectId: string
+): Promise<SurfaceUsage[]> {
+  const period = currentBillingPeriod();
+  const rows = await prisma.aiUsage.groupBy({
+    by: ["surface"],
+    where: { projectId, createdAt: { gte: period.start, lt: period.end } },
+    _sum: { costUsd: true },
+    _count: { _all: true },
+  });
+
+  const bySurface = new Map(rows.map((row) => [row.surface, row]));
+  return USAGE_SURFACES.map((surface) => {
+    const row = bySurface.get(surface);
+    return {
+      surface,
+      costUsd: row?._sum.costUsd?.toNumber() ?? 0,
+      calls: row?._count._all ?? 0,
+    };
+  });
 }
