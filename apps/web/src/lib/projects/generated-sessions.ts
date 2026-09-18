@@ -2,6 +2,7 @@ import { cache } from "react";
 import { prisma } from "@dante/db";
 import { isUuid } from "@/lib/chat/cursor";
 import { getOwnedProjectId } from "@/lib/projects/queries";
+import { sessionLabel } from "@/lib/projects/session-label";
 
 // 저장된 테스트 버전을 "세션"으로 조회한다 (서버 전용).
 //
@@ -14,7 +15,10 @@ export type SessionStatus = "not_run" | "running" | "passed" | "failed";
 export interface GeneratedSession {
   /** 버전 id = 세션 id (`/recommend/{id}`). */
   id: string;
+  /** 이 버전을 만든 요청(프롬프트·후속 요청). 대화에서 못 찾으면 "Counter test". */
   title: string;
+  /** 파일(컴포넌트)과 버전. 제목 아래 작은 글씨. 예: "Counter · v6". */
+  meta: string;
   status: SessionStatus;
   updatedAt: string;
   /** 같은 프롬프트로 배치 생성된 세션끼리 공유하는 묶음 id. 단건이면 null. */
@@ -49,8 +53,14 @@ function statusFromRun(runStatus: string | undefined): SessionStatus {
   return "not_run";
 }
 
-function sessionTitle(componentName: string, version: number): string {
-  return `${componentName} test · v${version}`;
+/** DB JSON(대화 메시지 배열)에서 제목 계산에 필요한 역할·글자만 추린다. 모양이 다르면 건너뛴다. */
+function chatMessages(value: unknown): { role: "user" | "assistant"; text: string }[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    const { role, text } = (item ?? {}) as Record<string, unknown>;
+    if ((role !== "user" && role !== "assistant") || typeof text !== "string") return [];
+    return [{ role, text }];
+  });
 }
 
 /** 이 프로젝트의 저장된 버전을 최신순으로. 사이드바·세션 탭이 쓴다. */
@@ -76,12 +86,16 @@ export async function getGeneratedSessions(
       batchId: true,
       testFile: { select: { component: { select: { name: true } } } },
       runs: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true } },
+      chatThread: { select: { messages: true } },
     },
   });
 
   return versions.map((version) => ({
     id: version.id,
-    title: sessionTitle(version.testFile.component.name, version.version),
+    title:
+      sessionLabel(chatMessages(version.chatThread?.messages)) ??
+      `${version.testFile.component.name} test`,
+    meta: `${version.testFile.component.name} · v${version.version}`,
     status: statusFromRun(version.runs[0]?.status),
     updatedAt: version.createdAt.toISOString(),
     batchId: version.batchId,

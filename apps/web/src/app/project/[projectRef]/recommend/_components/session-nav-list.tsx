@@ -47,14 +47,19 @@ function SessionRow({ projectRef, session }: { projectRef: string; session: Gene
     <div className="group hover:bg-sidebar-accent/60 flex items-center gap-1 rounded-md pr-1">
       <Link
         href={`/project/${projectRef}/recommend/${session.id}`}
-        className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left"
+        title={session.title}
+        className="flex min-w-0 flex-1 items-start gap-2 px-2 py-1.5 text-left"
       >
         <Icon
-          className={`size-3.5 shrink-0 ${STATUS_COLOR[session.status]} ${
+          className={`mt-px size-3.5 shrink-0 ${STATUS_COLOR[session.status]} ${
             session.status === "running" ? "animate-spin" : ""
           }`}
         />
-        <span className="text-sidebar-foreground truncate text-xs">{session.title}</span>
+        {/* 제목은 이 버전을 만든 요청, 아래 줄은 파일·버전 — 같은 파일의 버전끼리도 구분되게. */}
+        <span className="flex min-w-0 flex-col">
+          <span className="text-sidebar-foreground truncate text-xs">{session.title}</span>
+          <span className="text-muted-foreground truncate text-[11px]">{session.meta}</span>
+        </span>
       </Link>
       <SessionDeleteButton
         projectRef={projectRef}
@@ -104,7 +109,8 @@ export function SessionNavList({
         ))}
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
+      {/* 스크롤은 되지만 스크롤바는 숨긴다(좁은 사이드바에서 폭을 먹지 않게). */}
+      <div className="flex min-h-0 flex-1 [scrollbar-width:none] flex-col gap-1 overflow-y-auto [&::-webkit-scrollbar]:hidden">
         <p className="text-muted-foreground px-2 text-[11px] font-medium tracking-wide uppercase">
           Recent sessions
         </p>

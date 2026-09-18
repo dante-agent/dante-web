@@ -28,6 +28,8 @@ export function RegenerationProvider({
       await new Promise((resolve) => setTimeout(resolve, OPEN_DELAY_MS));
       // 고친 새 버전(대화 이어받음)으로 이동한다. 실행은 사용자가 Run 을 눌러 한다.
       router.push(`/project/${projectRef}/recommend/${files[0].versionId}`);
+      // 좌측 사이드바는 레이아웃이라 이동만으로는 다시 그리지 않는다. 새 세션이 목록에 뜨게 새로고침한다.
+      router.refresh();
     },
     [projectRef, router]
   );

@@ -33,7 +33,10 @@ export function SessionList({
             href={`/project/${projectRef}/recommend/${session.id}`}
             className="group-hover:bg-muted flex min-w-0 flex-1 items-center gap-3 rounded-lg px-2 py-2.5"
           >
-            <span className="min-w-0 flex-1 truncate text-sm">{session.title}</span>
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate text-sm">{session.title}</span>
+              <span className="text-muted-foreground truncate text-xs">{session.meta}</span>
+            </span>
             <Badge variant={STATUS_VARIANT[session.status]}>{STATUS_LABEL[session.status]}</Badge>
             <span className="text-muted-foreground w-20 shrink-0 text-right text-xs">
               {formatDistanceToNow(new Date(session.updatedAt), { addSuffix: true })}
