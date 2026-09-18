@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { Loader2, Play, RotateCcw, Sparkles } from "lucide-react";
 import { unstable_rethrow, useRouter } from "next/navigation";
 import { StoredRunLog, TerminalBody, useLiveRun, type RunView } from "@/components/run-terminal";
@@ -55,6 +55,13 @@ export function TestRunPanel({
 
   const running = view?.running ?? false;
   const status = displayStatus(view, initialRun);
+
+  // 실행이 끝나면 새로고침해 사이드바의 세션 상태 아이콘(통과/실패)을 맞춘다.
+  const wasRunning = useRef(false);
+  useEffect(() => {
+    if (wasRunning.current && !running) router.refresh();
+    wasRunning.current = running;
+  }, [running, router]);
   const failed = !running && (status === "failed" || status === "error");
   // 한 번이라도 돈 적이 있으면(라이브 뷰 또는 저장된 실행) 버튼은 "Re-run".
   const ran = Boolean(view) || Boolean(initialRun);
@@ -69,6 +76,8 @@ export function TestRunPanel({
         if (result.ok) {
           // 고친 새 버전으로 이동한다. 실행은 사용자가 Run 을 눌러 한다.
           router.push(`/project/${projectRef}/recommend/${result.versionId}`);
+          // 좌측 사이드바는 레이아웃이라 이동만으로는 다시 그리지 않는다. 새 세션이 목록에 뜨게 새로고침한다.
+          router.refresh();
           return;
         }
         setRegenError(REGEN_ERROR[result.reason]);

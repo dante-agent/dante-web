@@ -83,6 +83,8 @@ export function GeneratePerformance({
     const { saved, url } = resultRef.current;
     await Promise.all([saved.catch(() => undefined), wait(OPEN_DELAY_MS)]);
     router.replace(url);
+    // 좌측 사이드바는 레이아웃이라 이동만으로는 다시 그리지 않는다. 새 세션이 목록에 뜨게 새로고침한다.
+    router.refresh();
   }, [router]);
 
   const {
