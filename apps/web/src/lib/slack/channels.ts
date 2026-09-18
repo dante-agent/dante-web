@@ -81,3 +81,15 @@ export async function postSlackMessage(
   });
   return { channel: data.channel, ts: data.ts };
 }
+
+/** 보낸 메시지 고쳐 쓰기. 알림은 다시 울리지 않는다 — 같은 소식의 숫자만 바뀔 때 쓴다. */
+export async function updateSlackMessage(
+  token: string,
+  message: { channel: string; ts: string; text: string }
+) {
+  await slackCall("chat.update", token, {
+    channel: message.channel,
+    ts: message.ts,
+    text: message.text,
+  });
+}

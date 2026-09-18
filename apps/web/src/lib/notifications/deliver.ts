@@ -15,11 +15,12 @@ import type { RunSummary } from "@/lib/notifications/run-summary";
 import { evaluateScope } from "@/lib/notifications/scope";
 import { isSnoozed, type NotificationSettings } from "@/lib/notifications/settings";
 import { loadNotificationSettings, recordDelivery } from "@/lib/notifications/store";
+import { deliverSlack } from "@/lib/slack/deliver";
 
 // ⚠️ 서버 전용.
 //
 // "실행 결과 하나를 PR 에 되돌려준다"의 한 자리. 웹훅과 (나중에) 러너 콜백이
-// 둘 다 여기를 부른다.
+// 둘 다 여기를 부른다. Slack 도 여기서 같이 보낸다(lib/slack/deliver.ts).
 //
 // 여기서 던지지 않는 것이 규칙이다. 부르는 쪽은 대개 GitHub 웹훅이고, 웹훅에서
 // 500 을 내면 GitHub 이 같은 배달을 재시도한다. 권한이 없어서 403 이 나는 상황은
@@ -46,6 +47,8 @@ type NotifiableProject = {
   repoName: string;
   defaultBranch: string;
   installationId: bigint;
+  /** Slack 연결은 팀에 붙는다 */
+  teamId: string;
 };
 
 export async function deliverRunSummary(
@@ -69,7 +72,8 @@ export async function deliverRunSummary(
 
   const repo: RepoRef = { owner: project.repoOwner, repo: project.repoName };
 
-  // GitHub 설치 토큰을 못 받아도 Discord 는 보낼 수 있다. 그래서 먼저 보낸다.
+  // GitHub 설치 토큰을 못 받아도 Slack·Discord 는 보낼 수 있다. 그래서 먼저 보낸다.
+  await deliverSlack(project, pr.number, run, settings);
   await deliverDiscord(
     {
       projectId: project.id,

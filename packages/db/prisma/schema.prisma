@@ -621,6 +621,16 @@ model PullRequestSurface {
   discordMessageId String? @map("discord_message_id")
   discordOutcome   String? @map("discord_outcome")
 
+  /// Slack 에 보낸 메시지의 좌표 (lib/slack/rules.ts). 채널이 바뀌면 새로 시작한다.
+  slackChannelId String? @map("slack_channel_id")
+  /// 이 PR 의 첫 메시지. 후속 메시지는 이 스레드에 단다.
+  slackThreadTs  String? @map("slack_thread_ts")
+  /// 마지막으로 보낸 메시지. 같은 결론이 반복되면 이것을 고쳐 쓴다.
+  slackMessageTs String? @map("slack_message_ts")
+  /// 마지막 결론 ("failed" | "passed" | "cannotFinish"). 보내지 않았어도 적는다 —
+  /// "실패 → 통과"를 복구로 알아보려면 끈 이벤트의 결론도 알아야 한다.
+  slackLastEvent String? @map("slack_last_event")
+
   updatedAt DateTime @updatedAt @map("updated_at")
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
