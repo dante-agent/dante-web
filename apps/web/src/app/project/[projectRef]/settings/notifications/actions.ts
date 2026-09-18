@@ -103,6 +103,7 @@ export async function saveGithubNotifications(
     prCommentCollapseOnPass: checked(formData, "prCommentCollapseOnPass"),
     prCommentFields: fields,
     prCommentFailedLimit: clampFailedLimit(Number(formData.get("prCommentFailedLimit"))),
+    prCommentLocale: parseDiscordLocale(formData.get("prCommentLocale")),
     checkRunEnabled: checked(formData, "checkRunEnabled"),
     checkRunBlocking: checked(formData, "checkRunBlocking"),
   };

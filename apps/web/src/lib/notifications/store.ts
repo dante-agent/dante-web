@@ -43,6 +43,7 @@ export async function saveNotificationSettings(
     ...(patch.prCommentFailedLimit !== undefined && {
       prCommentFailedLimit: patch.prCommentFailedLimit,
     }),
+    ...(patch.prCommentLocale !== undefined && { prCommentLocale: patch.prCommentLocale }),
     ...(patch.checkRunEnabled !== undefined && { checkRunEnabled: patch.checkRunEnabled }),
     ...(patch.checkRunBlocking !== undefined && { checkRunBlocking: patch.checkRunBlocking }),
     ...(patch.branchFilters !== undefined && { branchFilters: patch.branchFilters }),
