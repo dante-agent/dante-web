@@ -10,7 +10,7 @@ const SRC_EXT = /\.(tsx?|jsx?|mjs|cjs)$/;
 const TEST_RE = /(\.(test|spec)\.[jt]sx?$|(^|\/)__tests__\/)/;
 const IGNORE = /(^|\/)(node_modules|dist|build|out|\.next|coverage|\.turbo|vendor)\//;
 
-function isSource(path: string) {
+export function isSource(path: string) {
   return SRC_EXT.test(path) && !path.endsWith(".d.ts") && !IGNORE.test(path) && !TEST_RE.test(path);
 }
 function isTest(path: string) {
@@ -36,9 +36,8 @@ const loadTree = cache(async (repo: ProjectRepo) => {
     recursive: "1",
   });
 
-  const blobs = data.tree
-    .filter((t) => t.type === "blob" && typeof t.path === "string")
-    .map((t) => t.path as string);
+  const blobItems = data.tree.filter((t) => t.type === "blob" && typeof t.path === "string");
+  const blobs = blobItems.map((t) => t.path as string);
 
   const sources = blobs.filter(isSource);
   const tests = blobs.filter(isTest);
@@ -56,8 +55,32 @@ const loadTree = cache(async (repo: ProjectRepo) => {
     return testPath ? { path, status: "has", testPath } : { path, status: "none" };
   });
 
-  return entries;
+  // 추천 점수가 쓴다: 파일 크기(코드를 못 읽었을 때의 대리값), 레포 전체 크기(tarball 을 받을지),
+  // 트리 sha(분석 결과 캐시 키 — 내용이 하나라도 바뀌면 달라진다).
+  const sizes = new Map<string, number>();
+  let totalBytes = 0;
+  for (const t of blobItems) {
+    totalBytes += t.size ?? 0;
+    if (t.size !== undefined) sizes.set(t.path as string, t.size);
+  }
+
+  return { entries, treeSha: data.sha, sizes, totalBytes };
 });
 
 /** 연결된 레포의 소스 파일 트리 (테스트 유무를 status 로 얹은 것). */
-export const getRepoTree = async (repo: ProjectRepo): Promise<FileEntry[]> => loadTree(repo);
+export const getRepoTree = async (repo: ProjectRepo): Promise<FileEntry[]> =>
+  (await loadTree(repo)).entries;
+
+export type RepoTreeMeta = {
+  treeSha: string;
+  /** 경로 → 바이트. blob 만. */
+  sizes: ReadonlyMap<string, number>;
+  /** 모든 blob 크기의 합(압축 전). */
+  totalBytes: number;
+};
+
+/** getRepoTree 와 같은 응답에서 뽑은 부가 정보. GitHub 을 다시 치지 않는다. */
+export const getRepoTreeMeta = async (repo: ProjectRepo): Promise<RepoTreeMeta> => {
+  const { treeSha, sizes, totalBytes } = await loadTree(repo);
+  return { treeSha, sizes, totalBytes };
+};

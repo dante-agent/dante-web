@@ -35,7 +35,7 @@ const TONE_CLASS: Record<"muted" | "ok" | "warn" | "error", string> = {
 /**
  * 추천 목록 + "AI 로 정렬" + 여러 개를 골라 한 번에 만드는 배치 생성.
  *
- * 처음 뜨는 목록(initial)은 서버가 경로 휴리스틱으로 공짜로 만든 것이다. "Sort with AI"는
+ * 처음 뜨는 목록(initial)은 서버가 점수로 공짜로 만든 것이다. "Sort with AI"는
  * 재정렬만 한다. Select 를 켜면 카드의 화살표가 체크박스로 바뀌고, 목록 아래 시트에서
  * 고른 파일들을 생성 화면(/recommend/generate)으로 한 번에 넘긴다.
  */
