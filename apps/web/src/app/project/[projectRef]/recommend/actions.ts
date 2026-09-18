@@ -22,6 +22,7 @@ import {
 import { saveGeneratedVersion } from "@/lib/projects/generated-versions";
 import { getOwnedProjectId, getProjectRepo, type ProjectRepo } from "@/lib/projects/queries";
 import { getTestRecommendations, type TestRecommendation } from "@/lib/projects/recommendations";
+import { FIXED_NOTE, UPDATED_NOTE } from "@/lib/projects/session-label";
 import { generateTestForFile } from "@/lib/projects/test-generation";
 
 /**
@@ -317,7 +318,7 @@ export async function regenerateFromFailure(
   await carryChat(projectRef, user.id, versionId, newVersionId, {
     id: crypto.randomUUID(),
     role: "assistant",
-    text: "Fixed the test based on the failure logs, and re-running it now.",
+    text: FIXED_NOTE,
   });
 
   return { ok: true, versionId: newVersionId, testPath: result.testPath, code: result.code };
@@ -374,7 +375,7 @@ export async function regenerateFromInstruction(
     {
       id: crypto.randomUUID(),
       role: "assistant",
-      text: "Updated the test with your request. Review it on the right and run it.",
+      text: UPDATED_NOTE,
     },
   ]);
 
