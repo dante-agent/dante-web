@@ -3,7 +3,8 @@
 // 폴더 보기 본문. view = 소스|테스트 2-pane(구분선 드래그로 비율 조절), edit = 테스트 Before|After DiffEditor.
 // Monaco 는 SSR 에서 깨져 dynamic({ ssr:false }) (AGENTS.md).
 
-import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition, type ReactNode } from "react";
+import type { OnMount } from "@monaco-editor/react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -21,6 +22,13 @@ import {
 import { generateFolderTest, saveTestEdit } from "@/app/project/[projectRef]/folder/actions";
 import { useReportHasTest } from "@/components/ai-chat";
 import { iconForFile } from "@/components/file-icons";
+import { CodeSkeleton } from "@/components/generation/code-skeleton";
+import { GenerationSteps } from "@/components/generation/generation-steps";
+import { SendingFiles } from "@/components/generation/sending-files";
+import {
+  useGenerationPerformance,
+  type GenerationOutcome,
+} from "@/components/generation/use-generation-performance";
 import { onTestRunRequest, RunPanel, useLiveRun } from "@/components/run-terminal";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { MONACO_THEME as THEME, setupMonaco } from "@/lib/monaco-theme";
@@ -69,7 +77,22 @@ function guessTestName(path: string): string {
   return dot === -1 ? `${base}.test` : `${base.slice(0, dot)}.test${base.slice(dot)}`;
 }
 
-function CodePane({ lang, value }: { lang: string; value: string }) {
+function CodePane({
+  lang,
+  value,
+  follow = false,
+}: {
+  lang: string;
+  value: string;
+  /** 내용이 늘어날 때마다 마지막 줄로 스크롤한다 — 생성 연출에서 코드가 써지는 걸 따라간다. */
+  follow?: boolean;
+}) {
+  const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
+  useEffect(() => {
+    const lines = editorRef.current?.getModel()?.getLineCount();
+    if (follow && lines) editorRef.current?.revealLine(lines);
+  }, [follow, value]);
+
   return (
     <Editor
       language={lang}
@@ -78,6 +101,9 @@ function CodePane({ lang, value }: { lang: string; value: string }) {
       loading={<Fallback />}
       value={value}
       options={OPTIONS}
+      onMount={(editor) => {
+        editorRef.current = editor;
+      }}
     />
   );
 }
@@ -139,47 +165,59 @@ function DraftBadge({ draft }: { draft: Draft }) {
   );
 }
 
-const GENERATE_ERROR: Record<"budget" | "not-found" | "error" | "failed", string> = {
+const GENERATE_ERROR: Record<"budget" | "not-found" | "error", string> = {
   budget: "You've exceeded this month's AI budget, so tests can't be generated.",
   "not-found": "Couldn't read this file from the repository. Refresh and try again.",
   error: "Test generation failed. Please try again in a moment.",
-  failed: "Couldn't run test generation. Please try again in a moment.",
 };
 
-/** 테스트가 없을 때의 빈 칸. 생성·저장이 끝나면 액션이 refresh() 해 페이지가 draft 를 읽어 온다. */
+/**
+ * 테스트가 없을 때의 빈 칸. Generate 를 누르면 추천 생성 화면과 같은 연출을 이 칸에서 보여준다:
+ * 위엔 파일을 AI 로 보내는 모습과 단계, 아래엔 스켈레톤 → 받은 코드가 써지는 에디터.
+ * 다 쓰면 router.refresh() 로 저장된 버전을 읽어 와 이 칸이 일반 Test Code 보기로 바뀐다.
+ */
 function GenerateTest({ projectRef, file }: { projectRef: string; file: string }) {
-  const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<keyof typeof GENERATE_ERROR | null>(null);
+  const router = useRouter();
 
-  const generate = () =>
-    startTransition(async () => {
-      setError(null);
-      try {
-        const result = await generateFolderTest(projectRef, file);
-        if (!result.ok) setError(result.reason);
-      } catch {
-        setError("failed");
-      }
-    });
+  const generate = useCallback(async (): Promise<GenerationOutcome<{ code: string }>> => {
+    const result = await generateFolderTest(projectRef, file);
+    return result.ok
+      ? { ok: true, files: [{ code: result.code }] }
+      : { ok: false, message: GENERATE_ERROR[result.reason] };
+  }, [projectRef, file]);
+  const finish = useCallback(() => router.refresh(), [router]);
+
+  const { stage, files, typing, error, start } = useGenerationPerformance({ generate, finish });
+
+  if (stage === null || stage === "error") {
+    return (
+      <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+        <p className="text-sm">No tests yet.</p>
+        <Button size="sm" onClick={start}>
+          <Sparkles data-icon="inline-start" />
+          Generate tests
+        </Button>
+        {error && (
+          <p role="alert" className="text-destructive text-xs">
+            {error}
+          </p>
+        )}
+      </div>
+    );
+  }
 
   return (
-    <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-      {pending ? (
-        <p className="flex items-center gap-2 text-sm">
-          <Loader2 className="size-4 animate-spin" />
-          Generating test code.
-        </p>
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="border-border bg-background flex shrink-0 flex-col gap-3 border-b p-3">
+        <SendingFiles files={[file]} stage={stage} />
+        <GenerationSteps stage={stage} finalLabel="Showing the test" />
+      </div>
+      {files ? (
+        <div className="min-h-0 flex-1">
+          <CodePane lang={langOf(file)} value={files[0].code.slice(0, typing.chars)} follow />
+        </div>
       ) : (
-        <p className="text-sm">No tests yet.</p>
-      )}
-      <Button size="sm" onClick={generate} disabled={pending}>
-        <Sparkles data-icon="inline-start" />
-        Generate tests
-      </Button>
-      {error && (
-        <p role="alert" className="text-destructive text-xs">
-          {GENERATE_ERROR[error]}
-        </p>
+        <CodeSkeleton pulsing={stage === "write"} />
       )}
     </div>
   );
