@@ -34,6 +34,7 @@ export default async function TeamSettingsLayout({
   const items = [
     { href: `/team/${teamId}/settings/general`, label: "General" },
     { href: `/team/${teamId}/settings/members`, label: "Members" },
+    { href: `/team/${teamId}/settings/slack`, label: "Slack" },
   ];
 
   return (
