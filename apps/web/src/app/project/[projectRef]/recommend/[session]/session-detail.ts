@@ -1,17 +1,6 @@
 // 세션 상세 화면(리뷰 패널 + 코드 패널)이 쓰는 뷰 타입.
 // 데이터는 page.tsx 가 저장된 TestFileVersion 에서 만들어 넣는다.
 
-export type DiffLineKind = "add" | "del" | "context";
-
-export interface DiffLine {
-  kind: DiffLineKind;
-  /** 원본(old) 줄번호. 추가 줄이면 null. */
-  oldNo: number | null;
-  /** 신규(new) 줄번호. 삭제 줄이면 null. */
-  newNo: number | null;
-  text: string;
-}
-
 export interface SessionDetail {
   id: string;
   title: string;
@@ -33,6 +22,5 @@ export interface SessionDetail {
     path: string;
     additions: number;
     deletions: number;
-    lines: DiffLine[];
   };
 }
