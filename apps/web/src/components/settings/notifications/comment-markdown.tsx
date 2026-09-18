@@ -29,9 +29,6 @@ function splitDetails(markdown: string): Part[] {
   return parts.filter((part) => part.kind === "details" || part.text.trim());
 }
 
-const isSafeHref = (href: string | undefined): href is string =>
-  !!href && /^https?:\/\//i.test(href);
-
 const COMPONENTS: Components = {
   p: ({ children }) => <p className="my-3 first:mt-0 last:mb-0">{children}</p>,
   h1: ({ children }) => (
@@ -50,19 +47,8 @@ const COMPONENTS: Components = {
       {children}
     </blockquote>
   ),
-  a: ({ href, children }) =>
-    isSafeHref(href) ? (
-      <a
-        href={href}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-brand-cobalt underline-offset-2 hover:underline"
-      >
-        {children}
-      </a>
-    ) : (
-      <span className="text-brand-cobalt">{children}</span>
-    ),
+  // 미리보기라 누르면 이동하지 않는다. 링크가 그 자리에 있다는 것만 보이게 모양만 흉내 낸다.
+  a: ({ children }) => <span className="text-brand-cobalt">{children}</span>,
   img: ({ alt }) => <span className="text-muted-foreground">[Image{alt ? `: ${alt}` : ""}]</span>,
   table: ({ children }) => (
     <div className="my-3 overflow-x-auto">
