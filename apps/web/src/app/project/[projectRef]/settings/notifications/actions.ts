@@ -15,6 +15,7 @@ import type { PullRequestContext } from "@/lib/notifications/deliver";
 import {
   DISCORD_EVENTS,
   isDiscordWebhookUrl,
+  parseDiscordLocale,
   renderDiscordMessage,
 } from "@/lib/notifications/discord";
 import { discordErrorDetail, postDiscordMessage } from "@/lib/notifications/discord-send";
@@ -186,7 +187,11 @@ export async function saveDiscordNotifications(
     DISCORD_EVENTS.map((event) => [event.id, checked(formData, `discordEvent.${event.id}`)])
   ) as NotificationSettings["discordEvents"];
 
-  await saveNotificationSettings(project.id, { discordEnabled: enabled, discordEvents: events });
+  await saveNotificationSettings(project.id, {
+    discordEnabled: enabled,
+    discordEvents: events,
+    discordLocale: parseDiscordLocale(formData.get("discordLocale")),
+  });
   revalidatePath(settingsPath(project.ref));
   return { saved: true };
 }
@@ -223,6 +228,8 @@ export async function sendDiscordTest(
     prNumber: null,
     prUrl: null,
     failedLimit: settings.prCommentFailedLimit,
+    // 저장 전에 고른 언어로 보낸다. 어떻게 보이는지 보려고 누르는 버튼이다.
+    locale: parseDiscordLocale(formData.get("discordLocale") ?? settings.discordLocale),
     test: true,
   });
 

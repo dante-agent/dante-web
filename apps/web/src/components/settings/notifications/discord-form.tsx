@@ -8,9 +8,9 @@ import {
   type DiscordTestState,
   type SaveState,
 } from "@/app/project/[projectRef]/settings/notifications/actions";
-import { Section, ToggleRow } from "@/components/settings/notifications/controls";
+import { RadioRow, Section, ToggleRow } from "@/components/settings/notifications/controls";
 import { Button } from "@/components/ui/button";
-import { DISCORD_EVENTS } from "@/lib/notifications/discord";
+import { DISCORD_EVENTS, DISCORD_LOCALES } from "@/lib/notifications/discord";
 import type { NotificationSettings } from "@/lib/notifications/settings";
 
 // Discord 섹션. 채널의 웹훅 URL 하나로 붙는다 — Slack 처럼 OAuth 가 없어서 팀 설정에
@@ -37,6 +37,7 @@ export function DiscordNotificationsForm({
 
   const [enabled, setEnabled] = useState(initial.discordEnabled);
   const [events, setEvents] = useState(initial.discordEvents);
+  const [locale, setLocale] = useState(initial.discordLocale);
 
   return (
     <form action={saveAction}>
@@ -81,6 +82,22 @@ export function DiscordNotificationsForm({
             checked={events[event.id]}
             disabled={!enabled}
             onChange={(value) => setEvents((current) => ({ ...current, [event.id]: value }))}
+          />
+        ))}
+      </Section>
+
+      <Section
+        title="Message language"
+        description="Test names and error messages stay as they are."
+      >
+        {DISCORD_LOCALES.map((option) => (
+          <RadioRow
+            key={option.id}
+            name="discordLocale"
+            value={option.id}
+            label={option.label}
+            selected={locale === option.id}
+            onSelect={() => setLocale(option.id)}
           />
         ))}
       </Section>

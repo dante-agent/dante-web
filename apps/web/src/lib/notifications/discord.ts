@@ -100,6 +100,60 @@ export function discordAction(
   return { kind: previous === outcome ? "edit" : "post", event };
 }
 
+/** 메시지 언어. 설정 화면은 영어지만, 채널을 보는 팀은 한국어로 받고 싶을 수 있다. */
+export type DiscordLocale = "en" | "ko";
+
+export const DISCORD_LOCALES: { id: DiscordLocale; label: string }[] = [
+  { id: "en", label: "English" },
+  { id: "ko", label: "한국어" },
+];
+
+/** 문자열 칸이라 무엇이든 들어올 수 있다. 모르는 값은 영어로. */
+export function parseDiscordLocale(value: unknown): DiscordLocale {
+  return value === "ko" ? "ko" : "en";
+}
+
+/**
+ * 메시지에 들어가는 문장 전부. 번역 라이브러리를 들일 만큼 많지 않아 표 하나로 둔다.
+ *
+ * 테스트 이름·실패 사유·Dante 오류 문장(run.error)은 번역하지 않는다. 원문이어야
+ * 검색해서 답을 찾을 수 있다.
+ */
+const COPY: Record<
+  DiscordLocale,
+  {
+    test: string;
+    fixed: string;
+    couldNotFinish: string;
+    failed: (failed: number, total: number) => string;
+    passed: (total: number) => string;
+    more: (rest: number) => string;
+    openPullRequest: string;
+    openInDante: string;
+  }
+> = {
+  en: {
+    test: "Test notification from Dante settings. Nothing actually ran.",
+    fixed: "fixed — ",
+    couldNotFinish: "could not finish",
+    failed: (failed, total) => `${failed} of ${total} tests failed`,
+    passed: (total) => `all ${total} tests passed`,
+    more: (rest) => `…and ${rest} more`,
+    openPullRequest: "Open the pull request",
+    openInDante: "Open in Dante",
+  },
+  ko: {
+    test: "Dante 설정에서 보낸 테스트 알림입니다. 실제로 실행된 것은 없습니다.",
+    fixed: "복구됨 — ",
+    couldNotFinish: "실행을 끝내지 못했습니다",
+    failed: (failed, total) => `테스트 ${total}개 중 ${failed}개 실패`,
+    passed: (total) => `테스트 ${total}개 모두 통과`,
+    more: (rest) => `…외 ${rest}개`,
+    openPullRequest: "PR 열기",
+    openInDante: "Dante 에서 보기",
+  },
+};
+
 /** Discord 메시지 본문 상한. 넘으면 400 이 난다. */
 const CONTENT_LIMIT = 2000;
 
@@ -119,15 +173,17 @@ export function renderDiscordMessage(
     prNumber: number | null;
     prUrl: string | null;
     failedLimit: number;
+    locale: DiscordLocale;
     /** 직전이 실패였던 통과. 제목으로 구분하지 않으면 그냥 통과와 똑같이 읽힌다 */
     recovered?: boolean;
     test?: boolean;
   }
 ) {
+  const copy = COPY[context.locale];
   const lines: string[] = [];
-  if (context.test) lines.push("-# Test notification from Dante settings. Nothing actually ran.");
+  if (context.test) lines.push(`-# ${copy.test}`);
 
-  lines.push(`**dante · ${context.recovered ? "fixed — " : ""}${headline(run)}**`);
+  lines.push(`**dante · ${context.recovered ? copy.fixed : ""}${headline(run, copy)}**`);
   lines.push(context.prNumber === null ? context.repo : `${context.repo} #${context.prNumber}`);
 
   if (run.status === "failed" && run.error) lines.push("", run.error);
@@ -139,12 +195,12 @@ export function renderDiscordMessage(
       lines.push(`- \`${failure.file}\` › ${failure.name}${reason}`);
     }
     const rest = run.failures.length - context.failedLimit;
-    if (rest > 0) lines.push(`…and ${rest} more`);
+    if (rest > 0) lines.push(copy.more(rest));
   }
 
   const links = [
-    context.prUrl && `[Open the pull request](<${context.prUrl}>)`,
-    run.detailUrl && `[Open in Dante](<${run.detailUrl}>)`,
+    context.prUrl && `[${copy.openPullRequest}](<${context.prUrl}>)`,
+    run.detailUrl && `[${copy.openInDante}](<${run.detailUrl}>)`,
   ].filter(Boolean);
   if (links.length > 0) lines.push("", links.join(" · "));
 
@@ -152,9 +208,9 @@ export function renderDiscordMessage(
   return content.length <= CONTENT_LIMIT ? content : `${content.slice(0, CONTENT_LIMIT - 1)}…`;
 }
 
-function headline(run: RunSummary) {
-  if (run.status === "failed") return "could not finish";
+function headline(run: RunSummary, copy: (typeof COPY)[DiscordLocale]) {
+  if (run.status === "failed") return copy.couldNotFinish;
   const { total, failed } = run.totals;
-  if (failed > 0) return `${failed} of ${total} tests failed`;
-  return `all ${total} tests passed`;
+  if (failed > 0) return copy.failed(failed, total);
+  return copy.passed(total);
 }

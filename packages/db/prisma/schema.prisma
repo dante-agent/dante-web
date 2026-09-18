@@ -514,6 +514,8 @@ model ProjectNotificationSetting {
   /// { failed, recovered, passed, cannotFinish }. null 이면 기본값
   /// (lib/notifications/discord.ts 의 DEFAULT_DISCORD_EVENTS).
   discordEvents              Json?   @map("discord_events")
+  /// 메시지 언어 "en" | "ko". 문자열인 이유는 prCommentMode 와 같다.
+  discordLocale              String  @default("en") @map("discord_locale")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

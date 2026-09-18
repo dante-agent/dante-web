@@ -81,6 +81,7 @@ describe("renderDiscordMessage", () => {
     prNumber: 42,
     prUrl: "https://github.com/wlrnjs/my-blog/pull/42",
     failedLimit: 2,
+    locale: "en" as const,
   };
 
   it("names the repository and folds failures past the limit", () => {
@@ -101,6 +102,18 @@ describe("renderDiscordMessage", () => {
       )
     );
     assert.ok(renderDiscordMessage(passing, context).includes("**dante · all 24 tests passed**"));
+  });
+
+  it("writes the message in Korean when asked", () => {
+    const text = renderDiscordMessage(failing, { ...context, locale: "ko" });
+    assert.ok(text.includes("**dante · 테스트 24개 중 3개 실패**"));
+    assert.ok(text.includes("…외 1개"));
+    assert.ok(text.includes("[PR 열기](<https://github.com/wlrnjs/my-blog/pull/42>)"));
+    assert.ok(
+      renderDiscordMessage(passing, { ...context, locale: "ko", recovered: true }).includes(
+        "**dante · 복구됨 — 테스트 24개 모두 통과**"
+      )
+    );
   });
 
   it("marks test notifications so nobody mistakes them for a real failure", () => {

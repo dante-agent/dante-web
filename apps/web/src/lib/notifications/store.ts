@@ -50,6 +50,7 @@ export async function saveNotificationSettings(
     ...(patch.snoozedUntil !== undefined && { snoozedUntil: patch.snoozedUntil }),
     ...(patch.discordEnabled !== undefined && { discordEnabled: patch.discordEnabled }),
     ...(patch.discordEvents !== undefined && { discordEvents: patch.discordEvents }),
+    ...(patch.discordLocale !== undefined && { discordLocale: patch.discordLocale }),
   } satisfies Prisma.ProjectNotificationSettingUncheckedUpdateInput;
 
   await prisma.projectNotificationSetting.upsert({

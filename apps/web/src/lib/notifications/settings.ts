@@ -2,7 +2,9 @@ import type { ProjectNotificationSetting } from "@dante/db";
 import {
   DEFAULT_DISCORD_EVENTS,
   parseDiscordEvents,
+  parseDiscordLocale,
   type DiscordEvents,
+  type DiscordLocale,
 } from "@/lib/notifications/discord";
 
 // 알림 설정값의 모양과 기본값. 서버·클라이언트 양쪽에서 읽으므로 여기에는
@@ -121,6 +123,7 @@ export type NotificationSettings = {
   snoozedUntil: Date | null;
   discordEnabled: boolean;
   discordEvents: DiscordEvents;
+  discordLocale: DiscordLocale;
   /**
    * 웹훅 URL 이 저장돼 있는지만. 이 값은 화면(클라이언트)으로 가므로 URL 자체는
    * 싣지 않는다 — URL 을 가진 사람은 그 채널에 글을 쓸 수 있다. URL 은 store.ts 가 따로 읽는다.
@@ -142,6 +145,7 @@ export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
   snoozedUntil: null,
   discordEnabled: false,
   discordEvents: DEFAULT_DISCORD_EVENTS,
+  discordLocale: "en",
   discordWebhookSaved: false,
 };
 
@@ -195,6 +199,7 @@ export function toNotificationSettings(
     snoozedUntil: row.snoozedUntil,
     discordEnabled: row.discordEnabled,
     discordEvents: parseDiscordEvents(row.discordEvents),
+    discordLocale: parseDiscordLocale(row.discordLocale),
     discordWebhookSaved: row.encryptedDiscordWebhookUrl !== null,
   };
 }
