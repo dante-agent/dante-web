@@ -142,8 +142,8 @@ export default async function PullRequestPreviewPage({
                 <summary className="text-muted-foreground border-border cursor-pointer px-3 py-1.5 text-[11px] font-medium">
                   Runner logs
                 </summary>
-                <pre className="border-border max-h-[480px] overflow-auto border-t bg-black p-3 font-mono text-[12px] leading-relaxed">
-                  {job.runLogs}
+                <pre className="border-border max-h-[480px] overflow-auto border-t bg-black p-3 font-mono text-[12px] leading-relaxed text-[#eeedf0]">
+                  <RunnerLogs logs={job.runLogs} />
                 </pre>
               </details>
             )}
@@ -180,13 +180,40 @@ function RerunPanel({
         <button
           type="submit"
           disabled={inFlight}
-          className="bg-brand-orange shrink-0 rounded-md px-3 py-1.5 text-xs font-medium text-black disabled:opacity-40"
+          className="bg-brand-orange shrink-0 cursor-pointer rounded-md px-3 py-1.5 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
         >
           Re-run
         </button>
       </form>
     </Panel>
   );
+}
+
+// 러너 로그는 packages/sandbox/run.ts 의 section() 이 "$ 명령 / 출력 / (exit N)" 로 묶은 글이다.
+// 샌드박스는 TTY 가 아니라 ANSI 색이 거의 없어서, 줄 모양을 보고 색을 입힌다. 남은 색 코드는 걷어낸다.
+const ANSI_SGR = /\x1b\[[0-9;]*m/g;
+
+function logLineClass(line: string): string | undefined {
+  if (line.startsWith("$ ")) return "text-brand-orange font-semibold";
+  const exit = /^\(exit (-?\d+)\)$/.exec(line.trim());
+  if (exit) return exit[1] === "0" ? "text-brand-mint" : "text-destructive font-semibold";
+  if (/^> /.test(line)) return "text-muted-foreground";
+  if (/\b(npm (error|ERR!)|Error|FAIL|failed)\b|[✗×]/.test(line)) return "text-destructive";
+  if (/\b(npm warn|WARN|warning)\b|vulnerabilit/i.test(line)) return "text-chart-amber";
+  if (/✓|\bPASS\b|\bpassed\b/.test(line)) return "text-brand-mint";
+  return undefined;
+}
+
+function RunnerLogs({ logs }: { logs: string }) {
+  return logs
+    .replace(ANSI_SGR, "")
+    .split("\n")
+    .map((line, i) => (
+      <span key={i} className={logLineClass(line)}>
+        {line}
+        {"\n"}
+      </span>
+    ));
 }
 
 /** folder-empty-state 의 "Recently opened" 상자와 같은 모양. */
