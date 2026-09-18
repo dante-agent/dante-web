@@ -12,20 +12,54 @@ import remarkGfm from "remark-gfm";
 
 const REMARK_PLUGINS = [remarkGfm];
 
-/** comment.ts 가 만드는 모양 그대로. 중첩은 만들지 않으므로 다루지 않는다. */
-const DETAILS = /<details><summary>([\s\S]*?)<\/summary>([\s\S]*?)<\/details>/g;
+const OPEN = "<details><summary>";
+const CLOSE = "</details>";
 
 type Part = { kind: "markdown"; text: string } | { kind: "details"; summary: string; body: string };
 
+/**
+ * `<details>` 를 바깥 한 겹만 잘라낸다. 안쪽은 body 로 넘겨 다시 이 함수를 태운다.
+ *
+ * 전부 통과해 한 줄로 접을 때는 접힌 상세 안에 "Components in this PR" 이 또 들어간다.
+ * 첫 `</details>` 에서 끊으면 바깥이 안쪽 닫는 태그에서 끝나 버려서, 짝을 세어 닫는 곳을 찾는다.
+ */
 function splitDetails(markdown: string): Part[] {
   const parts: Part[] = [];
-  let last = 0;
-  for (const match of markdown.matchAll(DETAILS)) {
-    parts.push({ kind: "markdown", text: markdown.slice(last, match.index) });
-    parts.push({ kind: "details", summary: match[1], body: match[2] });
-    last = match.index + match[0].length;
+  let rest = markdown;
+
+  for (;;) {
+    const open = rest.indexOf(OPEN);
+    if (open === -1) break;
+
+    let depth = 1;
+    let cursor = open + OPEN.length;
+    while (depth > 0) {
+      const nextOpen = rest.indexOf(OPEN, cursor);
+      const nextClose = rest.indexOf(CLOSE, cursor);
+      if (nextClose === -1) break;
+      if (nextOpen !== -1 && nextOpen < nextClose) {
+        depth += 1;
+        cursor = nextOpen + OPEN.length;
+      } else {
+        depth -= 1;
+        cursor = nextClose + CLOSE.length;
+      }
+    }
+    // 닫히지 않은 `<details>` 는 comment.ts 가 만들지 않는다. 만나면 나머지를 그냥 마크다운으로 둔다.
+    if (depth > 0) break;
+
+    const inner = rest.slice(open + OPEN.length, cursor - CLOSE.length);
+    const summaryEnd = inner.indexOf("</summary>");
+    parts.push({ kind: "markdown", text: rest.slice(0, open) });
+    parts.push({
+      kind: "details",
+      summary: inner.slice(0, summaryEnd),
+      body: inner.slice(summaryEnd + "</summary>".length),
+    });
+    rest = rest.slice(cursor);
   }
-  parts.push({ kind: "markdown", text: markdown.slice(last) });
+
+  parts.push({ kind: "markdown", text: rest });
   return parts.filter((part) => part.kind === "details" || part.text.trim());
 }
 
@@ -81,22 +115,26 @@ function Markdown({ text }: { text: string }) {
   );
 }
 
+function Parts({ markdown }: { markdown: string }) {
+  return splitDetails(markdown).map((part, index) =>
+    part.kind === "markdown" ? (
+      <Markdown key={index} text={part.text} />
+    ) : (
+      <details key={index} className="my-3 first:mt-0 last:mb-0">
+        <summary className="cursor-pointer">{part.summary}</summary>
+        <div className="mt-3">
+          <Parts markdown={part.body} />
+        </div>
+      </details>
+    )
+  );
+}
+
 /** 코멘트 본문. GitHub 처럼 `<details>` 는 접힌 채로 시작한다. */
 export function CommentMarkdown({ markdown }: { markdown: string }) {
   return (
     <div className="text-[13px] leading-relaxed wrap-break-word">
-      {splitDetails(markdown).map((part, index) =>
-        part.kind === "markdown" ? (
-          <Markdown key={index} text={part.text} />
-        ) : (
-          <details key={index} className="my-3 first:mt-0 last:mb-0">
-            <summary className="cursor-pointer">{part.summary}</summary>
-            <div className="mt-3">
-              <Markdown text={part.body} />
-            </div>
-          </details>
-        )
-      )}
+      <Parts markdown={markdown} />
     </div>
   );
 }
