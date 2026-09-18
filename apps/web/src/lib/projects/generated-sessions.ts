@@ -15,6 +15,8 @@ export interface GeneratedSession {
   title: string;
   status: SessionStatus;
   updatedAt: string;
+  /** 같은 프롬프트로 배치 생성된 세션끼리 공유하는 묶음 id. 단건이면 null. */
+  batchId: string | null;
 }
 
 export interface GeneratedSessionDetail {
@@ -27,6 +29,8 @@ export interface GeneratedSessionDetail {
   version: number;
   content: string;
   createdAt: Date;
+  /** 사용자가 남긴 피드백. "up" | "down" | null. */
+  feedback: string | null;
   latestRun: {
     status: string;
     logs: string | null;
@@ -67,6 +71,7 @@ export async function getGeneratedSessions(
       id: true,
       version: true,
       createdAt: true,
+      batchId: true,
       testFile: { select: { component: { select: { name: true } } } },
       runs: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true } },
     },
@@ -77,6 +82,7 @@ export async function getGeneratedSessions(
     title: sessionTitle(version.testFile.component.name, version.version),
     status: statusFromRun(version.runs[0]?.status),
     updatedAt: version.createdAt.toISOString(),
+    batchId: version.batchId,
   }));
 }
 
@@ -99,6 +105,7 @@ export async function getGeneratedSessionDetail(
       version: true,
       content: true,
       createdAt: true,
+      feedback: true,
       testFile: {
         select: { path: true, component: { select: { name: true, filePath: true } } },
       },
@@ -119,6 +126,7 @@ export async function getGeneratedSessionDetail(
     version: version.version,
     content: version.content,
     createdAt: version.createdAt,
+    feedback: version.feedback,
     latestRun: version.runs[0] ?? null,
   };
 }
@@ -153,4 +161,20 @@ export async function deleteGeneratedSession(
     }
   });
   return true;
+}
+
+/** 세션(버전) 하나에 피드백을 남긴다("up"|"down", 같은 값을 다시 누르면 null 로 해제). 소유 검증 포함. */
+export async function setSessionFeedback(
+  projectRef: string,
+  userId: string,
+  versionId: string,
+  value: "up" | "down" | null
+): Promise<boolean> {
+  const projectId = await getOwnedProjectId(projectRef, userId);
+  if (!projectId) return false;
+  const res = await prisma.testFileVersion.updateMany({
+    where: { id: versionId, testFile: { component: { projectId } } },
+    data: { feedback: value },
+  });
+  return res.count > 0;
 }

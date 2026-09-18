@@ -417,6 +417,13 @@ model TestFileVersion {
   /// 문자열인 이유는 Project.testFramework 와 같다(값이 늘 때 마이그레이션 회피).
   source String
 
+  /// 한 번의 프롬프트로 여러 파일을 배치 생성하면 같은 batchId 를 공유한다(최대 3).
+  /// 사이드바가 같은 배치의 세션들을 묶어 보여주는 데 쓴다. 단건 생성이면 null.
+  batchId String? @map("batch_id") @db.Uuid
+
+  /// 사용자가 이 결과에 남긴 피드백. "up" | "down" | null. 품질 개선 신호로만 모은다.
+  feedback String?
+
   createdAt DateTime @default(now()) @map("created_at")
 
   testFile   TestFile        @relation(fields: [testFileId], references: [id], onDelete: Cascade)

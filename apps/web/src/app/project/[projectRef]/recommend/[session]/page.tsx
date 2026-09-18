@@ -69,6 +69,7 @@ export default async function SessionDetailPage({
           projectRef={projectRef}
           session={session}
           initialMessages={chat}
+          feedback={detail.feedback === "up" || detail.feedback === "down" ? detail.feedback : null}
         />
       }
       right={

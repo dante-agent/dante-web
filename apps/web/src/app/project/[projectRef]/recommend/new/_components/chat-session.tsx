@@ -143,9 +143,9 @@ export function ChatSession({
           result.versionId,
           transcript.map(({ id, role, text }) => ({ id, role, text }))
         );
-        // 배치로 만든 버전을 전부 tests 쿼리로 넘겨, 세션 상세가 탭으로 나눠 보여주게 한다.
+        // 배치로 만든 버전을 전부 tests 쿼리로 넘겨 탭으로 보여주고, run=1 로 열자마자 실행한다.
         const tests = result.versionIds.join(",");
-        router.push(`/project/${projectRef}/recommend/${result.versionId}?tests=${tests}`);
+        router.push(`/project/${projectRef}/recommend/${result.versionId}?tests=${tests}&run=1`);
       } catch (error) {
         unstable_rethrow(error);
         pushAssistant(ERROR_MESSAGE.failed);

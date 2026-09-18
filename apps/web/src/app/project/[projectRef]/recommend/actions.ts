@@ -16,6 +16,7 @@ import {
 import {
   deleteGeneratedSession,
   getGeneratedSessionDetail,
+  setSessionFeedback,
 } from "@/lib/projects/generated-sessions";
 import { saveGeneratedVersion } from "@/lib/projects/generated-versions";
 import { getOwnedProjectId, getProjectRepo, type ProjectRepo } from "@/lib/projects/queries";
@@ -82,6 +83,8 @@ async function generateAndSave(args: {
   projectId: string | null;
   filePath: string;
   componentName: string;
+  /** 배치 생성 묶음 id. 단건이면 생략. */
+  batchId?: string;
 }): Promise<GenerateTestActionResult> {
   const result = await generateTestForFile({
     repo: args.repo,
@@ -98,6 +101,7 @@ async function generateAndSave(args: {
         componentName: args.componentName,
         testPath: result.testPath,
         code: result.code,
+        batchId: args.batchId,
       })
     : null;
 
@@ -209,6 +213,9 @@ export async function generatePlannedTests(
     .slice(0, MAX_MATCHES);
   if (targets.length === 0) return { ok: false, reason: "error" };
 
+  // 파일이 여럿이면 같은 batchId 를 공유해 사이드바가 한 배치로 묶어 보여준다. 단건이면 null.
+  const batchId = targets.length > 1 ? crypto.randomUUID() : undefined;
+
   // 파일들은 서로 독립이라 병렬로 생성한다 — 3개면 벽시계 시간이 순차의 ~1/3로 준다.
   // 파일마다 다른 Component 라 저장이 충돌하지 않고(예산도 각자 예약), 실패는 아래에서 개별 처리한다.
   // Promise.all 이 targets 순서를 보존하므로 versionIds[0] 은 여전히 첫 대상의 결과다.
@@ -220,6 +227,7 @@ export async function generatePlannedTests(
         projectId,
         filePath: meta.filePath,
         componentName: meta.componentName,
+        batchId,
       })
     )
   );
@@ -395,6 +403,17 @@ export async function saveRecommendChat(
  * 소유·존재 검증은 deleteGeneratedSession 이 한다. 지웠으면 목록·사이드바가 갱신되도록
  * 추천 경로를 revalidate 한다.
  */
+/** 세션 결과에 피드백을 남긴다(👍/👎, 해제 가능). 소유·존재 검증은 setSessionFeedback 이 한다. */
+export async function setRecommendFeedback(
+  projectRef: string,
+  versionId: string,
+  value: "up" | "down" | null
+): Promise<{ ok: boolean }> {
+  const user = await requireUser();
+  const ok = await setSessionFeedback(projectRef, user.id, versionId, value);
+  return { ok };
+}
+
 export async function deleteRecommendSession(
   projectRef: string,
   versionId: string

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import type { ChatMessage } from "../../_components/chat-thread";
 import type { SessionDetail } from "../session-detail";
+import { FeedbackButtons } from "./feedback-buttons";
 import { FollowUp } from "./follow-up";
 
 // 중앙 리뷰 패널 — Jules 가운데 컬럼. 헤더(레포·태스크) 아래는 채팅 하나로 채운다:
@@ -13,11 +14,13 @@ export function ReviewPanel({
   projectRef,
   session,
   initialMessages,
+  feedback,
 }: {
   projectName: string;
   projectRef: string;
   session: SessionDetail;
   initialMessages: ChatMessage[];
+  feedback: "up" | "down" | null;
 }) {
   return (
     <section className="border-border bg-background flex min-w-0 flex-1 flex-col border-r">
@@ -43,7 +46,10 @@ export function ReviewPanel({
             Read-only
           </Badge>
         )}
-        <Sparkles className="text-brand-cobalt ml-auto size-4" />
+        <div className="ml-auto flex items-center gap-2">
+          <FeedbackButtons projectRef={projectRef} versionId={session.id} initial={feedback} />
+          <Sparkles className="text-brand-cobalt size-4" />
+        </div>
       </div>
 
       {/* 대화 — 프롬프트·추천 사유·후속 요청이 한 채팅으로 이어진다. */}
