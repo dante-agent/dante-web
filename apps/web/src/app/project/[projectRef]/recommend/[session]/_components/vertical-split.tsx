@@ -55,9 +55,12 @@ export function VerticalSplit({
         onPointerDown={onDown}
         onPointerMove={onMove}
         style={{ bottom: `${bottomPx}px` }}
-        className="group absolute inset-x-0 z-10 flex h-2 -translate-y-1/2 cursor-row-resize touch-none items-center"
+        className="group absolute inset-x-0 z-10 flex h-2 -translate-y-1/2 cursor-row-resize touch-none items-center justify-center"
       >
-        <span className="group-hover:bg-brand-orange/70 h-0.5 w-full bg-transparent transition-colors" />
+        {/* 쉬는 상태에도 은은한 선(bg-border), hover 하면 색이 들어온다. */}
+        <span className="bg-border group-hover:bg-brand-orange/70 h-px w-full transition-colors" />
+        {/* 가운데 손잡이 — 여기가 드래그로 조절되는 구분선임을 알려준다. */}
+        <span className="bg-border group-hover:bg-brand-orange/70 absolute h-1 w-10 rounded-full transition-colors" />
       </div>
     </div>
   );
