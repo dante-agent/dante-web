@@ -25,7 +25,7 @@ import { getTestRecommendations, type TestRecommendation } from "@/lib/projects/
 import { generateTestForFile } from "@/lib/projects/test-generation";
 
 /**
- * generateTest 의 결과. 생성 성공분은 버전으로 저장하고 그 id 를 얹어 준다 —
+ * 파일 하나 생성(generateAndSave)의 결과. 생성 성공분은 버전으로 저장하고 그 id 를 얹어 준다 —
  * 화면이 세션 상세(`/recommend/{versionId}`)로 넘어갈 수 있게. 소유 프로젝트 확인이
  * 안 돼 저장을 건너뛰었으면 versionId 는 null(미리보기만 가능).
  */
@@ -49,34 +49,9 @@ export async function rerankRecommendations(projectRef: string): Promise<AiRecom
   return getAiTestRecommendations({ repo, userId: user.id, projectId });
 }
 
-/** 추천 목록에서 사용자가 고른 파일 하나의 테스트 코드를 만들고 버전으로 저장한다. */
-export async function generateTest(
-  projectRef: string,
-  filePath: string
-): Promise<GenerateTestActionResult> {
-  const user = await requireUser();
-  const repo = await getProjectRepo(projectRef, user.id);
-  if (!repo) notFound();
-
-  // Server Action 인자는 신뢰할 수 없다. 현재 추천 후보에 있는 경로만 파일 본문을 읽는다.
-  const recommendations = await getTestRecommendations(repo);
-  const match = recommendations.find((recommendation) => recommendation.filePath === filePath);
-  if (!match) return { ok: false, reason: "not-found" };
-
-  const projectId = await getOwnedProjectId(projectRef, user.id);
-  return generateAndSave({
-    repo,
-    userId: user.id,
-    projectId,
-    filePath,
-    componentName: match.componentName,
-  });
-}
-
 /**
  * 파일 하나를 생성(generateTestForFile)하고 성공분을 버전으로 저장(saveGeneratedVersion)한다.
- * generateTest 와 프롬프트 배치 생성(generatePlannedTests)이 함께 쓴다 — 저장 규칙을 한
- * 곳에 둔다. projectId 가 없으면(소유자 아님) 저장을 건너뛰고 versionId: null(미리보기만).
+ * 카드·배치·프롬프트 생성(generatePlannedTests)이 쓴다 — 저장 규칙을 한 곳에 둔다. projectId 가 없으면(소유자 아님) 저장을 건너뛰고 versionId: null(미리보기만).
  */
 async function generateAndSave(args: {
   repo: ProjectRepo;
@@ -178,6 +153,7 @@ export async function planTestGeneration(
  * generatePlannedTests 결과.
  *   ok         — versionId(첫 생성분)로 세션 상세로 이동. generated = 실제로 만든 파일 수(최대 3).
  *   versionIds — 이번 배치로 저장한 모든 버전 id(생성 순서). 세션 상세가 탭으로 나눠 보여준다.
+ *   files      — 저장한 버전별 코드. 생성 화면(/recommend/generate)이 코드가 써지는 연출에 쓴다.
  *   preview    — 생성은 됐지만 소유자가 아니라 저장을 못해 이동할 세션이 없음
  */
 export type PromptGenerateResult =
@@ -185,11 +161,21 @@ export type PromptGenerateResult =
       ok: true;
       versionId: string;
       versionIds: string[];
+      files: GeneratedTestFile[];
       generated: number;
       /** 이번 배치에서 생성에 실패한 파일들의 표시 이름. 채팅에서 "이건 못 만들었다"고 알린다. */
       failed: string[];
     }
   | { ok: false; reason: "budget" | "preview" | "error" };
+
+/** 배치에서 저장까지 된 파일 하나. */
+export type GeneratedTestFile = {
+  versionId: string;
+  filePath: string;
+  componentName: string;
+  testPath: string;
+  code: string;
+};
 
 /**
  * 제출 2단계. 채팅에서 사용자가 확정한 파일들(최대 3)의 테스트를 만들고 버전으로 저장한 뒤,
@@ -234,6 +220,7 @@ export async function generatePlannedTests(
   );
 
   const versionIds: string[] = [];
+  const files: GeneratedTestFile[] = [];
   const failed: string[] = [];
   let generated = 0;
   let lastFailure: "budget" | "error" | null = null;
@@ -244,11 +231,19 @@ export async function generatePlannedTests(
       return;
     }
     generated += 1;
-    if (result.versionId) versionIds.push(result.versionId);
+    if (!result.versionId) return;
+    versionIds.push(result.versionId);
+    files.push({
+      versionId: result.versionId,
+      filePath: result.filePath,
+      componentName: targets[index].componentName,
+      testPath: result.testPath,
+      code: result.code,
+    });
   });
 
   if (versionIds.length > 0)
-    return { ok: true, versionId: versionIds[0], versionIds, generated, failed };
+    return { ok: true, versionId: versionIds[0], versionIds, files, generated, failed };
   if (generated > 0) return { ok: false, reason: "preview" }; // 만들었지만 저장 못함(소유자 아님)
   return { ok: false, reason: lastFailure === "budget" ? "budget" : "error" };
 }

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, Copy, Loader2 } from "lucide-react";
+import type { MonacoDiffEditor } from "@monaco-editor/react";
 import dynamic from "next/dynamic";
 import { MONACO_THEME as THEME, setupMonaco } from "@/lib/monaco-theme";
 import type { SessionDetail } from "../session-detail";
@@ -40,8 +41,24 @@ function langOf(path: string): string {
   return "plaintext";
 }
 
-export function CodePanel({ code, content }: { code: SessionDetail["code"]; content: string }) {
+export function CodePanel({
+  code,
+  content,
+  follow = false,
+}: {
+  code: SessionDetail["code"];
+  content: string;
+  /** 내용이 늘어날 때마다 마지막 줄로 스크롤한다 — 생성 화면의 "코드가 써지는" 연출용. */
+  follow?: boolean;
+}) {
   const [copied, setCopied] = useState(false);
+  const editorRef = useRef<MonacoDiffEditor | null>(null);
+
+  useEffect(() => {
+    const editor = editorRef.current?.getModifiedEditor();
+    const lines = editor?.getModel()?.getLineCount();
+    if (follow && editor && lines) editor.revealLine(lines);
+  }, [follow, content]);
 
   const copy = async () => {
     try {
@@ -87,6 +104,9 @@ export function CodePanel({ code, content }: { code: SessionDetail["code"]; cont
           original=""
           modified={content}
           options={OPTIONS}
+          onMount={(editor) => {
+            editorRef.current = editor;
+          }}
         />
       </div>
     </section>
