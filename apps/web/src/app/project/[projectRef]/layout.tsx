@@ -1,9 +1,22 @@
 // 프로젝트 스코프 셸. /project/<ref>/... 로 시작하는 모든 페이지가 이 레이아웃을 공유한다.
 // 페이지를 오가도 이 컴포넌트는 다시 렌더되지 않으므로 사이드바·헤더가 들어갈 자리다.
+import type { Metadata } from "next";
 import { AppHeader } from "@/components/app-header";
 import { ProjectSidebar } from "@/components/project-sidebar";
 import { avatarUrl, displayName } from "@/lib/auth/user";
 import { requireProjectContext } from "@/lib/projects/queries";
+
+// 탭 제목: "Dashboard · my-repo · Dante". 프로젝트를 여러 탭에 띄워도 구분되게 이름을 넣는다.
+// requireProjectContext 는 cache 라 아래 레이아웃과 같은 요청에서 한 번만 읽는다.
+export async function generateMetadata({
+  params,
+}: LayoutProps<"/project/[projectRef]">): Promise<Metadata> {
+  const { projectRef } = await params;
+  const { project } = await requireProjectContext(projectRef);
+  return {
+    title: { default: `${project.name} · Dante`, template: `%s · ${project.name} · Dante` },
+  };
+}
 
 export default async function ProjectLayout({
   children,

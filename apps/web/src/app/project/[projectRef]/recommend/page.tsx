@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { CalendarClock, History, ListChecks } from "lucide-react";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/user";
@@ -11,6 +12,8 @@ import { SessionList } from "./_components/session-list";
 import { SuggestedSection } from "./_components/suggested-section";
 
 const VALID_TABS: RecommendTab[] = ["suggested", "sessions", "scheduled"];
+
+export const metadata: Metadata = { title: "AI Recommendations" };
 
 export default async function RecommendPage({
   params,

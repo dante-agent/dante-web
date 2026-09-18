@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { GitPullRequest } from "lucide-react";
@@ -13,6 +14,14 @@ import { RerunButton } from "./rerun-button";
 
 /** "다시 실행" 서버 액션이 after() 로 PR 작업을 돈다. api/github/webhook/route.ts 와 같은 이유 */
 export const maxDuration = 800;
+
+// 제목은 URL 의 번호만으로 만든다. PR 제목까지 넣으려고 여기서 DB 를 한 번 더 읽지 않는다.
+export async function generateMetadata({
+  params,
+}: PageProps<"/project/[projectRef]/pull/[prNumber]">): Promise<Metadata> {
+  const { prNumber } = await params;
+  return { title: `PR #${prNumber}` };
+}
 
 // PR preview. PR 코멘트의 "Open in Dante" 가 여기로 온다(lib/notifications/links.ts).
 //
