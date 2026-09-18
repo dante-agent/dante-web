@@ -116,6 +116,7 @@ export type NotificationSettings = {
   prCommentCollapseOnPass: boolean;
   prCommentFields: CommentFields;
   prCommentFailedLimit: number;
+  prCommentLocale: DiscordLocale;
   checkRunEnabled: boolean;
   checkRunBlocking: boolean;
   branchFilters: string[];
@@ -138,6 +139,7 @@ export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
   prCommentCollapseOnPass: true,
   prCommentFields: DEFAULT_COMMENT_FIELDS,
   prCommentFailedLimit: 10,
+  prCommentLocale: "en",
   checkRunEnabled: true,
   checkRunBlocking: false,
   branchFilters: [],
@@ -192,6 +194,7 @@ export function toNotificationSettings(
     prCommentCollapseOnPass: row.prCommentCollapseOnPass,
     prCommentFields: parseCommentFields(row.prCommentFields),
     prCommentFailedLimit: clampFailedLimit(row.prCommentFailedLimit),
+    prCommentLocale: parseDiscordLocale(row.prCommentLocale),
     checkRunEnabled: row.checkRunEnabled,
     checkRunBlocking: row.checkRunBlocking,
     branchFilters: row.branchFilters,

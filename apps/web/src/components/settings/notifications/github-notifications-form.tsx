@@ -10,6 +10,7 @@ import { CommentMarkdown } from "@/components/settings/notifications/comment-mar
 import { RadioRow, Section, ToggleRow } from "@/components/settings/notifications/controls";
 import { Button } from "@/components/ui/button";
 import { renderPrComment } from "@/lib/notifications/comment";
+import { DISCORD_LOCALES } from "@/lib/notifications/discord";
 import type { RunSummary } from "@/lib/notifications/run-summary";
 import {
   COMMENT_FIELDS,
@@ -172,6 +173,22 @@ export function GithubNotificationsForm({
                 failed tests, then “…and N more”
               </span>
             </label>
+          </Section>
+
+          <Section
+            title="Comment language"
+            description="Test names and error messages stay as they are."
+          >
+            {DISCORD_LOCALES.map((option) => (
+              <RadioRow
+                key={option.id}
+                name="prCommentLocale"
+                value={option.id}
+                label={option.label}
+                selected={settings.prCommentLocale === option.id}
+                onSelect={() => patch({ prCommentLocale: option.id })}
+              />
+            ))}
           </Section>
 
           <Section
