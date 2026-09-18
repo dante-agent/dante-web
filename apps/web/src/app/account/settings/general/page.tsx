@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { signOut } from "@/app/auth/actions";
 import { DeleteAccountForm } from "@/components/settings/general/delete-account-form";
@@ -5,6 +6,8 @@ import { SettingsHeader } from "@/components/settings/settings-section";
 import { Button } from "@/components/ui/button";
 import { accountConfirmation, soleOwnerTeams } from "@/lib/account/delete";
 import { requireUser } from "@/lib/auth/user";
+
+export const metadata: Metadata = { title: "General settings" };
 
 // 계정 일반. 읽기 전용 요약 + 로그아웃 + 맨 아래 계정 삭제.
 //

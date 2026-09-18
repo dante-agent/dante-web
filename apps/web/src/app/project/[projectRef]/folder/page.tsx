@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 // 선택된 파일(`?file=`)을 <FileView> 로 띄운다. `?mode=edit` 이면 테스트 diff.
 // Test Code 칸은 저장된 최신 버전을 보여준다. 레포에 테스트가 있으면 열 때 버전으로 가져온다
 // (처음이면 v1, 레포에서 바뀌었으면 다음 번호). AI 로 만든 버전은 커밋 전 draft 로 표시한다.
@@ -10,6 +11,8 @@ import { getRepoTree } from "@/lib/github/tree";
 import { getLatestGeneratedTest, saveGeneratedVersion } from "@/lib/projects/generated-versions";
 import { getOwnedProjectId, getProjectRepo } from "@/lib/projects/queries";
 import { componentName } from "@/lib/projects/recommendations";
+
+export const metadata: Metadata = { title: "Explorer" };
 
 export default async function FolderPage({
   params,

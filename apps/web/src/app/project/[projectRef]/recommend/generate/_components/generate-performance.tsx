@@ -106,7 +106,8 @@ export function GeneratePerformance({
         setDone({
           files: result.files,
           failed: result.failed,
-          url: `/project/${projectRef}/recommend/${result.versionId}?tests=${result.versionIds.join(",")}&run=1`,
+          // 생성 직후에는 실행하지 않는다 — 사용자가 코드를 보고 Run 을 눌러 돌린다.
+          url: `/project/${projectRef}/recommend/${result.versionId}?tests=${result.versionIds.join(",")}`,
         });
       } catch (err) {
         unstable_rethrow(err);

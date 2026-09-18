@@ -15,8 +15,9 @@ import { LegalDocument, type LegalSection } from "@/components/legal/legal-docum
 //   - 법률 검토
 
 export const metadata: Metadata = {
-  title: "개인정보처리방침 · Dante",
+  title: "개인정보처리방침",
   description: "Dante 개인정보처리방침",
+  robots: { index: true, follow: true },
 };
 
 const SECTIONS: LegalSection[] = [

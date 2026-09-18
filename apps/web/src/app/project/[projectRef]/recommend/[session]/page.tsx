@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { formatDistanceToNow } from "date-fns";
 import { notFound } from "next/navigation";
 import { isSandboxConfigured } from "@dante/sandbox";
@@ -15,6 +16,8 @@ import type { SessionDetail } from "./session-detail";
 
 // 한 번에 만들 수 있는 최대 파일 수와 맞춘다(ai-file-match 의 MAX_MATCHES). 탭 상한.
 const MAX_TABS = 3;
+
+export const metadata: Metadata = { title: "Session" };
 
 // AI 추천 세션 상세. 좌측 세션 사이드바는 recommend/layout.tsx 가 제공하고,
 // 여기서는 중앙 리뷰(채팅) 패널 + 우측 코드/실행 패널의 2-pane 을 채운다.

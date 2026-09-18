@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { prisma } from "@dante/db";
 import { InviteForm, RevokeInviteButton } from "@/components/settings/team/invite-forms";
@@ -5,6 +6,8 @@ import { MemberControls } from "@/components/settings/team/team-forms";
 import { SettingsHeader } from "@/components/settings/settings-section";
 import { UserAvatar } from "@/components/user-avatar";
 import { requireTeamMember } from "@/lib/teams/access";
+
+export const metadata: Metadata = { title: "Members" };
 
 // 팀 멤버. 목록 + 역할 바꾸기·내보내기·나가기 + 초대. 규칙은 lib/teams/manage.ts·invites.ts.
 export default async function TeamMembersPage({

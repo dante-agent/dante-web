@@ -15,9 +15,9 @@ import type { PullRequestContext } from "@/lib/notifications/deliver";
 import {
   DISCORD_EVENTS,
   isDiscordWebhookUrl,
-  parseDiscordLocale,
   renderDiscordMessage,
 } from "@/lib/notifications/discord";
+import { parseNotificationLocale } from "@/lib/notifications/locale";
 import { discordErrorDetail, postDiscordMessage } from "@/lib/notifications/discord-send";
 import { SAMPLE_RUNS } from "@/lib/notifications/run-summary";
 import { enqueuePullRequestJob } from "@/lib/notifications/pull-request-job";
@@ -109,7 +109,7 @@ export async function saveGithubNotifications(
     prCommentCollapseOnPass: checked(formData, "prCommentCollapseOnPass"),
     prCommentFields: fields,
     prCommentFailedLimit: clampFailedLimit(Number(formData.get("prCommentFailedLimit"))),
-    prCommentLocale: parseDiscordLocale(formData.get("prCommentLocale")),
+    prCommentLocale: parseNotificationLocale(formData.get("prCommentLocale")),
     checkRunEnabled: checked(formData, "checkRunEnabled"),
     checkRunBlocking: checked(formData, "checkRunBlocking"),
   };
@@ -197,7 +197,7 @@ export async function saveDiscordNotifications(
   await saveNotificationSettings(project.id, {
     discordEnabled: enabled,
     discordEvents: events,
-    discordLocale: parseDiscordLocale(formData.get("discordLocale")),
+    discordLocale: parseNotificationLocale(formData.get("discordLocale")),
   });
   revalidatePath(settingsPath(project.ref));
   return { saved: true };
@@ -236,7 +236,7 @@ export async function sendDiscordTest(
     prUrl: null,
     failedLimit: settings.prCommentFailedLimit,
     // 저장 전에 고른 언어로 보낸다. 어떻게 보이는지 보려고 누르는 버튼이다.
-    locale: parseDiscordLocale(formData.get("discordLocale") ?? settings.discordLocale),
+    locale: parseNotificationLocale(formData.get("discordLocale") ?? settings.discordLocale),
     test: true,
   });
 
@@ -398,7 +398,7 @@ export async function saveSlackNotifications(
   const patch: Partial<NotificationSettings> = {
     slackEnabled: enabled,
     slackEvents: events,
-    slackLocale: parseDiscordLocale(formData.get("slackLocale")),
+    slackLocale: parseNotificationLocale(formData.get("slackLocale")),
   };
 
   if (channelId) {
@@ -463,7 +463,7 @@ export async function sendSlackTest(
         failedLimit: settings.prCommentFailedLimit,
         test: true,
         // 화면에서 지금 고른 언어로. 채널과 같은 이유로 저장 전에 시험해 볼 수 있다.
-        locale: parseDiscordLocale(formData.get("slackLocale") ?? settings.slackLocale),
+        locale: parseNotificationLocale(formData.get("slackLocale") ?? settings.slackLocale),
       }),
     });
   } catch (error) {

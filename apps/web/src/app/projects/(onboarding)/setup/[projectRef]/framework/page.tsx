@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { prisma } from "@dante/db";
 import { selectFramework } from "@/app/projects/(onboarding)/setup/[projectRef]/actions";
@@ -6,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth/user";
 import { accessibleProjectWhere } from "@/lib/teams/access";
 import { TEST_FRAMEWORKS } from "@/lib/projects/frameworks";
+
+export const metadata: Metadata = { title: "Test framework" };
 
 // 온보딩 3단계 — 테스트 러너 고르기.
 //

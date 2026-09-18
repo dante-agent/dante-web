@@ -10,8 +10,9 @@ import { LegalDocument, type LegalSection } from "@/components/legal/legal-docum
 //   - 법률 검토
 
 export const metadata: Metadata = {
-  title: "서비스 이용약관 · Dante",
+  title: "서비스 이용약관",
   description: "Dante 서비스 이용약관",
+  robots: { index: true, follow: true },
 };
 
 const SECTIONS: LegalSection[] = [

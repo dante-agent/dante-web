@@ -1,4 +1,6 @@
+import type { Metadata } from "next";
 import Image from "next/image";
+import { cache } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@dante/db";
@@ -16,6 +18,24 @@ import { listTeams } from "@/lib/teams/current";
 //
 // URL 에 팀 id 를 넣는 이유: 다른 탭에서 보고 있는 팀을 바꿔도 이 화면의 버튼이
 // 엉뚱한 팀에 적용되지 않는다. 멤버를 빼거나 팀을 지우는 화면이라 그 사고가 가장 크다.
+// generateMetadata 와 레이아웃이 같은 요청에서 둘 다 읽는다. cache 로 한 번만.
+const getTeamName = cache(async (teamId: string) => {
+  const team = await prisma.team.findUnique({ where: { id: teamId }, select: { name: true } });
+  return team?.name ?? null;
+});
+
+// 탭 제목: "Members · Acme · Dante". 팀을 여러 탭에 띄워도 구분되게 팀 이름을 넣는다.
+export async function generateMetadata({
+  params,
+}: LayoutProps<"/team/[teamId]/settings">): Promise<Metadata> {
+  const { teamId } = await params;
+  // 멤버가 아니면 여기서도 404 — 팀 이름이 제목으로 새지 않게 한다.
+  await requireTeamMember(teamId);
+  const name = await getTeamName(teamId);
+  if (!name) notFound();
+  return { title: { default: `${name} · Dante`, template: `%s · ${name} · Dante` } };
+}
+
 export default async function TeamSettingsLayout({
   children,
   params,
@@ -24,11 +44,8 @@ export default async function TeamSettingsLayout({
 
   // 멤버가 아니면 404. 페이지와 액션도 각자 다시 확인한다 (AGENTS.md).
   const { user } = await requireTeamMember(teamId);
-  const [team, teams] = await Promise.all([
-    prisma.team.findUnique({ where: { id: teamId }, select: { name: true } }),
-    listTeams(user.id),
-  ]);
-  if (!team) notFound();
+  const [teamName, teams] = await Promise.all([getTeamName(teamId), listTeams(user.id)]);
+  if (!teamName) notFound();
 
   const headerUser = { name: displayName(user), avatarUrl: avatarUrl(user) };
   const items = [
@@ -60,7 +77,7 @@ export default async function TeamSettingsLayout({
 
       <AccountSidebar />
       <main className="ml-14 p-8">
-        <SettingsShell title="Team" scope={team.name} items={items}>
+        <SettingsShell title="Team" scope={teamName} items={items}>
           {children}
         </SettingsShell>
       </main>

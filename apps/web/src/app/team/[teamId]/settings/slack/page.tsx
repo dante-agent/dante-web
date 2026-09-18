@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { prisma } from "@dante/db";
 import { StatusBadge } from "@/components/settings/notifications/controls";
 import { SettingsHeader } from "@/components/settings/settings-section";
@@ -19,6 +20,8 @@ const ERRORS: Record<string, string> = {
   code: "Slack didn't send an authorization code. Try again.",
   exchange: "Slack refused the connection.",
 };
+
+export const metadata: Metadata = { title: "Slack" };
 
 export default async function TeamSlackPage({
   params,

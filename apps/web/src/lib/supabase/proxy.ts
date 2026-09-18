@@ -4,7 +4,7 @@ import { LOGIN_PATH, safeNext } from "@/lib/auth/redirect";
 
 // 로그인 없이 볼 수 있는 경로(하위 경로 포함).
 // /auth/* 는 OAuth 콜백이라 반드시 열어둬야 한다 — 막으면 로그인 자체가 불가능하다.
-const PUBLIC_PREFIXES = ["/auth", "/terms", "/privacy"];
+const PUBLIC_PREFIXES = ["/auth", "/terms", "/privacy", "/robots.txt", "/sitemap.xml"];
 
 function isPublic(pathname: string) {
   if (pathname === LOGIN_PATH) return true;
@@ -12,7 +12,8 @@ function isPublic(pathname: string) {
 }
 
 // 공개 경로 중 세션과 아예 무관한 것. /auth 는 로그인 흐름이라 빼면 안 된다.
-const STATIC_PUBLIC = ["/terms", "/privacy"];
+// robots.txt·sitemap.xml 은 크롤러가 쿠키 없이 부른다. 막으면 로그인 화면 HTML 을 받아 간다.
+const STATIC_PUBLIC = ["/terms", "/privacy", "/robots.txt", "/sitemap.xml"];
 
 function isStaticPublic(pathname: string) {
   return STATIC_PUBLIC.some((path) => pathname === path || pathname.startsWith(`${path}/`));

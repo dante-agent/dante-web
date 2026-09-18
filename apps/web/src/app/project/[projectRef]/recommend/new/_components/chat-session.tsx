@@ -143,9 +143,9 @@ export function ChatSession({
         await Promise.all(
           result.versionIds.map((versionId) => saveRecommendChat(projectRef, versionId, stored))
         );
-        // 배치로 만든 버전을 전부 tests 쿼리로 넘겨 탭으로 보여주고, run=1 로 열자마자 실행한다.
+        // 배치로 만든 버전을 전부 tests 쿼리로 넘겨 탭으로 보여준다. 생성 직후에는 실행하지 않는다.
         const tests = result.versionIds.join(",");
-        router.push(`/project/${projectRef}/recommend/${result.versionId}?tests=${tests}&run=1`);
+        router.push(`/project/${projectRef}/recommend/${result.versionId}?tests=${tests}`);
       } catch (error) {
         unstable_rethrow(error);
         pushAssistant(ERROR_MESSAGE.failed);
