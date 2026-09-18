@@ -127,7 +127,7 @@ export function TestRunPanel({
                 ? undefined
                 : "The test runner is not configured in this environment."
             }
-            className="bg-primary text-primary-foreground flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
+            className="bg-primary text-primary-foreground flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
           >
             {running ? (
               <Loader2 className="size-3.5 animate-spin" />
