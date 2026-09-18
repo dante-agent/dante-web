@@ -29,8 +29,6 @@ export default async function SessionDetailPage({
 }: PageProps<"/project/[projectRef]/recommend/[session]">) {
   const { projectRef, session: versionId } = await params;
   const query = await searchParams;
-  // 재생성 직후 이동에 붙는 ?run=1 — 새 버전을 열자마자 한 번 자동 실행한다.
-  const autoRun = query.run === "1";
   const { user, project } = await requireProjectContext(projectRef);
 
   const detail = await getGeneratedSessionDetail(projectRef, user.id, versionId);
@@ -80,7 +78,6 @@ export default async function SessionDetailPage({
           projectRef={projectRef}
           files={files}
           runnerConfigured={runnerConfigured}
-          autoRun={autoRun}
         />
       }
     />

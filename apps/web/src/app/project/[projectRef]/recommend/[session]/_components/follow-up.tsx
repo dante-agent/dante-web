@@ -6,7 +6,7 @@ import { regenerateFromInstruction, saveRecommendChat } from "../../actions";
 import { ChatThread, type ChatMessage } from "../../_components/chat-thread";
 
 // 세션 상세 좌측 채팅. 후속 요청을 보내면 그 요청대로 테스트를 고친 새 버전을 만들고,
-// 대화를 이어받은 그 세션으로 이동해 자동 실행한다(?run=1). 실패 시 오류를 채팅에 남긴다.
+// 대화를 이어받은 그 세션으로 이동한다(실행은 사용자가 Run 을 눌러 한다). 실패 시 오류를 채팅에 남긴다.
 //
 // 대화는 DB(TestChatThread)에 영구 저장한다. 초기 메시지는 서버(page.tsx)가 읽어 넘겨주고,
 // 바뀔 때마다 저장해 새로고침·재접속·다른 기기에서도 이어진다.
@@ -56,8 +56,8 @@ export function FollowUp({
           next.map(strip)
         );
         if (result.ok) {
-          // 고친 새 버전(대화 이어받음)으로 이동해 자동 실행한다.
-          router.push(`/project/${projectRef}/recommend/${result.versionId}?run=1`);
+          // 고친 새 버전(대화 이어받음)으로 이동한다.
+          router.push(`/project/${projectRef}/recommend/${result.versionId}`);
           return;
         }
         setMessages((m) => [
