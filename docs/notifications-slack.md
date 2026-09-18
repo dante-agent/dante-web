@@ -3,6 +3,10 @@
 알림 기획 중 **Slack** 표면만 다룬다. GitHub 은 `notifications-github.md`, Discord 와
 Email 은 별도 문서.
 
+> 구현 메모 (2026-09-18): 팀 모델이 들어온 뒤라 워크스페이스 연결은 **사용자가 아니라
+> 팀**에 붙였다(`SlackInstallation.teamId`, 팀 설정 `/team/<id>/settings/slack`, owner 만).
+> 아래 "사용자당"은 팀당으로 읽는다. §6 멘션과 §8 의 채널·초대 배지는 아직 없다.
+
 설정 위치는 GitHub 과 같은 `/project/<ref>/settings/notifications` 다. 다만 이 표면은
 **두 층으로 쪼개진다** — 워크스페이스를 붙이는 일은 사람당 한 번이고, 어느 채널로
 무엇을 보낼지는 프로젝트마다 다르다.
