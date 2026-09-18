@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { DEMO_BLOCKED_MESSAGE, isDemoUser } from "@/lib/auth/demo";
 import { displayName, requireUser } from "@/lib/auth/user";
-import { isTeamId } from "@/lib/teams/access";
+import { deleteSlackInstallation } from "@/lib/slack/installation";
+import { getTeamRole, isTeamId } from "@/lib/teams/access";
 import * as invites from "@/lib/teams/invites";
 import * as manage from "@/lib/teams/manage";
 
@@ -117,4 +118,23 @@ export async function deleteTeam(_prev: TeamFormState, formData: FormData) {
 
   revalidatePath("/projects");
   redirect("/projects");
+}
+
+/**
+ * Slack 연결 끊기. 팀 설정이라 owner 만 한다(팀 모델 결정 2).
+ *
+ * 프로젝트마다 고른 채널은 지우지 않는다. 다시 연결하면 그대로 이어서 보낸다 —
+ * 같은 워크스페이스를 다시 붙이는 경우가 대부분이라, 채널을 다시 고르게 할 이유가 없다.
+ */
+export async function disconnectSlack(_prev: TeamFormState, formData: FormData) {
+  const { user, teamId, blocked } = await begin(formData);
+  if (!teamId) return blocked ?? NOT_FOUND;
+
+  const role = await getTeamRole(teamId, user.id);
+  if (!role) return NOT_FOUND;
+  if (role !== "owner") return { ok: false, message: "Only owners can disconnect Slack." };
+
+  await deleteSlackInstallation(teamId);
+  revalidatePath(`/team/${teamId}/settings/slack`);
+  return { ok: true, message: "Disconnected." };
 }

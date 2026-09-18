@@ -53,6 +53,7 @@ model User {
   chatConversations  ChatConversation[]
   teamMemberships    TeamMember[]
   sentTeamInvites    TeamInvite[]
+  slackInstallations SlackInstallation[]
   /// 가입할 때 자동으로 만든 "내 팀". 사용자당 하나다(Team.personalForUserId 가 unique).
   personalTeam       Team?                @relation("PersonalTeam")
   /// Restrict: 쓰는 사람이 있는 플랜을 지우면 그 사람들 한도가 조용히 기본값으로
@@ -111,6 +112,7 @@ model Team {
   invites       TeamInvite[]
   projects      Project[]
   installations GithubInstallation[]
+  slack         SlackInstallation?
 
   @@map("teams")
 }
@@ -485,6 +487,38 @@ model TestRun {
   /// "이 버전의 최근 실행" 을 자주 뽑는다.
   @@index([testFileVersionId, createdAt])
   @@map("test_runs")
+}
+
+/// 팀에 붙인 Slack 워크스페이스 (apps/web/src/lib/slack/). 팀당 하나.
+///
+/// 팀에 다는 이유는 GitHub 설치와 같다 — 레포를 다섯 개 연결한 팀이 워크스페이스를
+/// 다섯 번 붙일 이유가 없다. 어느 채널로 보낼지는 프로젝트 알림 설정이 정한다.
+/// 팀당 하나로 묶은 이유: 프로젝트 하나는 채널 하나로 시작한다(docs/notifications-slack.md
+/// 범위 밖). 다른 워크스페이스로 다시 연결하면 이 행을 덮어쓴다.
+model SlackInstallation {
+  id     String @id @default(uuid()) @db.Uuid
+  teamId String @unique @map("team_id") @db.Uuid
+
+  /// Slack 쪽 워크스페이스 id ("T0123"). 이름은 바뀔 수 있어 표시용으로만 캐시한다.
+  slackTeamId       String   @map("slack_team_id")
+  slackTeamName     String   @map("slack_team_name")
+  botUserId         String   @map("bot_user_id")
+  /// xoxb- 토큰. 평문으로 두지 않는다 (lib/crypto/secret.ts).
+  encryptedBotToken String   @map("encrypted_bot_token")
+  /// 승인받은 scope. 나중에 scope 를 늘리면 다시 승인받아야 하는지 여기서 판단한다.
+  scopes            String[]
+
+  /// 연결한 사람. 탈퇴해도 연결은 팀에 남는다.
+  installedById String?   @map("installed_by_id") @db.Uuid
+  /// token_revoked / account_inactive 를 만난 시각. null 이면 살아 있다.
+  revokedAt     DateTime? @map("revoked_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  team        Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  installedBy User? @relation(fields: [installedById], references: [id], onDelete: SetNull)
+
+  @@map("slack_installations")
 }
 
 /// 프로젝트당 1행. 알림을 "언제, 어디로, 어떻게" 보낼지의 설정값.
