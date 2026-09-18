@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { AlertTriangle, Sparkles } from "lucide-react";
+import { AlertTriangle, LoaderCircle, Sparkles } from "lucide-react";
+import { unstable_rethrow, useRouter } from "next/navigation";
 import type {
   RecommendationOutcome,
   AiRecommendationResult,
 } from "@/lib/projects/ai-recommendations";
 import type { TestRecommendation } from "@/lib/projects/recommendations";
-import { rerankRecommendations } from "../actions";
+import { generatePlannedTests, rerankRecommendations, saveRecommendChat } from "../actions";
 import { SuggestedList } from "./suggested-list";
 
 // "initial" = 아직 버튼을 안 눌러 휴리스틱만 본 상태. 나머지는 액션이 준 outcome.
@@ -29,12 +30,15 @@ const TONE_CLASS: Record<"muted" | "ok" | "warn" | "error", string> = {
   error: "text-destructive",
 };
 
+/** 한 번에 배치 생성할 수 있는 최대 개수(서버 MAX_MATCHES 와 맞춘다). */
+const MAX_SELECT = 3;
+
 /**
- * 추천 목록 + "AI 로 정렬" 버튼.
+ * 추천 목록 + "AI 로 정렬" + 여러 개를 골라 한 번에 만드는 배치 생성.
  *
- * 처음 뜨는 목록(initial)은 서버가 경로 휴리스틱으로 공짜로 만든 것이다. 버튼을
- * 누르면 서버 액션이 결과와 함께 outcome 을 돌려주고, 화면은 그 outcome 으로
- * 성공·예산초과·실패를 구분해 안내한다. 실패해도 목록은 휴리스틱으로 유지된다.
+ * 처음 뜨는 목록(initial)은 서버가 경로 휴리스틱으로 공짜로 만든 것이다. "Sort with AI"는
+ * 재정렬만 하고, 카드를 체크해 "Generate selected"를 누르면 프롬프트 경로와 같은 배치 생성으로
+ * 세션(탭)으로 이동한다.
  */
 export function SuggestedSection({
   projectRef,
@@ -43,9 +47,13 @@ export function SuggestedSection({
   projectRef: string;
   initial: TestRecommendation[];
 }) {
+  const router = useRouter();
   const [recommendations, setRecommendations] = useState(initial);
   const [status, setStatus] = useState<Status>("initial");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [genError, setGenError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [generating, startGenerate] = useTransition();
 
   function rerank() {
     startTransition(async () => {
@@ -54,8 +62,49 @@ export function SuggestedSection({
         setRecommendations(result.recommendations);
         setStatus(result.outcome);
       } catch {
-        // 액션이 폴백조차 못 하고 죽은 경우 — 목록은 그대로 두고 실패만 알린다.
         setStatus("failed");
+      }
+    });
+  }
+
+  function toggle(filePath: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(filePath)) next.delete(filePath);
+      else if (next.size < MAX_SELECT) next.add(filePath);
+      return next;
+    });
+  }
+
+  function generateSelected() {
+    if (selected.size === 0 || generating) return;
+    setGenError(null);
+    const paths = [...selected];
+    startGenerate(async () => {
+      try {
+        const result = await generatePlannedTests(projectRef, paths);
+        if (!result.ok) {
+          setGenError(
+            result.reason === "budget"
+              ? "You've exceeded this month's AI budget."
+              : result.reason === "preview"
+                ? "Generated a preview, but it can't be saved because you don't own this project."
+                : "Test generation failed. Check your API key and AI settings."
+          );
+          return;
+        }
+        await saveRecommendChat(projectRef, result.versionId, [
+          {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            text: `Generated ${result.generated} test file${result.generated > 1 ? "s" : ""} from your selection.`,
+          },
+        ]);
+        const tests = result.versionIds.join(",");
+        router.push(`/project/${projectRef}/recommend/${result.versionId}?tests=${tests}&run=1`);
+      } catch (error) {
+        unstable_rethrow(error);
+        setGenError("Couldn't run test generation. Please try again in a moment.");
       }
     });
   }
@@ -80,7 +129,51 @@ export function SuggestedSection({
           {pending ? "Sorting..." : "Sort with AI"}
         </button>
       </div>
-      <SuggestedList projectRef={projectRef} recommendations={recommendations} />
+
+      {selected.size > 0 && (
+        <div className="border-border bg-card flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
+          <span className="text-muted-foreground text-xs">
+            {selected.size} selected{selected.size >= MAX_SELECT ? ` (max ${MAX_SELECT})` : ""}
+          </span>
+          <div className="flex items-center gap-2">
+            {genError && (
+              <span className="text-destructive flex items-center gap-1 text-xs">
+                <AlertTriangle className="size-3 shrink-0" />
+                {genError}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => setSelected(new Set())}
+              disabled={generating}
+              className="text-muted-foreground hover:text-foreground text-xs disabled:opacity-50"
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              onClick={generateSelected}
+              disabled={generating}
+              className="bg-primary text-primary-foreground flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+            >
+              {generating ? (
+                <LoaderCircle className="size-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="size-3.5" />
+              )}
+              {generating ? "Generating..." : `Generate ${selected.size} selected`}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <SuggestedList
+        projectRef={projectRef}
+        recommendations={recommendations}
+        selected={selected}
+        onToggle={toggle}
+        selectionFull={selected.size >= MAX_SELECT}
+      />
     </div>
   );
 }

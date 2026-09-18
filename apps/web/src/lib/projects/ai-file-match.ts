@@ -22,6 +22,7 @@ const MAX_OUTPUT_TOKENS = 1_000;
 
 const matchSchema = z.object({
   files: z.array(z.string()).max(MAX_MATCHES),
+  reasoning: z.string(),
 });
 
 /**
@@ -30,7 +31,8 @@ const matchSchema = z.object({
  *   error   — AI 호출이 실패했다(키·모델 등)
  */
 export type FileMatchOutcome = "matched" | "budget" | "error";
-export type FileMatchResult = { files: string[]; outcome: FileMatchOutcome };
+/** reasoning — 왜 이 파일들을(또는 왜 아무것도) 골랐는지 1~2문장. 채팅 메시지에 그대로 실린다. */
+export type FileMatchResult = { files: string[]; outcome: FileMatchOutcome; reasoning: string };
 
 export async function matchFilesToPrompt(args: {
   userId: string;
@@ -38,7 +40,9 @@ export async function matchFilesToPrompt(args: {
   userPrompt: string;
   candidates: TestRecommendation[];
 }): Promise<FileMatchResult> {
-  if (args.candidates.length === 0) return { files: [], outcome: "matched" };
+  if (args.candidates.length === 0) {
+    return { files: [], outcome: "matched", reasoning: "There are no files without tests yet." };
+  }
 
   const prompt = buildMatchPrompt(args.candidates, args.userPrompt);
   const reserved = await reserveAiBudget({
@@ -47,7 +51,7 @@ export async function matchFilesToPrompt(args: {
     surface: "recommend",
     estimateUsd: maxCostUsd(MODEL, { prompt, maxOutputTokens: MAX_OUTPUT_TOKENS }),
   });
-  if (!reserved.ok) return { files: [], outcome: "budget" };
+  if (!reserved.ok) return { files: [], outcome: "budget", reasoning: "" };
   const { reservation } = reserved;
 
   try {
@@ -61,11 +65,11 @@ export async function matchFilesToPrompt(args: {
     // AI 가 지어낸(후보에 없는) 경로는 버리고, 중복 제거 후 최대 3개만.
     const allowed = new Set(args.candidates.map((c) => c.filePath));
     const files = [...new Set(object.files)].filter((f) => allowed.has(f)).slice(0, MAX_MATCHES);
-    return { files, outcome: "matched" };
+    return { files, outcome: "matched", reasoning: object.reasoning.trim() };
   } catch (error) {
     await settleAiUsage(reservation, usageFromError(error));
     console.error("[ai-file-match] 매칭 실패", error);
-    return { files: [], outcome: "error" };
+    return { files: [], outcome: "error", reasoning: "" };
   }
 }
 
@@ -78,6 +82,7 @@ function buildMatchPrompt(candidates: TestRecommendation[], userPrompt: string):
     "From the candidate source-file paths below, pick the ones that best match what the user described.",
     `Return at most ${MAX_MATCHES} paths, most relevant first. Only choose paths from the list — never invent one.`,
     "If nothing in the list matches, return an empty list.",
+    "Also return a short reasoning (1-2 sentences, plain text, same language as the user's request) explaining why you picked those files, or why nothing matched.",
     "",
     list,
   ].join("\n");

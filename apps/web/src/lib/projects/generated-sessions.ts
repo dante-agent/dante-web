@@ -7,7 +7,7 @@ import { getOwnedProjectId } from "@/lib/projects/queries";
 // 버전들이 사이드바 목록과 세션 상세 화면의 데이터 소스가 된다.
 
 /** 사이드바·목록에서 쓰는 상태. 마지막 실행(TestRun)에서 유도한다. */
-export type SessionStatus = "needs_clarification" | "in_progress" | "completed";
+export type SessionStatus = "not_run" | "running" | "passed" | "failed";
 
 export interface GeneratedSession {
   /** 버전 id = 세션 id (`/recommend/{id}`). */
@@ -15,6 +15,8 @@ export interface GeneratedSession {
   title: string;
   status: SessionStatus;
   updatedAt: string;
+  /** 같은 프롬프트로 배치 생성된 세션끼리 공유하는 묶음 id. 단건이면 null. */
+  batchId: string | null;
 }
 
 export interface GeneratedSessionDetail {
@@ -27,6 +29,8 @@ export interface GeneratedSessionDetail {
   version: number;
   content: string;
   createdAt: Date;
+  /** 사용자가 남긴 피드백. "up" | "down" | null. */
+  feedback: string | null;
   latestRun: {
     status: string;
     logs: string | null;
@@ -34,11 +38,13 @@ export interface GeneratedSessionDetail {
   } | null;
 }
 
-/** 실행이 없으면 "확인 필요"(아직 안 돌림). 돌고 있으면 진행 중, 통과면 완료. */
+/** 실행 기록에서 상태를 유도한다. 실행이 없으면 "아직 안 돌림", 돌는 중이면 running,
+ * 통과면 passed, 그 밖(failed·error)은 failed 로 접는다. */
 function statusFromRun(runStatus: string | undefined): SessionStatus {
-  if (runStatus === "passed") return "completed";
-  if (runStatus === "queued" || runStatus === "running") return "in_progress";
-  return "needs_clarification";
+  if (runStatus === "passed") return "passed";
+  if (runStatus === "queued" || runStatus === "running") return "running";
+  if (runStatus === "failed" || runStatus === "error") return "failed";
+  return "not_run";
 }
 
 function sessionTitle(componentName: string, version: number): string {
@@ -65,6 +71,7 @@ export async function getGeneratedSessions(
       id: true,
       version: true,
       createdAt: true,
+      batchId: true,
       testFile: { select: { component: { select: { name: true } } } },
       runs: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true } },
     },
@@ -75,6 +82,7 @@ export async function getGeneratedSessions(
     title: sessionTitle(version.testFile.component.name, version.version),
     status: statusFromRun(version.runs[0]?.status),
     updatedAt: version.createdAt.toISOString(),
+    batchId: version.batchId,
   }));
 }
 
@@ -97,6 +105,7 @@ export async function getGeneratedSessionDetail(
       version: true,
       content: true,
       createdAt: true,
+      feedback: true,
       testFile: {
         select: { path: true, component: { select: { name: true, filePath: true } } },
       },
@@ -117,6 +126,55 @@ export async function getGeneratedSessionDetail(
     version: version.version,
     content: version.content,
     createdAt: version.createdAt,
+    feedback: version.feedback,
     latestRun: version.runs[0] ?? null,
   };
+}
+
+/**
+ * 세션(= TestFileVersion) 하나를 지운다. 실행 기록(TestRun)·대화(TestChatThread)는 FK Cascade 로
+ * 함께 지워진다. 그 파일에 남은 버전이 하나도 없으면 빈 Component·TestFile 도 정리한다.
+ *
+ * versionId 는 클라이언트에서 오므로 믿지 않는다 — 이 사용자 소유 프로젝트의, repo 가 아닌
+ * (추천/사용자가 만든) 버전일 때만 지운다. 지웠으면 true.
+ */
+export async function deleteGeneratedSession(
+  projectRef: string,
+  userId: string,
+  versionId: string
+): Promise<boolean> {
+  const projectId = await getOwnedProjectId(projectRef, userId);
+  if (!projectId) return false;
+
+  const version = await prisma.testFileVersion.findFirst({
+    where: { id: versionId, source: { not: "repo" }, testFile: { component: { projectId } } },
+    select: { id: true, testFileId: true, testFile: { select: { componentId: true } } },
+  });
+  if (!version) return false;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.testFileVersion.delete({ where: { id: version.id } });
+    // 이 파일에 남은 버전(레포 포함)이 없으면 Component 를 지운다 — TestFile 은 Cascade 로 따라온다.
+    const remaining = await tx.testFileVersion.count({ where: { testFileId: version.testFileId } });
+    if (remaining === 0) {
+      await tx.component.delete({ where: { id: version.testFile.componentId } });
+    }
+  });
+  return true;
+}
+
+/** 세션(버전) 하나에 피드백을 남긴다("up"|"down", 같은 값을 다시 누르면 null 로 해제). 소유 검증 포함. */
+export async function setSessionFeedback(
+  projectRef: string,
+  userId: string,
+  versionId: string,
+  value: "up" | "down" | null
+): Promise<boolean> {
+  const projectId = await getOwnedProjectId(projectRef, userId);
+  if (!projectId) return false;
+  const res = await prisma.testFileVersion.updateMany({
+    where: { id: versionId, testFile: { component: { projectId } } },
+    data: { feedback: value },
+  });
+  return res.count > 0;
 }

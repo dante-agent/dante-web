@@ -39,6 +39,8 @@ export async function generateTestForFile(args: {
   /** 넘기면 새로 짜는 대신 실패한 이전 테스트를 실패 로그 근거로 고친다(재생성). */
   previousCode?: string;
   failureLogs?: string;
+  /** 넘기면 previousCode 를 이 후속 요청대로 고친다(채팅 후속 수정). */
+  instruction?: string;
 }): Promise<GenerateTestResult> {
   try {
     // 락 없는 사전 검사. 막힐 요청에 GitHub API 를 태우지 않으려고 파일을 읽기 전에 본다.
@@ -69,6 +71,7 @@ export async function generateTestForFile(args: {
       toolkit: true,
       previousCode: args.previousCode,
       failureLogs: args.failureLogs,
+      instruction: args.instruction,
     });
     if (!generated) return { ok: false, reason: "budget" };
 
@@ -108,6 +111,8 @@ export async function generateTestCode(args: {
   /** 넘기면 새로 짜는 대신 실패한 이전 테스트를 실패 로그 근거로 고친다(재생성) */
   previousCode?: string;
   failureLogs?: string;
+  /** 넘기면 previousCode 를 이 후속 요청대로 고친다(채팅 후속 수정) */
+  instruction?: string;
 }): Promise<{ testPath: string; code: string } | null> {
   const testPath = args.testPath ?? testPathFor(args.filePath);
   const prompt = buildTestPrompt({
@@ -119,6 +124,7 @@ export async function generateTestCode(args: {
     dependencies: args.dependencies,
     previousCode: args.previousCode,
     failureLogs: args.failureLogs,
+    instruction: args.instruction,
   });
   // 키가 없어 던지면 예약이 남으므로 예약 전에 불러 둔다.
   const model = chatModel();
