@@ -7,7 +7,7 @@ import { getOwnedProjectId } from "@/lib/projects/queries";
 // 버전들이 사이드바 목록과 세션 상세 화면의 데이터 소스가 된다.
 
 /** 사이드바·목록에서 쓰는 상태. 마지막 실행(TestRun)에서 유도한다. */
-export type SessionStatus = "needs_clarification" | "in_progress" | "completed";
+export type SessionStatus = "not_run" | "running" | "passed" | "failed";
 
 export interface GeneratedSession {
   /** 버전 id = 세션 id (`/recommend/{id}`). */
@@ -34,11 +34,13 @@ export interface GeneratedSessionDetail {
   } | null;
 }
 
-/** 실행이 없으면 "확인 필요"(아직 안 돌림). 돌고 있으면 진행 중, 통과면 완료. */
+/** 실행 기록에서 상태를 유도한다. 실행이 없으면 "아직 안 돌림", 돌는 중이면 running,
+ * 통과면 passed, 그 밖(failed·error)은 failed 로 접는다. */
 function statusFromRun(runStatus: string | undefined): SessionStatus {
-  if (runStatus === "passed") return "completed";
-  if (runStatus === "queued" || runStatus === "running") return "in_progress";
-  return "needs_clarification";
+  if (runStatus === "passed") return "passed";
+  if (runStatus === "queued" || runStatus === "running") return "running";
+  if (runStatus === "failed" || runStatus === "error") return "failed";
+  return "not_run";
 }
 
 function sessionTitle(componentName: string, version: number): string {

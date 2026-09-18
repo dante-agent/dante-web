@@ -35,7 +35,8 @@ export default async function RecommendPage({
           <SuggestedSection projectRef={projectRef} initial={recommendations} />
         ) : (
           <p className="text-muted-foreground py-12 text-center text-sm">
-            No files without tests were found.
+            Every file already has tests, or none were detected. Use the prompt above to describe
+            what you want tested.
           </p>
         ))}
       {activeTab === "sessions" &&
@@ -43,7 +44,7 @@ export default async function RecommendPage({
           <SessionList projectRef={projectRef} sessions={sessions} />
         ) : (
           <p className="text-muted-foreground py-12 text-center text-sm">
-            No generated test sessions yet.
+            No generated test sessions yet. Describe a component in the prompt above to create one.
           </p>
         ))}
       {activeTab === "scheduled" && (

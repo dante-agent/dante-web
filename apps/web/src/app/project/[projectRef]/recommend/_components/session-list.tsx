@@ -5,15 +5,17 @@ import type { GeneratedSession, SessionStatus } from "@/lib/projects/generated-s
 import { SessionDeleteButton } from "./session-delete-button";
 
 const STATUS_LABEL: Record<SessionStatus, string> = {
-  needs_clarification: "Needs clarification",
-  in_progress: "In progress",
-  completed: "Completed",
+  not_run: "Not run",
+  running: "Running",
+  passed: "Passed",
+  failed: "Failed",
 };
 
-const STATUS_VARIANT: Record<SessionStatus, "outline" | "secondary" | "default"> = {
-  needs_clarification: "outline",
-  in_progress: "secondary",
-  completed: "default",
+const STATUS_VARIANT: Record<SessionStatus, "outline" | "info" | "success" | "destructive"> = {
+  not_run: "outline",
+  running: "info",
+  passed: "success",
+  failed: "destructive",
 };
 
 export function SessionList({

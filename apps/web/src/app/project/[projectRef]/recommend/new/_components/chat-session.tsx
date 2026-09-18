@@ -50,6 +50,9 @@ export function ChatSession({
     if (startedRef.current) return;
     startedRef.current = true;
     submit(initialPrompt);
+    // 프롬프트를 URL 에서 지운다 — 이 화면에서 새로고침·뒤로가기 해도 다시 생성(재과금)되지
+    // 않게. prompt 가 없으면 new/page.tsx 가 목록으로 리다이렉트한다.
+    window.history.replaceState(null, "", window.location.pathname);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -125,7 +128,11 @@ export function ChatSession({
           pushAssistant(ERROR_MESSAGE[result.reason]);
           return;
         }
-        const introText = `Generated ${result.generated} test file${result.generated > 1 ? "s" : ""}. Opening the session now…`;
+        const failedNote =
+          result.failed.length > 0
+            ? ` Couldn't generate ${result.failed.length} (${result.failed.join(", ")}) — try those again.`
+            : "";
+        const introText = `Generated ${result.generated} test file${result.generated > 1 ? "s" : ""}.${failedNote} Opening the session now…`;
         const transcript: ChatMessage[] = [
           ...messages,
           { id: uid(), role: "assistant", text: introText },

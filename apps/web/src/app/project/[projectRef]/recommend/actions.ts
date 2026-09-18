@@ -172,7 +172,14 @@ export async function planTestGeneration(
  *   preview    — 생성은 됐지만 소유자가 아니라 저장을 못해 이동할 세션이 없음
  */
 export type PromptGenerateResult =
-  | { ok: true; versionId: string; versionIds: string[]; generated: number }
+  | {
+      ok: true;
+      versionId: string;
+      versionIds: string[];
+      generated: number;
+      /** 이번 배치에서 생성에 실패한 파일들의 표시 이름. 채팅에서 "이건 못 만들었다"고 알린다. */
+      failed: string[];
+    }
   | { ok: false; reason: "budget" | "preview" | "error" };
 
 /**
@@ -214,18 +221,21 @@ export async function generatePlannedTests(
   );
 
   const versionIds: string[] = [];
+  const failed: string[] = [];
   let generated = 0;
   let lastFailure: "budget" | "error" | null = null;
-  for (const result of results) {
+  results.forEach((result, index) => {
     if (!result.ok) {
       if (result.reason !== "not-found") lastFailure = result.reason;
-      continue;
+      failed.push(targets[index].componentName);
+      return;
     }
     generated += 1;
     if (result.versionId) versionIds.push(result.versionId);
-  }
+  });
 
-  if (versionIds.length > 0) return { ok: true, versionId: versionIds[0], versionIds, generated };
+  if (versionIds.length > 0)
+    return { ok: true, versionId: versionIds[0], versionIds, generated, failed };
   if (generated > 0) return { ok: false, reason: "preview" }; // 만들었지만 저장 못함(소유자 아님)
   return { ok: false, reason: lastFailure === "budget" ? "budget" : "error" };
 }

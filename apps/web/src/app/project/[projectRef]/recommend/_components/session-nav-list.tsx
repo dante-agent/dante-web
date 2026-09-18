@@ -1,18 +1,20 @@
-import { CheckCircle2, CircleDot, HelpCircle } from "lucide-react";
+import { CheckCircle2, Circle, LoaderCircle, XCircle } from "lucide-react";
 import Link from "next/link";
 import type { GeneratedSession, SessionStatus } from "@/lib/projects/generated-sessions";
 import { SessionDeleteButton } from "./session-delete-button";
 
 const STATUS_ICON: Record<SessionStatus, typeof CheckCircle2> = {
-  needs_clarification: HelpCircle,
-  in_progress: CircleDot,
-  completed: CheckCircle2,
+  not_run: Circle,
+  running: LoaderCircle,
+  passed: CheckCircle2,
+  failed: XCircle,
 };
 
 const STATUS_COLOR: Record<SessionStatus, string> = {
-  needs_clarification: "text-brand-orange",
-  in_progress: "text-brand-cobalt",
-  completed: "text-brand-mint",
+  not_run: "text-muted-foreground",
+  running: "text-brand-cobalt",
+  passed: "text-brand-mint",
+  failed: "text-brand-orange",
 };
 
 export function SessionNavList({
@@ -43,7 +45,11 @@ export function SessionNavList({
               href={`/project/${projectRef}/recommend/${session.id}`}
               className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left"
             >
-              <Icon className={`size-3.5 shrink-0 ${STATUS_COLOR[session.status]}`} />
+              <Icon
+                className={`size-3.5 shrink-0 ${STATUS_COLOR[session.status]} ${
+                  session.status === "running" ? "animate-spin" : ""
+                }`}
+              />
               <span className="text-sidebar-foreground truncate text-xs">{session.title}</span>
             </Link>
             <SessionDeleteButton
