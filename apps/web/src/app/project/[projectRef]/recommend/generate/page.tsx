@@ -1,6 +1,9 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { requireProjectContext } from "@/lib/projects/queries";
 import { GeneratePerformance } from "./_components/generate-performance";
+
+export const metadata: Metadata = { title: "Generating tests" };
 
 // 한 번에 만들 수 있는 최대 파일 수(서버 MAX_MATCHES 와 맞춘다).
 const MAX_FILES = 3;
