@@ -1,12 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
-import { unstable_rethrow, useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { unstable_rethrow } from "next/navigation";
+import { GenerationSteps } from "@/components/generation/generation-steps";
+import { SendingFiles } from "@/components/generation/sending-files";
 import { regenerateFromInstruction, saveRecommendChat } from "../../actions";
 import { ChatThread, type ChatMessage } from "../../_components/chat-thread";
+import { isRegenerating, useRegeneration } from "./regeneration";
 
 // 세션 상세 좌측 채팅. 후속 요청을 보내면 그 요청대로 테스트를 고친 새 버전을 만들고,
 // 대화를 이어받은 그 세션으로 이동한다(실행은 사용자가 Run 을 눌러 한다). 실패 시 오류를 채팅에 남긴다.
+// 기다리는 동안엔 생성 화면과 같은 연출을 한다 — 여기엔 파일 전송·단계, 우측엔 코드 타이핑(regeneration.tsx).
 //
 // 대화는 DB(TestChatThread)에 영구 저장한다. 초기 메시지는 서버(page.tsx)가 읽어 넘겨주고,
 // 바뀔 때마다 저장해 새로고침·재접속·다른 기기에서도 이어진다.
@@ -23,15 +27,19 @@ const strip = ({ id, role, text }: ChatMessage) => ({ id, role, text });
 export function FollowUp({
   projectRef,
   sessionId,
+  targetFile,
   initialMessages,
 }: {
   projectRef: string;
   sessionId: string;
+  /** 테스트 대상 소스 파일 — 전송 연출에 보여준다. */
+  targetFile: string;
   initialMessages: ChatMessage[];
 }) {
-  const router = useRouter();
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
-  const [pending, startTransition] = useTransition();
+  const regeneration = useRegeneration();
+  const { stage, start } = regeneration;
+  const pending = isRegenerating(regeneration);
   // 서버가 준 초기값을 그대로 다시 저장하지 않으려고, 첫 렌더의 저장은 건너뛴다.
   const hydrated = useRef(false);
 
@@ -44,10 +52,15 @@ export function FollowUp({
     void saveRecommendChat(projectRef, sessionId, messages.map(strip));
   }, [projectRef, sessionId, messages]);
 
+  const fail = (text: string) => {
+    setMessages((m) => [...m, { id: crypto.randomUUID(), role: "assistant", text }]);
+    return { ok: false as const, message: text };
+  };
+
   const send = (text: string) => {
     const next: ChatMessage[] = [...messages, { id: crypto.randomUUID(), role: "user", text }];
     setMessages(next);
-    startTransition(async () => {
+    start(async () => {
       try {
         const result = await regenerateFromInstruction(
           projectRef,
@@ -55,21 +68,13 @@ export function FollowUp({
           text,
           next.map(strip)
         );
-        if (result.ok) {
-          // 고친 새 버전(대화 이어받음)으로 이동한다.
-          router.push(`/project/${projectRef}/recommend/${result.versionId}`);
-          return;
-        }
-        setMessages((m) => [
-          ...m,
-          { id: crypto.randomUUID(), role: "assistant", text: REGEN_ERROR[result.reason] },
-        ]);
+        if (!result.ok) return fail(REGEN_ERROR[result.reason]);
+        // 받은 코드를 우측에 타이핑한 뒤, 고친 새 버전(대화 이어받음)으로 이동한다.
+        const { versionId, testPath, code } = result;
+        return { ok: true, files: [{ versionId, testPath, code }] };
       } catch (error) {
         unstable_rethrow(error);
-        setMessages((m) => [
-          ...m,
-          { id: crypto.randomUUID(), role: "assistant", text: REGEN_ERROR.failed },
-        ]);
+        return fail(REGEN_ERROR.failed);
       }
     });
   };
@@ -78,7 +83,14 @@ export function FollowUp({
     <ChatThread
       messages={messages}
       pending={pending}
-      pendingLabel="Updating the test…"
+      pendingContent={
+        stage && (
+          <div className="flex flex-col gap-3">
+            <SendingFiles files={[targetFile]} stage={stage} />
+            <GenerationSteps stage={stage} finalLabel="Opening the new version" />
+          </div>
+        )
+      }
       onSend={send}
       disabled={pending}
       placeholder="Ask for a change (e.g. add error cases too)"

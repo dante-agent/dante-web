@@ -91,10 +91,7 @@ export function GeneratePerformance({
     typing,
     error,
     start,
-  } = useGenerationPerformance({
-    generate,
-    finish,
-  });
+  } = useGenerationPerformance<GeneratedTestFile>({ finish });
 
   const startedRef = useRef(false);
   useEffect(() => {
@@ -103,8 +100,8 @@ export function GeneratePerformance({
     // 새로고침·뒤로가기로 다시 생성(재과금)되지 않게 대상 파일을 URL 에서 지운다.
     // 파일이 없으면 page.tsx 가 목록으로 리다이렉트한다.
     window.history.replaceState(null, "", window.location.pathname);
-    start();
-  }, [start]);
+    start(generate);
+  }, [start, generate]);
 
   const current = stage ?? "read";
 

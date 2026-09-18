@@ -4,7 +4,9 @@ import { useState } from "react";
 import type { TestRunView } from "@/lib/projects/run-version";
 import { cn } from "@/lib/utils";
 import type { SessionDetail } from "../session-detail";
+import { WritingCode } from "../../generate/_components/writing-code";
 import { CodePanel } from "./code-panel";
+import { isRegenerating, useRegeneration } from "./regeneration";
 import { TestRunPanel } from "./test-run-panel";
 import { VerticalSplit } from "./vertical-split";
 
@@ -34,7 +36,11 @@ export function GeneratedTestsPanel({
   runnerConfigured: boolean;
 }) {
   const [active, setActive] = useState(0);
-  const file = files[active] ?? files[0];
+  // 채팅으로 고치는 중이면 고치는 파일(첫 탭 = 라우트 버전)에 코드가 써지는 연출을 보여준다.
+  const regeneration = useRegeneration();
+  const regenerating = isRegenerating(regeneration);
+  const shownIndex = regenerating ? 0 : active;
+  const file = files[shownIndex] ?? files[0];
 
   return (
     <div className="flex h-full w-full min-w-0 flex-col">
@@ -47,7 +53,7 @@ export function GeneratedTestsPanel({
               onClick={() => setActive(index)}
               className={cn(
                 "shrink-0 rounded-md px-2.5 py-1 font-mono text-xs transition-colors",
-                index === active
+                index === shownIndex
                   ? "bg-muted text-foreground"
                   : "text-muted-foreground hover:text-foreground"
               )}
@@ -61,7 +67,19 @@ export function GeneratedTestsPanel({
 
       <div className="min-h-0 flex-1">
         <VerticalSplit
-          top={<CodePanel code={file.code} content={file.content} />}
+          top={
+            regenerating ? (
+              <WritingCode
+                sources={[file.path]}
+                files={regeneration.files}
+                typing={regeneration.typing}
+                waiting={regeneration.stage === "write" && !regeneration.files}
+                failed={false}
+              />
+            ) : (
+              <CodePanel code={file.code} content={file.content} />
+            )
+          }
           bottom={
             <TestRunPanel
               // 파일(버전)마다 터미널 실행 상태를 분리한다.

@@ -2,7 +2,6 @@ import { Check, LoaderCircle } from "lucide-react";
 import { CodeSkeleton } from "@/components/generation/code-skeleton";
 import { cn } from "@/lib/utils";
 import { CodePanel } from "../../[session]/_components/code-panel";
-import type { GeneratedTestFile } from "../../actions";
 
 /**
  * 우측 "테스트 코드가 써지는" 연출. AI 응답 전엔 스켈레톤 줄이 깜빡이고, 코드를 받으면
@@ -16,9 +15,9 @@ export function WritingCode({
   waiting,
   failed,
 }: {
-  /** 생성 대상 원본 경로 — 코드를 받기 전 탭·헤더에 쓴다. */
+  /** 코드를 받기 전 탭·헤더에 쓸 경로(생성 대상 원본, 또는 고치는 테스트 파일). */
   sources: string[];
-  files: GeneratedTestFile[] | null;
+  files: { testPath: string; code: string }[] | null;
   typing: { index: number; chars: number };
   waiting: boolean;
   failed: boolean;

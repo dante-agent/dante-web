@@ -53,7 +53,12 @@ export function ReviewPanel({
       </div>
 
       {/* 대화 — 프롬프트·추천 사유·후속 요청이 한 채팅으로 이어진다. */}
-      <FollowUp projectRef={projectRef} sessionId={session.id} initialMessages={initialMessages} />
+      <FollowUp
+        projectRef={projectRef}
+        sessionId={session.id}
+        targetFile={session.targetFile}
+        initialMessages={initialMessages}
+      />
     </section>
   );
 }
