@@ -9,7 +9,7 @@ import { ChatThread, type ChatMessage } from "../../_components/chat-thread";
 import { isRegenerating, useRegeneration } from "./regeneration";
 
 // 세션 상세 좌측 채팅. 후속 요청을 보내면 그 요청대로 테스트를 고친 새 버전을 만들고,
-// 대화를 이어받은 그 세션으로 이동해 자동 실행한다(?run=1). 실패 시 오류를 채팅에 남긴다.
+// 대화를 이어받은 그 세션으로 이동한다(실행은 사용자가 Run 을 눌러 한다). 실패 시 오류를 채팅에 남긴다.
 // 기다리는 동안엔 생성 화면과 같은 연출을 한다 — 여기엔 파일 전송·단계, 우측엔 코드 타이핑(regeneration.tsx).
 //
 // 대화는 DB(TestChatThread)에 영구 저장한다. 초기 메시지는 서버(page.tsx)가 읽어 넘겨주고,
@@ -69,7 +69,7 @@ export function FollowUp({
           next.map(strip)
         );
         if (!result.ok) return fail(REGEN_ERROR[result.reason]);
-        // 받은 코드를 우측에 타이핑한 뒤, 고친 새 버전(대화 이어받음)으로 이동해 자동 실행한다.
+        // 받은 코드를 우측에 타이핑한 뒤, 고친 새 버전(대화 이어받음)으로 이동한다.
         const { versionId, testPath, code } = result;
         return { ok: true, files: [{ versionId, testPath, code }] };
       } catch (error) {

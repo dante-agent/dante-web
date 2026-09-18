@@ -33,7 +33,8 @@ export async function generateMetadata({
   await requireTeamMember(teamId);
   const name = await getTeamName(teamId);
   if (!name) notFound();
-  return { title: { default: `${name} · Dante`, template: `%s · ${name} · Dante` } };
+  // default 에 " · Dante" 를 안 붙이는 이유는 project/[projectRef]/layout.tsx 와 같다.
+  return { title: { default: name, template: `%s · ${name} · Dante` } };
 }
 
 export default async function TeamSettingsLayout({

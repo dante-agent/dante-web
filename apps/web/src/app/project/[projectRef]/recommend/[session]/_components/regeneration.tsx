@@ -26,8 +26,8 @@ export function RegenerationProvider({
   const finish = useCallback(
     async (files: RegeneratedFile[]) => {
       await new Promise((resolve) => setTimeout(resolve, OPEN_DELAY_MS));
-      // 고친 새 버전(대화 이어받음)으로 이동해 자동 실행한다.
-      router.push(`/project/${projectRef}/recommend/${files[0].versionId}?run=1`);
+      // 고친 새 버전(대화 이어받음)으로 이동한다. 실행은 사용자가 Run 을 눌러 한다.
+      router.push(`/project/${projectRef}/recommend/${files[0].versionId}`);
     },
     [projectRef, router]
   );

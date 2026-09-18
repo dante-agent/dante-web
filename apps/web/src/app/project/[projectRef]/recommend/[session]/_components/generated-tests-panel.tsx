@@ -30,12 +30,10 @@ export function GeneratedTestsPanel({
   projectRef,
   files,
   runnerConfigured,
-  autoRun,
 }: {
   projectRef: string;
   files: GeneratedFile[];
   runnerConfigured: boolean;
-  autoRun?: boolean;
 }) {
   const [active, setActive] = useState(0);
   // 채팅으로 고치는 중이면 고치는 파일(첫 탭 = 라우트 버전)에 코드가 써지는 연출을 보여준다.
@@ -90,8 +88,6 @@ export function GeneratedTestsPanel({
               versionId={file.versionId}
               initialRun={file.initialRun}
               runnerConfigured={runnerConfigured}
-              // 자동 실행(?run=1)은 재생성으로 온 단일 파일 경우이므로 첫 탭에만 건다.
-              autoRun={autoRun && active === 0}
             />
           }
         />

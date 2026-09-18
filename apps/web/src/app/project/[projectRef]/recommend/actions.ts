@@ -50,6 +50,14 @@ export async function rerankRecommendations(projectRef: string): Promise<AiRecom
 }
 
 /**
+ * 세션(테스트 버전)을 새로 저장했을 때 부른다. 세션 목록은 recommend layout 이 서버에서
+ * 읽으므로 "layout" 으로 갱신해야 서브 사이드바가 새로고침 없이 따라온다.
+ */
+function refreshSessions(projectRef: string) {
+  revalidatePath(`/project/${projectRef}/recommend`, "layout");
+}
+
+/**
  * 파일 하나를 생성(generateTestForFile)하고 성공분을 버전으로 저장(saveGeneratedVersion)한다.
  * 카드·배치·프롬프트 생성(generatePlannedTests)이 쓴다 — 저장 규칙을 한 곳에 둔다. projectId 가 없으면(소유자 아님) 저장을 건너뛰고 versionId: null(미리보기만).
  */
@@ -242,8 +250,10 @@ export async function generatePlannedTests(
     });
   });
 
-  if (versionIds.length > 0)
+  if (versionIds.length > 0) {
+    refreshSessions(projectRef);
     return { ok: true, versionId: versionIds[0], versionIds, files, generated, failed };
+  }
   if (generated > 0) return { ok: false, reason: "preview" }; // 만들었지만 저장 못함(소유자 아님)
   return { ok: false, reason: lastFailure === "budget" ? "budget" : "error" };
 }
@@ -301,6 +311,7 @@ export async function regenerateFromFailure(
     code: result.code,
   });
   if (!newVersionId) return { ok: false, reason: "error" };
+  refreshSessions(projectRef);
 
   // 대화 연속성: 이전 세션의 대화를 새 버전으로 옮기고 재생성 사실을 한 줄 남긴다.
   await carryChat(projectRef, user.id, versionId, newVersionId, {
@@ -355,6 +366,7 @@ export async function regenerateFromInstruction(
     code: result.code,
   });
   if (!newVersionId) return { ok: false, reason: "error" };
+  refreshSessions(projectRef);
 
   // 클라이언트가 넘긴 대화(방금 요청 포함)에 결과 한 줄을 붙여 새 버전으로 저장한다.
   await saveGeneratedChat(projectRef, user.id, newVersionId, [
@@ -417,6 +429,6 @@ export async function deleteRecommendSession(
 ): Promise<{ ok: boolean }> {
   const user = await requireUser();
   const ok = await deleteGeneratedSession(projectRef, user.id, versionId);
-  if (ok) revalidatePath(`/project/${projectRef}/recommend`);
+  if (ok) refreshSessions(projectRef);
   return { ok };
 }
