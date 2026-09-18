@@ -28,7 +28,7 @@ const uid = () => crypto.randomUUID();
 
 /**
  * 프롬프트→계획→추천 사유+생성 확인→생성 의 전체 흐름을 채팅 메시지로 이어 붙인다.
- * 확정되면 generatePlannedTests 로 저장하고, 방금까지의 대화를 sessionStorage 에 심어
+ * 확정되면 generatePlannedTests 로 저장하고, 방금까지의 대화를 만든 세션들(DB)에 심어
  * 실제 세션(/recommend/[session])의 FollowUp 이 이어서 보여줄 수 있게 한 뒤 그리로 이동한다.
  */
 export function ChatSession({
@@ -137,11 +137,11 @@ export function ChatSession({
           ...messages,
           { id: uid(), role: "assistant", text: introText },
         ];
-        // 대화를 세션(첫 버전)에 영구 저장한 뒤 이동한다 — 세션 상세가 DB 에서 읽어 이어 보여준다.
-        await saveRecommendChat(
-          projectRef,
-          result.versionId,
-          transcript.map(({ id, role, text }) => ({ id, role, text }))
+        // 대화를 배치의 모든 세션에 영구 저장한 뒤 이동한다 — 사이드바에서 어느 세션을 열어도
+        // 세션 상세가 DB 에서 읽어 같은 대화를 이어 보여준다.
+        const stored = transcript.map(({ id, role, text }) => ({ id, role, text }));
+        await Promise.all(
+          result.versionIds.map((versionId) => saveRecommendChat(projectRef, versionId, stored))
         );
         // 배치로 만든 버전을 전부 tests 쿼리로 넘겨 탭으로 보여주고, run=1 로 열자마자 실행한다.
         const tests = result.versionIds.join(",");
