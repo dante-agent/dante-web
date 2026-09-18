@@ -198,19 +198,25 @@ export async function generatePlannedTests(
     .slice(0, MAX_MATCHES);
   if (targets.length === 0) return { ok: false, reason: "error" };
 
+  // 파일들은 서로 독립이라 병렬로 생성한다 — 3개면 벽시계 시간이 순차의 ~1/3로 준다.
+  // 파일마다 다른 Component 라 저장이 충돌하지 않고(예산도 각자 예약), 실패는 아래에서 개별 처리한다.
+  // Promise.all 이 targets 순서를 보존하므로 versionIds[0] 은 여전히 첫 대상의 결과다.
+  const results = await Promise.all(
+    targets.map((meta) =>
+      generateAndSave({
+        repo,
+        userId: user.id,
+        projectId,
+        filePath: meta.filePath,
+        componentName: meta.componentName,
+      })
+    )
+  );
+
   const versionIds: string[] = [];
   let generated = 0;
   let lastFailure: "budget" | "error" | null = null;
-
-  // 확정 순서대로 생성한다. 하나 실패해도 나머지는 계속 시도한다.
-  for (const meta of targets) {
-    const result = await generateAndSave({
-      repo,
-      userId: user.id,
-      projectId,
-      filePath: meta.filePath,
-      componentName: meta.componentName,
-    });
+  for (const result of results) {
     if (!result.ok) {
       if (result.reason !== "not-found") lastFailure = result.reason;
       continue;
