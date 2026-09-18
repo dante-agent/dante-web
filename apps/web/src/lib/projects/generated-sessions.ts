@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { prisma } from "@dante/db";
 import { isUuid } from "@/lib/chat/cursor";
 import { getOwnedProjectId } from "@/lib/projects/queries";
@@ -87,8 +88,11 @@ export async function getGeneratedSessions(
   }));
 }
 
-/** 세션 상세 화면용. 없거나 이 사용자 것이 아니면 null. */
-export async function getGeneratedSessionDetail(
+/**
+ * 세션 상세 화면용. 없거나 이 사용자 것이 아니면 null.
+ * 페이지와 generateMetadata(탭 제목)가 같은 요청에서 둘 다 부른다. cache 로 한 번만 읽는다.
+ */
+export const getGeneratedSessionDetail = cache(async function getGeneratedSessionDetail(
   projectRef: string,
   userId: string,
   versionId: string
@@ -133,7 +137,7 @@ export async function getGeneratedSessionDetail(
     feedback: version.feedback,
     latestRun: version.runs[0] ?? null,
   };
-}
+});
 
 /**
  * 세션(= TestFileVersion) 하나를 지운다. 실행 기록(TestRun)·대화(TestChatThread)는 FK Cascade 로

@@ -7,6 +7,8 @@ import { avatarUrl, displayName } from "@/lib/auth/user";
 import { requireProjectContext } from "@/lib/projects/queries";
 
 // 탭 제목: "Dashboard · my-repo · Dante". 프로젝트를 여러 탭에 띄워도 구분되게 이름을 넣는다.
+// default 에는 " · Dante" 를 붙이지 않는다. 하위에서 notFound() 가 나면 Next 가 default 에 루트
+// 템플릿을 한 번 더 씌워 "my-repo · Dante · Dante" 가 된다.
 // requireProjectContext 는 cache 라 아래 레이아웃과 같은 요청에서 한 번만 읽는다.
 export async function generateMetadata({
   params,
@@ -14,7 +16,7 @@ export async function generateMetadata({
   const { projectRef } = await params;
   const { project } = await requireProjectContext(projectRef);
   return {
-    title: { default: `${project.name} · Dante`, template: `%s · ${project.name} · Dante` },
+    title: { default: project.name, template: `%s · ${project.name} · Dante` },
   };
 }
 
