@@ -8,7 +8,11 @@ import {
   getAiTestRecommendations,
   type AiRecommendationResult,
 } from "@/lib/projects/ai-recommendations";
-import { saveGeneratedChat, type StoredChatMessage } from "@/lib/projects/generated-chat";
+import {
+  getGeneratedChat,
+  saveGeneratedChat,
+  type StoredChatMessage,
+} from "@/lib/projects/generated-chat";
 import {
   deleteGeneratedSession,
   getGeneratedSessionDetail,
@@ -293,7 +297,83 @@ export async function regenerateFromFailure(
   });
   if (!newVersionId) return { ok: false, reason: "error" };
 
+  // 대화 연속성: 이전 세션의 대화를 새 버전으로 옮기고 재생성 사실을 한 줄 남긴다.
+  await carryChat(projectRef, user.id, versionId, newVersionId, {
+    id: crypto.randomUUID(),
+    role: "assistant",
+    text: "Fixed the test based on the failure logs, and re-running it now.",
+  });
+
   return { ok: true, versionId: newVersionId };
+}
+
+/**
+ * 세션 상세 채팅의 후속 요청을 받아, 기존 테스트를 그 요청대로 고친 새 버전을 만든다.
+ * regenerateFromFailure 와 달리 실패한 실행이 없어도 되고, 자유 텍스트 instruction 으로 고친다.
+ *
+ * messages 는 클라이언트가 방금까지의 대화를 그대로 넘긴 것이다 — 새 버전으로 이어 저장해
+ * 대화가 끊기지 않게 한다. versionId·instruction 은 믿지 않고 소유·존재를 다시 거른다.
+ */
+export async function regenerateFromInstruction(
+  projectRef: string,
+  versionId: string,
+  instruction: string,
+  messages: StoredChatMessage[]
+): Promise<RegenerateResult> {
+  const trimmed = instruction.trim().slice(0, MAX_USER_PROMPT);
+  if (!trimmed) return { ok: false, reason: "error" };
+
+  const user = await requireUser();
+  const detail = await getGeneratedSessionDetail(projectRef, user.id, versionId);
+  if (!detail) return { ok: false, reason: "not-found" };
+
+  const repo = await getProjectRepo(projectRef, user.id);
+  if (!repo) notFound();
+  const projectId = await getOwnedProjectId(projectRef, user.id);
+  if (!projectId) return { ok: false, reason: "not-found" };
+
+  const result = await generateTestForFile({
+    repo,
+    userId: user.id,
+    projectId,
+    filePath: detail.targetFile,
+    previousCode: detail.content,
+    instruction: trimmed,
+  });
+  if (!result.ok) return result.reason === "not-found" ? { ok: false, reason: "error" } : result;
+
+  const newVersionId = await saveGeneratedVersion({
+    projectId,
+    sourceFilePath: result.filePath,
+    componentName: detail.componentName,
+    testPath: result.testPath,
+    code: result.code,
+  });
+  if (!newVersionId) return { ok: false, reason: "error" };
+
+  // 클라이언트가 넘긴 대화(방금 요청 포함)에 결과 한 줄을 붙여 새 버전으로 저장한다.
+  await saveGeneratedChat(projectRef, user.id, newVersionId, [
+    ...messages,
+    {
+      id: crypto.randomUUID(),
+      role: "assistant",
+      text: "Updated the test with your request. Review it on the right and run it.",
+    },
+  ]);
+
+  return { ok: true, versionId: newVersionId };
+}
+
+/** 한 세션의 대화를 다른 버전으로 옮기고 note 한 줄을 덧붙인다(재생성 시 대화 연속성). */
+async function carryChat(
+  projectRef: string,
+  userId: string,
+  fromVersionId: string,
+  toVersionId: string,
+  note: StoredChatMessage
+): Promise<void> {
+  const prev = await getGeneratedChat(projectRef, userId, fromVersionId);
+  await saveGeneratedChat(projectRef, userId, toVersionId, [...prev, note]);
 }
 
 /**
