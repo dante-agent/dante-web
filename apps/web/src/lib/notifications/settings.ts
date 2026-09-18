@@ -1,4 +1,9 @@
 import type { ProjectNotificationSetting } from "@dante/db";
+import {
+  DEFAULT_DISCORD_EVENTS,
+  parseDiscordEvents,
+  type DiscordEvents,
+} from "@/lib/notifications/discord";
 
 // 알림 설정값의 모양과 기본값. 서버·클라이언트 양쪽에서 읽으므로 여기에는
 // DB 도 GitHub 도 부르지 않는 순수 값만 둔다 (화면이 이 파일을 import 한다).
@@ -114,6 +119,13 @@ export type NotificationSettings = {
   branchFilters: string[];
   skipDraftPr: boolean;
   snoozedUntil: Date | null;
+  discordEnabled: boolean;
+  discordEvents: DiscordEvents;
+  /**
+   * 웹훅 URL 이 저장돼 있는지만. 이 값은 화면(클라이언트)으로 가므로 URL 자체는
+   * 싣지 않는다 — URL 을 가진 사람은 그 채널에 글을 쓸 수 있다. URL 은 store.ts 가 따로 읽는다.
+   */
+  discordWebhookSaved: boolean;
 };
 
 export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
@@ -128,6 +140,9 @@ export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
   branchFilters: [],
   skipDraftPr: true,
   snoozedUntil: null,
+  discordEnabled: false,
+  discordEvents: DEFAULT_DISCORD_EVENTS,
+  discordWebhookSaved: false,
 };
 
 /** 실패 목록에 적을 개수의 범위. 0 이면 목록 토글을 끄는 것과 같아 1부터 받는다. */
@@ -178,6 +193,9 @@ export function toNotificationSettings(
     branchFilters: row.branchFilters,
     skipDraftPr: row.skipDraftPr,
     snoozedUntil: row.snoozedUntil,
+    discordEnabled: row.discordEnabled,
+    discordEvents: parseDiscordEvents(row.discordEvents),
+    discordWebhookSaved: row.encryptedDiscordWebhookUrl !== null,
   };
 }
 

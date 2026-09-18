@@ -9,6 +9,7 @@ import {
 } from "@/lib/github/pull-request";
 import { checkRunResult, skippedCheckRun } from "@/lib/notifications/check-run";
 import { renderPrComment } from "@/lib/notifications/comment";
+import { deliverDiscord } from "@/lib/notifications/discord-send";
 import type { PullRequestAuthor } from "@/lib/notifications/pr-author-rules";
 import type { RunSummary } from "@/lib/notifications/run-summary";
 import { evaluateScope } from "@/lib/notifications/scope";
@@ -67,6 +68,19 @@ export async function deliverRunSummary(
   }
 
   const repo: RepoRef = { owner: project.repoOwner, repo: project.repoName };
+
+  // GitHub 설치 토큰을 못 받아도 Discord 는 보낼 수 있다. 그래서 먼저 보낸다.
+  await deliverDiscord(
+    {
+      projectId: project.id,
+      repo: `${repo.owner}/${repo.repo}`,
+      prNumber: pr.number,
+      prUrl: `https://github.com/${repo.owner}/${repo.repo}/pull/${pr.number}`,
+    },
+    run,
+    settings
+  );
+
   const surface = await loadSurface(project.id, pr.number);
 
   let octokit: Octokit;

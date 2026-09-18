@@ -12,6 +12,13 @@ import {
   installationClient,
 } from "@/lib/github/pull-request";
 import type { PullRequestContext } from "@/lib/notifications/deliver";
+import {
+  DISCORD_EVENTS,
+  isDiscordWebhookUrl,
+  renderDiscordMessage,
+} from "@/lib/notifications/discord";
+import { discordErrorDetail, postDiscordMessage } from "@/lib/notifications/discord-send";
+import { SAMPLE_RUNS } from "@/lib/notifications/run-summary";
 import { enqueuePullRequestJob } from "@/lib/notifications/pull-request-job";
 import {
   clampFailedLimit,
@@ -19,7 +26,13 @@ import {
   type CommentFields,
   type NotificationSettings,
 } from "@/lib/notifications/settings";
-import { recordDelivery, saveNotificationSettings } from "@/lib/notifications/store";
+import {
+  loadDiscordWebhookUrl,
+  loadNotificationSettings,
+  recordDelivery,
+  saveDiscordWebhookUrl,
+  saveNotificationSettings,
+} from "@/lib/notifications/store";
 
 // 알림 설정 화면이 부르는 서버 액션들.
 //
@@ -130,6 +143,113 @@ export async function saveNotificationScope(
 
   revalidatePath(settingsPath(project.ref));
   return { saved: true };
+}
+
+/**
+ * 폼에 붙여 넣은 웹훅 URL. 비었으면 null(저장된 것을 그대로 쓴다), 모양이 틀리면 error.
+ *
+ * 저장된 URL 은 화면에 되돌려 보내지 않으므로 입력칸은 늘 비어서 온다 — 빈 칸을
+ * "지우기"로 읽으면 다른 토글만 바꿔 저장해도 연결이 끊긴다.
+ */
+function pastedWebhookUrl(formData: FormData): { url: string | null } | { error: string } {
+  const url = String(formData.get("discordWebhookUrl") ?? "").trim();
+  if (!url) return { url: null };
+  if (!isDiscordWebhookUrl(url)) {
+    return { error: "That is not a Discord webhook URL. Copy it from Integrations → Webhooks." };
+  }
+  return { url };
+}
+
+/** Discord 섹션 저장 (켜기 + 웹훅 URL + 보낼 이벤트). */
+export async function saveDiscordNotifications(
+  _prev: SaveState,
+  formData: FormData
+): Promise<SaveState> {
+  let project;
+  try {
+    project = await requireProject(String(formData.get("projectRef") ?? ""));
+  } catch {
+    return { error: "Project not found." };
+  }
+
+  const pasted = pastedWebhookUrl(formData);
+  if ("error" in pasted) return pasted;
+
+  const enabled = checked(formData, "discordEnabled");
+  if (pasted.url) {
+    await saveDiscordWebhookUrl(project.id, pasted.url);
+  } else if (enabled && !(await loadNotificationSettings(project.id)).discordWebhookSaved) {
+    return { error: "Paste a webhook URL before turning Discord on." };
+  }
+
+  const events = Object.fromEntries(
+    DISCORD_EVENTS.map((event) => [event.id, checked(formData, `discordEvent.${event.id}`)])
+  ) as NotificationSettings["discordEvents"];
+
+  await saveNotificationSettings(project.id, { discordEnabled: enabled, discordEvents: events });
+  revalidatePath(settingsPath(project.ref));
+  return { saved: true };
+}
+
+export type DiscordTestState = { error?: string; sent?: boolean } | null;
+
+/**
+ * 테스트 알림 한 건 (docs/notifications-slack.md §9).
+ *
+ * GitHub 과 달리 진짜로 보낸다. 확인할 것이 문구가 아니라 "이 채널에 실제로 도착하는가"라서다.
+ * 붙여 넣고 아직 저장하지 않은 URL 이 있으면 그걸로 보낸다 — 저장 전에 맞는 채널인지 보려는 것이다.
+ * 결과는 화면에 바로 띄우고, 전달 로그에도 PR 없이 한 줄 남긴다.
+ */
+export async function sendDiscordTest(
+  _prev: DiscordTestState,
+  formData: FormData
+): Promise<DiscordTestState> {
+  let project;
+  try {
+    project = await requireProject(String(formData.get("projectRef") ?? ""));
+  } catch {
+    return { error: "Project not found." };
+  }
+
+  const pasted = pastedWebhookUrl(formData);
+  if ("error" in pasted) return pasted;
+
+  const webhookUrl = pasted.url ?? (await loadDiscordWebhookUrl(project.id));
+  if (!webhookUrl) return { error: "Paste a webhook URL first." };
+
+  const settings = await loadNotificationSettings(project.id);
+  const content = renderDiscordMessage(SAMPLE_RUNS.failing, {
+    repo: `${project.repoOwner}/${project.repoName}`,
+    prNumber: null,
+    prUrl: null,
+    failedLimit: settings.prCommentFailedLimit,
+    test: true,
+  });
+
+  try {
+    await postDiscordMessage(webhookUrl, content);
+  } catch (error) {
+    const detail = discordErrorDetail(error);
+    await recordDelivery({
+      projectId: project.id,
+      surface: "discord",
+      prNumber: null,
+      status: "failed",
+      detail: `test — ${detail}`,
+    });
+    revalidatePath(settingsPath(project.ref));
+    return { error: detail };
+  }
+
+  await recordDelivery({
+    projectId: project.id,
+    surface: "discord",
+    prNumber: null,
+    status: "ok",
+    detail: "test notification",
+  });
+  revalidatePath(settingsPath(project.ref));
+  return { sent: true };
 }
 
 /** 길이가 고정된 선택지. "오늘"과 "해제할 때까지"는 아래에서 따로 계산한다. */

@@ -18,8 +18,8 @@ export function SnoozeBanner({ projectRef, until }: { projectRef: string; until:
   // 절대 시각 대신 "3시간 후"로 적는다. 서버에서 그리는 화면이라 toLocaleString
   // 은 서버(UTC) 시계로 찍히는데, 남은 시간은 시간대와 무관하다.
   const message = forever
-    ? "Dante is not writing to GitHub until you resume it."
-    : `Dante resumes writing to GitHub ${formatDistanceToNow(until, { addSuffix: true })}.`;
+    ? "Dante is not sending notifications until you resume it."
+    : `Dante resumes notifications ${formatDistanceToNow(until, { addSuffix: true })}.`;
 
   return (
     <div className="border-border bg-card mt-6 flex max-w-2xl flex-wrap items-center gap-3 border p-4">
