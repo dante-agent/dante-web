@@ -52,6 +52,10 @@ export async function saveNotificationSettings(
     ...(patch.discordEnabled !== undefined && { discordEnabled: patch.discordEnabled }),
     ...(patch.discordEvents !== undefined && { discordEvents: patch.discordEvents }),
     ...(patch.discordLocale !== undefined && { discordLocale: patch.discordLocale }),
+    ...(patch.slackEnabled !== undefined && { slackEnabled: patch.slackEnabled }),
+    ...(patch.slackChannelId !== undefined && { slackChannelId: patch.slackChannelId }),
+    ...(patch.slackChannelName !== undefined && { slackChannelName: patch.slackChannelName }),
+    ...(patch.slackEvents !== undefined && { slackEvents: patch.slackEvents }),
   } satisfies Prisma.ProjectNotificationSettingUncheckedUpdateInput;
 
   await prisma.projectNotificationSetting.upsert({
@@ -94,8 +98,8 @@ export async function loadDiscordWebhookUrl(projectId: string) {
   }
 }
 
-/** 전달 로그 한 줄이 가리키는 표면. Slack·Email 이 붙으면 여기에 값이 는다. */
-export type DeliverySurface = "github_comment" | "github_check" | "discord";
+/** 전달 로그 한 줄이 가리키는 표면. Email 이 붙으면 여기에 값이 는다. */
+export type DeliverySurface = "github_comment" | "github_check" | "discord" | "slack";
 
 export type DeliveryStatus = "ok" | "skipped" | "failed";
 

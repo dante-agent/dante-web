@@ -7,6 +7,7 @@ import { DiscordNotificationsForm } from "@/components/settings/notifications/di
 import { GithubNotificationsForm } from "@/components/settings/notifications/github-notifications-form";
 import { NotificationScopeForm } from "@/components/settings/notifications/scope-form";
 import { SnoozeBanner } from "@/components/settings/notifications/snooze";
+import { SlackNotificationsForm } from "@/components/settings/notifications/slack-notifications-form";
 import { SnoozeControl } from "@/components/settings/notifications/snooze-control";
 import { ComingSoon, SettingsHeader } from "@/components/settings/settings-section";
 import { requireUser } from "@/lib/auth/user";
@@ -21,15 +22,18 @@ import { isSnoozed, toNotificationSettings } from "@/lib/notifications/settings"
 import { notificationBadges } from "@/lib/notifications/status";
 import { recentDeliveries } from "@/lib/notifications/store";
 import type { ProjectRepo } from "@/lib/projects/queries";
+import { isRevokedError, slackErrorDetail } from "@/lib/slack/api";
+import { listSlackChannels, type SlackChannel } from "@/lib/slack/channels";
+import { loadSlackConnection, markSlackRevoked } from "@/lib/slack/installation";
 
 /** 전달 로그의 재시도 서버 액션이 after() 로 PR 작업을 돈다. api/github/webhook/route.ts 와 같은 이유 */
 export const maxDuration = 800;
 
 // 알림 — 언제, 어디로 알릴지.
 //
-// 지금은 GitHub 과 Discord 가 있다. Discord 는 웹훅 URL 하나로 붙어 프로젝트에만 둔다. Slack 은 두 층으로 나뉜다 — 워크스페이스를 붙이는
-// OAuth 는 팀마다 한 번만 하면 되는 일이라 팀 설정(/team/<id>/settings)에 붙이고,
-// 어느 채널로 무엇을 보낼지는 프로젝트마다 다르니 여기 남긴다. 둘 다 아직 없다.
+// GitHub·Discord·Slack. Discord 는 웹훅 URL 하나로 붙어 프로젝트에만 둔다. Slack 은 두 층으로
+// 나뉜다 — 워크스페이스를 붙이는 OAuth 는 팀마다 한 번만 하면 되는 일이라 팀 설정
+// (/team/<id>/settings/slack)에 붙이고, 어느 채널로 무엇을 보낼지는 프로젝트마다 다르니 여기 둔다.
 export default async function ProjectNotificationsPage({
   params,
 }: PageProps<"/project/[projectRef]/settings/notifications">) {
@@ -46,6 +50,7 @@ export default async function ProjectNotificationsPage({
       repoName: true,
       defaultBranch: true,
       installationId: true,
+      teamId: true,
       disconnectedAt: true,
       disconnectedReason: true,
       installation: {
@@ -78,10 +83,11 @@ export default async function ProjectNotificationsPage({
   // 배지가 전달 로그를 같이 쓰므로 한 번만 읽어 나눠 준다. Prisma 쿼리는 await 할 때
   // 실행되는 지연 객체라 Promise.resolve 로 한 번만 돌게 묶는다.
   const deliveriesQuery = Promise.resolve(recentDeliveries(project.id));
-  const [badges, deliveries, requiredCheck] = await Promise.all([
+  const [badges, deliveries, requiredCheck, slack] = await Promise.all([
     deliveriesQuery.then((rows) => notificationBadges(project, rows)),
     deliveriesQuery,
     requiredCheckStatus(project),
+    slackState(project.teamId),
   ]);
 
   // 미리보기 데이터. 실제 실행 결과가 생기면 여기서 가장 최근 것을 읽어 쓴다
@@ -128,16 +134,60 @@ export default async function ProjectNotificationsPage({
         <DiscordNotificationsForm projectRef={project.ref} initial={settings} />
       </div>
 
+      <div className="mt-12">
+        {slack.connected ? (
+          <SlackNotificationsForm
+            projectRef={project.ref}
+            workspace={slack.workspace}
+            channels={slack.channels}
+            channelsError={slack.error}
+            initial={settings}
+          />
+        ) : (
+          <StatusBadge
+            tone="warn"
+            title={slack.revoked ? "The Slack connection was lost" : "Slack isn't connected"}
+            description="A team owner connects a Slack workspace once in team settings. Then pick the channel for this project here."
+            action={{ label: "Open team settings", href: `/team/${project.teamId}/settings/slack` }}
+          />
+        )}
+      </div>
+
       <div className="mt-12 max-w-2xl">
-        <ComingSoon>
-          Slack and email. You&apos;ll connect a Slack workspace once in team settings, then choose
-          here which channel this project posts to.
-        </ComingSoon>
+        <ComingSoon>Email.</ComingSoon>
       </div>
 
       <DeliveryLog projectRef={project.ref} deliveries={deliveries} />
     </>
   );
+}
+
+/**
+ * 팀의 Slack 연결과 채널 목록.
+ *
+ * 채널 목록을 못 받아도 페이지는 뜬다. 토큰이 죽었다는 답이면 그 자리에서 끊긴 것으로
+ * 적는다 — 알림을 보내다 알게 될 때까지 기다리면 그사이 설정 화면이 멀쩡해 보인다.
+ */
+async function slackState(teamId: string) {
+  const connection = await loadSlackConnection(teamId);
+  if (!connection) {
+    const revoked = await prisma.slackInstallation.count({ where: { teamId } });
+    return { connected: false as const, revoked: revoked > 0 };
+  }
+
+  let channels: SlackChannel[] = [];
+  let error: string | null = null;
+  try {
+    channels = await listSlackChannels(connection.botToken);
+  } catch (caught) {
+    if (isRevokedError(caught)) {
+      await markSlackRevoked(teamId);
+      return { connected: false as const, revoked: true };
+    }
+    error = slackErrorDetail(caught);
+  }
+
+  return { connected: true as const, workspace: connection.slackTeamName, channels, error };
 }
 
 /**

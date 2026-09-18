@@ -24,8 +24,10 @@ import { enqueuePullRequestJob } from "@/lib/notifications/pull-request-job";
 import {
   clampFailedLimit,
   COMMENT_FIELDS,
+  SLACK_EVENTS,
   type CommentFields,
   type NotificationSettings,
+  type SlackEvents,
 } from "@/lib/notifications/settings";
 import {
   loadDiscordWebhookUrl,
@@ -34,6 +36,10 @@ import {
   saveDiscordWebhookUrl,
   saveNotificationSettings,
 } from "@/lib/notifications/store";
+import { isRevokedError, slackErrorDetail } from "@/lib/slack/api";
+import { fetchSlackChannel, postSlackMessage } from "@/lib/slack/channels";
+import { loadSlackConnection, markSlackRevoked } from "@/lib/slack/installation";
+import { renderSlackMessage } from "@/lib/slack/message";
 
 // 알림 설정 화면이 부르는 서버 액션들.
 //
@@ -363,4 +369,118 @@ export async function retryDelivery(formData: FormData) {
   });
 
   revalidatePath(settingsPath(project.ref));
+}
+
+/**
+ * Slack 섹션 저장 (채널 + 보낼 결과).
+ *
+ * 채널 id 는 폼에서 온다. 그대로 믿지 않고 conversations.info 로 이 워크스페이스에
+ * 있는 채널인지 확인하고, 그 답에서 이름을 받아 캐시한다.
+ */
+export async function saveSlackNotifications(
+  _prev: SaveState,
+  formData: FormData
+): Promise<SaveState> {
+  let project;
+  try {
+    project = await requireProject(String(formData.get("projectRef") ?? ""));
+  } catch {
+    return { error: "Project not found." };
+  }
+
+  const events = {} as SlackEvents;
+  for (const event of SLACK_EVENTS) events[event.id] = checked(formData, `slackEvent.${event.id}`);
+
+  const enabled = checked(formData, "slackEnabled");
+  const channelId = String(formData.get("slackChannelId") ?? "").trim();
+  if (enabled && !channelId) return { error: "Pick a channel first." };
+
+  const patch: Partial<NotificationSettings> = { slackEnabled: enabled, slackEvents: events };
+
+  if (channelId) {
+    const connection = await loadSlackConnection(project.teamId);
+    if (!connection) return { error: "Slack isn't connected for this team." };
+
+    try {
+      const channel = await fetchSlackChannel(connection.botToken, channelId);
+      if (channel.is_archived) return { error: `#${channel.name} is archived.` };
+      patch.slackChannelId = channel.id;
+      patch.slackChannelName = channel.name;
+    } catch (error) {
+      if (isRevokedError(error)) await markSlackRevoked(project.teamId);
+      return { error: `Slack said: ${slackErrorDetail(error)}` };
+    }
+  }
+
+  await saveNotificationSettings(project.id, patch);
+  revalidatePath(settingsPath(project.ref));
+  return { saved: true };
+}
+
+export type SlackTestState = { error?: string; sent?: boolean } | null;
+
+/**
+ * 테스트 알림 (docs/notifications-slack.md §9).
+ *
+ * GitHub 과 달리 진짜 한 건을 보낸다. 확인해야 하는 게 문구가 아니라 "이 채널에
+ * 실제로 도착하는가"이기 때문이다 — scope, 채널 권한, 봇 초대 여부는 보내봐야 안다.
+ * 화면에서 지금 고른 채널로 보낸다(Discord 와 같다). 저장 전에 채널을 시험해 볼 수 있다.
+ */
+export async function sendSlackTest(
+  _prev: SlackTestState,
+  formData: FormData
+): Promise<SlackTestState> {
+  let project;
+  try {
+    project = await requireProject(String(formData.get("projectRef") ?? ""));
+  } catch {
+    return { error: "Project not found." };
+  }
+
+  const channelId = String(formData.get("slackChannelId") ?? "").trim();
+  if (!channelId) return { error: "Choose a channel first." };
+
+  const connection = await loadSlackConnection(project.teamId);
+  if (!connection) return { error: "Slack isn't connected for this team." };
+
+  const settings = await loadNotificationSettings(project.id);
+  let channel = channelId;
+  try {
+    // 채널 id 는 폼에서 온다. 이 워크스페이스의 채널인지 보고, 로그에 적을 이름도 받는다.
+    channel = `#${(await fetchSlackChannel(connection.botToken, channelId)).name}`;
+    await postSlackMessage(connection.botToken, {
+      channel: channelId,
+      text: renderSlackMessage({
+        event: "failed",
+        // 표본의 링크는 가짜 프로젝트를 가리킨다. 눌러서 404 를 보느니 없는 편이 낫다.
+        run: { ...SAMPLE_RUNS.failing, detailUrl: null, rerunUrl: null },
+        repo: { owner: project.repoOwner, name: project.repoName },
+        prNumber: null,
+        failedLimit: settings.prCommentFailedLimit,
+        test: true,
+      }),
+    });
+  } catch (error) {
+    if (isRevokedError(error)) await markSlackRevoked(project.teamId);
+    const detail = slackErrorDetail(error);
+    await recordDelivery({
+      projectId: project.id,
+      surface: "slack",
+      prNumber: null,
+      status: "failed",
+      detail: `test message to ${channel} — ${detail}`,
+    });
+    revalidatePath(settingsPath(project.ref));
+    return { error: `Slack said: ${detail}` };
+  }
+
+  await recordDelivery({
+    projectId: project.id,
+    surface: "slack",
+    prNumber: null,
+    status: "ok",
+    detail: `test message to ${channel}`,
+  });
+  revalidatePath(settingsPath(project.ref));
+  return { sent: true };
 }

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Check } from "lucide-react";
 import { cn } from "cn";
 
 // 알림 설정 화면의 작은 조각들. 서버·클라이언트 양쪽에서 쓰므로 상태를 두지
@@ -146,5 +147,39 @@ export function StatusBadge({
         </a>
       )}
     </div>
+  );
+}
+
+/**
+ * 저장·테스트 버튼 옆의 상태 자리 하나. 마지막으로 누른 버튼의 결과만 보인다
+ * (discord-form.tsx·slack-notifications-form.tsx).
+ */
+export function FormStatus({
+  pending,
+  pendingLabel,
+  done,
+  doneLabel,
+  error,
+}: {
+  pending: boolean;
+  pendingLabel: string;
+  done?: boolean;
+  doneLabel: string;
+  error?: string;
+}) {
+  if (pending) return <span className="text-muted-foreground text-[13px]">{pendingLabel}</span>;
+  if (error) {
+    return (
+      <span role="alert" className="text-destructive text-[13px]">
+        {error}
+      </span>
+    );
+  }
+  if (!done) return null;
+  return (
+    <span className="text-brand-mint flex items-center gap-1.5 text-[13px]">
+      <Check className="size-3.5" />
+      {doneLabel}
+    </span>
   );
 }

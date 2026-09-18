@@ -106,6 +106,61 @@ export function commentPresetOf(fields: CommentFields): CommentPreset {
   return "custom";
 }
 
+/**
+ * Slack 으로 보낼 결과 (docs/notifications-slack.md §4).
+ *
+ * 진행 상태(queued·generating…)는 목록에 없다. Slack 은 사람을 방해하는 표면이라
+ * 결론만 보낸다 — 진행 상태까지 밀면 PR 하나가 사람을 네 번 부른다.
+ */
+export type SlackEventId =
+  /** 테스트가 하나라도 실패 */
+  | "failed"
+  /** 직전에 실패했던 PR 이 전부 통과 */
+  | "recovered"
+  /** 전부 통과 (복구가 아닌 경우) */
+  | "passed"
+  /** 우리 쪽이 끝내지 못함 */
+  | "cannotFinish";
+
+export type SlackEvents = Record<SlackEventId, boolean>;
+
+/** 설정 화면이 그대로 훑어 쓰는 목록. 순서 = 화면에 보이는 순서. */
+export const SLACK_EVENTS: { id: SlackEventId; label: string; hint?: string }[] = [
+  { id: "failed", label: "Tests failed", hint: "The reason to connect Slack at all" },
+  {
+    id: "recovered",
+    label: "Fixed after failing",
+    hint: "So nobody keeps watching a pull request that's already green",
+  },
+  {
+    id: "passed",
+    label: "All tests passed",
+    hint: "Off by default — on a busy repo this posts dozens of times a day",
+  },
+  { id: "cannotFinish", label: "Dante couldn't finish", hint: "A problem on our side" },
+];
+
+/** 통과만 끈다. 켜 두면 하루에 수십 번 울리고, 그 팀은 채널을 음소거한다. */
+export const DEFAULT_SLACK_EVENTS: SlackEvents = {
+  failed: true,
+  recovered: true,
+  passed: false,
+  cannotFinish: true,
+};
+
+/** parseCommentFields 와 같은 규칙. 없는 키는 기본값, 모르는 키는 버린다. */
+export function parseSlackEvents(value: unknown): SlackEvents {
+  const stored =
+    typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+
+  const events = { ...DEFAULT_SLACK_EVENTS };
+  for (const event of SLACK_EVENTS) {
+    const saved = stored[event.id];
+    if (typeof saved === "boolean") events[event.id] = saved;
+  }
+  return events;
+}
+
 /** "sticky" = 코멘트 하나를 계속 고쳐 쓴다. "append" = 푸시마다 새 코멘트. */
 export type PrCommentMode = "sticky" | "append";
 
@@ -130,6 +185,10 @@ export type NotificationSettings = {
    * 싣지 않는다 — URL 을 가진 사람은 그 채널에 글을 쓸 수 있다. URL 은 store.ts 가 따로 읽는다.
    */
   discordWebhookSaved: boolean;
+  slackEnabled: boolean;
+  slackChannelId: string | null;
+  slackChannelName: string | null;
+  slackEvents: SlackEvents;
 };
 
 export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
@@ -149,6 +208,10 @@ export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
   discordEvents: DEFAULT_DISCORD_EVENTS,
   discordLocale: "en",
   discordWebhookSaved: false,
+  slackEnabled: false,
+  slackChannelId: null,
+  slackChannelName: null,
+  slackEvents: DEFAULT_SLACK_EVENTS,
 };
 
 /** 실패 목록에 적을 개수의 범위. 0 이면 목록 토글을 끄는 것과 같아 1부터 받는다. */
@@ -204,6 +267,10 @@ export function toNotificationSettings(
     discordEvents: parseDiscordEvents(row.discordEvents),
     discordLocale: parseDiscordLocale(row.discordLocale),
     discordWebhookSaved: row.encryptedDiscordWebhookUrl !== null,
+    slackEnabled: row.slackEnabled,
+    slackChannelId: row.slackChannelId,
+    slackChannelName: row.slackChannelName,
+    slackEvents: parseSlackEvents(row.slackEvents),
   };
 }
 
