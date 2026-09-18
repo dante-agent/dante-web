@@ -1,12 +1,12 @@
-import { RUNNER_REPORTS_BACK } from "@/lib/notifications/check-run";
-import type { DiscordLocale } from "@/lib/notifications/discord";
+import { RUNNER_REPORTS_BACK } from "./check-run.ts";
+import type { DiscordLocale } from "./discord.ts";
 import {
   isTerminal,
   type ComponentChange,
   type RunSummary,
   type RunStatus,
-} from "@/lib/notifications/run-summary";
-import type { CommentFields, NotificationSettings } from "@/lib/notifications/settings";
+} from "./run-summary.ts";
+import type { CommentFields, NotificationSettings } from "./settings.ts";
 
 // PR 코멘트 본문을 만든다. 순수 함수다 — 설정 화면의 미리보기와 실제로 GitHub 에
 // 쓰는 코드가 같은 함수를 부른다. 그래야 "저장하기 전에 눈으로 확인"이 거짓말이
