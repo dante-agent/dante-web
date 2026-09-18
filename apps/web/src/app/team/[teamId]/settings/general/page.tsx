@@ -1,9 +1,12 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { prisma } from "@dante/db";
 import { DeleteTeamForm, RenameTeamForm } from "@/components/settings/team/team-forms";
 import { SettingsHeader } from "@/components/settings/settings-section";
 import { requireTeamMember } from "@/lib/teams/access";
 import { TEAM_NAME_MAX } from "@/lib/teams/manage";
+
+export const metadata: Metadata = { title: "General settings" };
 
 // 팀 일반. 이름 + 요약 + 맨 아래 삭제. 무엇을 지우고 무엇을 남기는지는 manage.ts 주석에 있다.
 export default async function TeamGeneralPage({

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { prisma } from "@dante/db";
 import { switchTeam } from "@/app/team/actions";
@@ -7,6 +8,8 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { getCurrentTeamId } from "@/lib/teams/current";
 import { TEAM_NAME_MAX } from "@/lib/teams/manage";
 import { requireUser } from "@/lib/auth/user";
+
+export const metadata: Metadata = { title: "Teams" };
 
 // 계정 설정 Teams. 내가 속한 팀 목록 + 새 팀 만들기.
 //
