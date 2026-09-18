@@ -1,11 +1,6 @@
 import type { ProjectNotificationSetting } from "@dante/db";
-import {
-  DEFAULT_DISCORD_EVENTS,
-  parseDiscordEvents,
-  parseDiscordLocale,
-  type DiscordEvents,
-  type DiscordLocale,
-} from "./discord.ts";
+import { DEFAULT_DISCORD_EVENTS, parseDiscordEvents, type DiscordEvents } from "./discord.ts";
+import { parseNotificationLocale, type NotificationLocale } from "./locale.ts";
 
 // 알림 설정값의 모양과 기본값. 서버·클라이언트 양쪽에서 읽으므로 여기에는
 // DB 도 GitHub 도 부르지 않는 순수 값만 둔다 (화면이 이 파일을 import 한다).
@@ -171,7 +166,7 @@ export type NotificationSettings = {
   prCommentCollapseOnPass: boolean;
   prCommentFields: CommentFields;
   prCommentFailedLimit: number;
-  prCommentLocale: DiscordLocale;
+  prCommentLocale: NotificationLocale;
   checkRunEnabled: boolean;
   checkRunBlocking: boolean;
   branchFilters: string[];
@@ -179,7 +174,7 @@ export type NotificationSettings = {
   snoozedUntil: Date | null;
   discordEnabled: boolean;
   discordEvents: DiscordEvents;
-  discordLocale: DiscordLocale;
+  discordLocale: NotificationLocale;
   /**
    * 웹훅 URL 이 저장돼 있는지만. 이 값은 화면(클라이언트)으로 가므로 URL 자체는
    * 싣지 않는다 — URL 을 가진 사람은 그 채널에 글을 쓸 수 있다. URL 은 store.ts 가 따로 읽는다.
@@ -190,7 +185,7 @@ export type NotificationSettings = {
   slackChannelName: string | null;
   slackEvents: SlackEvents;
   /** 언어 목록은 Discord 와 같이 쓴다. 두 표면의 선택지가 어긋나지 않게 */
-  slackLocale: DiscordLocale;
+  slackLocale: NotificationLocale;
 };
 
 export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
@@ -260,7 +255,7 @@ export function toNotificationSettings(
     prCommentCollapseOnPass: row.prCommentCollapseOnPass,
     prCommentFields: parseCommentFields(row.prCommentFields),
     prCommentFailedLimit: clampFailedLimit(row.prCommentFailedLimit),
-    prCommentLocale: parseDiscordLocale(row.prCommentLocale),
+    prCommentLocale: parseNotificationLocale(row.prCommentLocale),
     checkRunEnabled: row.checkRunEnabled,
     checkRunBlocking: row.checkRunBlocking,
     branchFilters: row.branchFilters,
@@ -268,13 +263,13 @@ export function toNotificationSettings(
     snoozedUntil: row.snoozedUntil,
     discordEnabled: row.discordEnabled,
     discordEvents: parseDiscordEvents(row.discordEvents),
-    discordLocale: parseDiscordLocale(row.discordLocale),
+    discordLocale: parseNotificationLocale(row.discordLocale),
     discordWebhookSaved: row.encryptedDiscordWebhookUrl !== null,
     slackEnabled: row.slackEnabled,
     slackChannelId: row.slackChannelId,
     slackChannelName: row.slackChannelName,
     slackEvents: parseSlackEvents(row.slackEvents),
-    slackLocale: parseDiscordLocale(row.slackLocale),
+    slackLocale: parseNotificationLocale(row.slackLocale),
   };
 }
 

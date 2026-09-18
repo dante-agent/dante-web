@@ -1,3 +1,4 @@
+import type { NotificationLocale } from "@/lib/notifications/locale";
 import type { RunSummary } from "@/lib/notifications/run-summary";
 
 // Discord 알림의 규칙. 서버·클라이언트 양쪽에서 읽으므로 DB 도 fetch 도 부르지 않는다
@@ -100,19 +101,6 @@ export function discordAction(
   return { kind: previous === outcome ? "edit" : "post", event };
 }
 
-/** 메시지 언어. 설정 화면은 영어지만, 채널을 보는 팀은 한국어로 받고 싶을 수 있다. */
-export type DiscordLocale = "en" | "ko";
-
-export const DISCORD_LOCALES: { id: DiscordLocale; label: string }[] = [
-  { id: "en", label: "English" },
-  { id: "ko", label: "한국어" },
-];
-
-/** 문자열 칸이라 무엇이든 들어올 수 있다. 모르는 값은 영어로. */
-export function parseDiscordLocale(value: unknown): DiscordLocale {
-  return value === "ko" ? "ko" : "en";
-}
-
 /**
  * 메시지에 들어가는 문장 전부. 번역 라이브러리를 들일 만큼 많지 않아 표 하나로 둔다.
  *
@@ -120,7 +108,7 @@ export function parseDiscordLocale(value: unknown): DiscordLocale {
  * 검색해서 답을 찾을 수 있다.
  */
 const COPY: Record<
-  DiscordLocale,
+  NotificationLocale,
   {
     test: string;
     fixed: string;
@@ -173,7 +161,7 @@ export function renderDiscordMessage(
     prNumber: number | null;
     prUrl: string | null;
     failedLimit: number;
-    locale: DiscordLocale;
+    locale: NotificationLocale;
     /** 직전이 실패였던 통과. 제목으로 구분하지 않으면 그냥 통과와 똑같이 읽힌다 */
     recovered?: boolean;
     test?: boolean;
@@ -208,7 +196,7 @@ export function renderDiscordMessage(
   return content.length <= CONTENT_LIMIT ? content : `${content.slice(0, CONTENT_LIMIT - 1)}…`;
 }
 
-function headline(run: RunSummary, copy: (typeof COPY)[DiscordLocale]) {
+function headline(run: RunSummary, copy: (typeof COPY)[NotificationLocale]) {
   if (run.status === "failed") return copy.couldNotFinish;
   const { total, failed } = run.totals;
   if (failed > 0) return copy.failed(failed, total);

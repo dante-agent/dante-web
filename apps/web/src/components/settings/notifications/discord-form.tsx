@@ -14,7 +14,8 @@ import {
   ToggleRow,
 } from "@/components/settings/notifications/controls";
 import { Button } from "@/components/ui/button";
-import { DISCORD_EVENTS, DISCORD_LOCALES } from "@/lib/notifications/discord";
+import { DISCORD_EVENTS } from "@/lib/notifications/discord";
+import { NOTIFICATION_LOCALES } from "@/lib/notifications/locale";
 import type { NotificationSettings } from "@/lib/notifications/settings";
 
 // Discord 섹션. 채널의 웹훅 URL 하나로 붙는다 — Slack 처럼 OAuth 가 없어서 팀 설정에
@@ -108,7 +109,7 @@ export function DiscordNotificationsForm({
         title="Message language"
         description="Test names and error messages stay as they are."
       >
-        {DISCORD_LOCALES.map((option) => (
+        {NOTIFICATION_LOCALES.map((option) => (
           <RadioRow
             key={option.id}
             name="discordLocale"

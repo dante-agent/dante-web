@@ -1,5 +1,5 @@
 import { RUNNER_REPORTS_BACK } from "./check-run.ts";
-import type { DiscordLocale } from "./discord.ts";
+import type { NotificationLocale } from "./locale.ts";
 import {
   isTerminal,
   type ComponentChange,
@@ -42,7 +42,7 @@ type Change = ComponentChange["change"];
  * 않는다. 원문이어야 검색해서 답을 찾을 수 있다.
  */
 const COPY: Record<
-  DiscordLocale,
+  NotificationLocale,
   {
     /** 진행 중 상태의 제목 줄. 하나의 코멘트가 이 문구들을 거쳐 간다. */
     progress: Record<ProgressStatus, string>;
@@ -147,7 +147,7 @@ const COPY: Record<
   },
 };
 
-type Copy = (typeof COPY)[DiscordLocale];
+type Copy = (typeof COPY)[NotificationLocale];
 
 export function renderPrComment(run: RunSummary, settings: NotificationSettings): string {
   const copy = COPY[settings.prCommentLocale];

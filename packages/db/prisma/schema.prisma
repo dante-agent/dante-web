@@ -548,7 +548,7 @@ model ProjectNotificationSetting {
   /// 모양은 lib/notifications/settings.ts 의 CommentFields.
   prCommentFields         Json    @map("pr_comment_fields")
   /// GitHub 에 쓰는 언어 "en" | "ko" — 코멘트와 체크가 같이 따른다(이름에 check 가 없는 건 코멘트에 먼저 붙인 탓).
-  /// 모양과 해석은 Discord 와 같다(lib/notifications/discord.ts 의 DiscordLocale).
+  /// 모양과 해석은 lib/notifications/locale.ts 의 NotificationLocale.
   prCommentLocale         String  @default("en") @map("pr_comment_locale")
   /// 실패 목록에 몇 개까지 적을지. 나머지는 "…and N more" 로 접는다.
   prCommentFailedLimit    Int     @default(10) @map("pr_comment_failed_limit")
@@ -590,7 +590,7 @@ model ProjectNotificationSetting {
   /// 어떤 결과를 보낼지. 모양은 lib/notifications/settings.ts 의 SlackEvents.
   /// prCommentFields 와 같은 이유로 JSON 이고, 빈 객체면 기본값을 쓴다.
   slackEvents      Json    @default("{}") @map("slack_events")
-  /// "en" | "ko". 모양과 해석은 Discord 와 같다(lib/notifications/discord.ts 의 DiscordLocale).
+  /// "en" | "ko". 모양과 해석은 lib/notifications/locale.ts 의 NotificationLocale.
   slackLocale      String  @default("en") @map("slack_locale")
 
   createdAt DateTime @default(now()) @map("created_at")

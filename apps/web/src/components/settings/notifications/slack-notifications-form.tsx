@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { DISCORD_LOCALES, type DiscordLocale } from "@/lib/notifications/discord";
+import { NOTIFICATION_LOCALES, type NotificationLocale } from "@/lib/notifications/locale";
 import { SLACK_EVENTS, type SlackEvents } from "@/lib/notifications/settings";
 import type { SlackChannel } from "@/lib/slack/channels";
 
@@ -47,7 +47,7 @@ export function SlackNotificationsForm({
     slackChannelId: string | null;
     slackChannelName: string | null;
     slackEvents: SlackEvents;
-    slackLocale: DiscordLocale;
+    slackLocale: NotificationLocale;
   };
 }) {
   const [saveState, saveAction, saving] = useActionState<SaveState, FormData>(
@@ -154,7 +154,7 @@ export function SlackNotificationsForm({
         title="Message language"
         description="Test names and error messages stay as they are."
       >
-        {DISCORD_LOCALES.map((option) => (
+        {NOTIFICATION_LOCALES.map((option) => (
           <RadioRow
             key={option.id}
             name="slackLocale"
