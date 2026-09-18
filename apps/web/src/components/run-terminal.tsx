@@ -10,12 +10,19 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import Anser from "anser";
 import { CheckCircle2, ChevronRight, ChevronUp, Loader2, TimerOff, XCircle } from "lucide-react";
 import type { LiveRunMessage } from "@/app/api/projects/[projectRef]/runs/live/route";
+import { parseStoredRunLog } from "@/lib/projects/stored-run-log";
 import { cn } from "@/lib/utils";
 
 type Step = "setup" | "install" | "toolkit" | "test";
 type ResultMessage = Extract<LiveRunMessage, { type: "result" }>;
 
-type StepView = { state: "pending" | "running" | "done"; ok: boolean; ms: number; text: string };
+/** ms 가 null 이면 걸린 시간을 모른다(저장된 로그에는 단계 시간이 없다). */
+type StepView = {
+  state: "pending" | "running" | "done";
+  ok: boolean;
+  ms: number | null;
+  text: string;
+};
 
 export type RunView = {
   running: boolean;
@@ -216,7 +223,9 @@ function StepRow({
     <>
       {icon}
       <span className="font-semibold">{STEP_LABEL[step]}</span>
-      {view.state === "done" && <span className="text-muted-foreground">{formatMs(view.ms)}</span>}
+      {view.state === "done" && view.ms !== null && (
+        <span className="text-muted-foreground">{formatMs(view.ms)}</span>
+      )}
     </>
   );
   return onToggle ? (
@@ -415,6 +424,32 @@ export function RunPanel({
  * 실행 단계(setup→install→toolkit→test)와 러너 출력을 실시간으로 그린다. 폴더 보기의 RunPanel 과
  * 세션 상세 실행 패널이 함께 쓴다 — 접힘·리사이즈 같은 셸은 각자 두고 본문만 공유한다.
  */
+/**
+ * 저장된 실행 로그(PR 미리보기, 추천 화면의 지난 실행)를 실시간 실행과 같은 터미널로 그린다.
+ * 로그에 있는 명령만 단계로 보인다. 샌드박스 준비는 로그가 있다는 것 자체가 끝났다는 뜻이다.
+ */
+function storedRunView(logs: string): RunView {
+  const view = initialView();
+  view.running = false;
+  const sections = parseStoredRunLog(logs);
+  if (sections.length > 0) view.steps.setup = { state: "done", ok: true, ms: null, text: "" };
+  for (const section of sections) {
+    const prev = view.steps[section.step];
+    view.steps[section.step] = {
+      state: "done",
+      ok: section.exitCode === 0,
+      ms: null,
+      text: prev.text ? `${prev.text}\n${section.text}` : section.text,
+    };
+  }
+  return view;
+}
+
+export function StoredRunLog({ logs }: { logs: string }) {
+  const view = useMemo(() => storedRunView(logs), [logs]);
+  return <TerminalBody view={view} />;
+}
+
 export function TerminalBody({ view }: { view: RunView }) {
   // 설치 로그(레포 의존성·Dante 도구)는 수백 줄이라 접어 둔다. 실패했을 때만 원인을 보라고 펼친다.
   const [installOpen, setInstallOpen] = useState(false);
