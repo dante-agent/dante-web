@@ -394,7 +394,11 @@ export async function saveSlackNotifications(
   const channelId = String(formData.get("slackChannelId") ?? "").trim();
   if (enabled && !channelId) return { error: "Pick a channel first." };
 
-  const patch: Partial<NotificationSettings> = { slackEnabled: enabled, slackEvents: events };
+  const patch: Partial<NotificationSettings> = {
+    slackEnabled: enabled,
+    slackEvents: events,
+    slackLocale: parseDiscordLocale(formData.get("slackLocale")),
+  };
 
   if (channelId) {
     const connection = await loadSlackConnection(project.teamId);
@@ -457,6 +461,8 @@ export async function sendSlackTest(
         prNumber: null,
         failedLimit: settings.prCommentFailedLimit,
         test: true,
+        // 화면에서 지금 고른 언어로. 채널과 같은 이유로 저장 전에 시험해 볼 수 있다.
+        locale: parseDiscordLocale(formData.get("slackLocale") ?? settings.slackLocale),
       }),
     });
   } catch (error) {

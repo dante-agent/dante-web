@@ -53,6 +53,7 @@ export async function deliverSlack(
     repo: { owner: project.repoOwner, name: project.repoName },
     prNumber,
     failedLimit: settings.prCommentFailedLimit,
+    locale: settings.slackLocale,
   });
   const channel = `#${settings.slackChannelName ?? channelId}`;
 
