@@ -54,8 +54,8 @@ export function GenerateTestButton({
             text: `Generated \`${result.testPath}\`. Review it on the right and run it when you're ready.`,
           },
         ]);
-        // run=1 로 열자마자 실행해 통과 여부를 바로 보여준다.
-        router.push(`/project/${projectRef}/recommend/${result.versionId}?run=1`);
+        // 생성 직후에는 실행하지 않는다 — 사용자가 코드를 보고 Run 을 눌러 돌린다.
+        router.push(`/project/${projectRef}/recommend/${result.versionId}`);
       } catch (err) {
         // redirect()/notFound() 같은 프레임워크 신호는 삼키지 않고 되던진다.
         unstable_rethrow(err);
