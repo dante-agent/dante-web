@@ -95,7 +95,7 @@ export function TestRunPanel({
               type="button"
               onClick={regenerate}
               disabled={busy}
-              className="border-border hover:bg-muted/40 flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium text-[#eeedf0] disabled:cursor-not-allowed disabled:opacity-50"
+              className="border-border hover:bg-muted/40 flex cursor-pointer items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium text-[#eeedf0] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {regenerating ? (
                 <Loader2 className="size-3.5 animate-spin" />
