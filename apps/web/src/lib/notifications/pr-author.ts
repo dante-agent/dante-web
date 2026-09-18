@@ -8,8 +8,8 @@ import type { AuthorCheck, Payer, PullRequestAuthor } from "@/lib/notifications/
 /**
  * 비용을 낼 사람을 판정한다. author 는 PR 작성자, requester 는 Re-run 을 누른 사람이다.
  *
- * TODO(지권): PR 작성자와 Re-run 요청자가 다른 사람일 때 요청자 한도로 과금되는지 실제로
- * 검증한다. #129 검증 때는 작성자와 요청자가 같은 계정(wlrnjs)이라 구분되지 않았다.
+ * 작성자(wlrnjs)와 다른 팀원(junye0l)이 체크 Re-run 을 눌렀을 때 요청자 한도로 기록되는 것을
+ * 운영에서 확인했다(2026-09-18).
  */
 export function checkPayer(
   teamId: string,

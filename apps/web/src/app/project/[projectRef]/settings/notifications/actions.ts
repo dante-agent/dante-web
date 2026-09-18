@@ -354,8 +354,6 @@ export async function retryDelivery(formData: FormData) {
   // queued 를 바로 보내지 않고 작업을 다시 돌린다. 체크가 in_progress 로 나가는데
   // 결론을 채워줄 작업이 없으면 그 체크는 영원히 돈다.
   // 비용은 PR 작성자가 아니라 재시도를 누른 사람 한도로 센다(pr-author-rules.ts 의 Payer).
-  // TODO(지권): 전달 로그의 재시도 버튼을 실제로 눌러 누른 사람 한도로 도는지 검증한다.
-  // #129 에서 이 경로는 타입 검사까지만 했다.
   const user = await requireUser();
   await enqueuePullRequestJob(project, pr, {
     kind: "dante-requester",
