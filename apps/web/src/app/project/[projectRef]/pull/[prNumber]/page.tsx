@@ -2,11 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { GitPullRequest } from "lucide-react";
 import { FileView } from "@/components/file-view";
+import { StoredRunLog } from "@/components/run-terminal";
 import { requireUser } from "@/lib/auth/user";
+import { cn } from "@/lib/utils";
 import { fetchFileText, installationClient } from "@/lib/github/pull-request";
 import { getPullRequestPreview, parsePrNumber } from "@/lib/notifications/pull-request-preview";
 import { readStoredRun, type StoredRun } from "@/lib/notifications/stored-run";
 import { rerunPullRequest } from "./actions";
+import { RerunButton } from "./rerun-button";
 
 /** "다시 실행" 서버 액션이 after() 로 PR 작업을 돈다. api/github/webhook/route.ts 와 같은 이유 */
 export const maxDuration = 800;
@@ -80,7 +83,7 @@ export default async function PullRequestPreviewPage({
                 {" · "}
                 <span className="font-mono">{job.headSha.slice(0, 7)}</span>
                 {" · job "}
-                {job.status}
+                <span className={statusTone(job.status, run)}>{job.status}</span>
               </>
             )}
           </p>
@@ -95,9 +98,7 @@ export default async function PullRequestPreviewPage({
           <RerunPanel
             projectRef={projectRef}
             prNumber={prNumber}
-            inFlight={
-              job !== null && ["queued", "running", "awaiting_run", "testing"].includes(job.status)
-            }
+            inFlight={job !== null && IN_FLIGHT.includes(job.status)}
           />
         )}
 
@@ -142,9 +143,9 @@ export default async function PullRequestPreviewPage({
                 <summary className="text-muted-foreground border-border cursor-pointer px-3 py-1.5 text-[11px] font-medium">
                   Runner logs
                 </summary>
-                <pre className="border-border max-h-[480px] overflow-auto border-t bg-black p-3 font-mono text-[12px] leading-relaxed">
-                  {job.runLogs}
-                </pre>
+                <div className="flex max-h-[480px] flex-col">
+                  <StoredRunLog logs={job.runLogs} />
+                </div>
               </details>
             )}
           </>
@@ -177,16 +178,20 @@ function RerunPanel({
             ? "Dante is already working on this pull request."
             : "Generate and run tests again for the latest commit of this pull request. AI usage is billed to you."}
         </p>
-        <button
-          type="submit"
-          disabled={inFlight}
-          className="bg-brand-orange shrink-0 rounded-md px-3 py-1.5 text-xs font-medium text-black disabled:opacity-40"
-        >
-          Re-run
-        </button>
+        <RerunButton disabled={inFlight} />
       </form>
     </Panel>
   );
+}
+
+const IN_FLIGHT = ["queued", "running", "awaiting_run", "testing"];
+
+/** 상태 색: 도는 중 노랑, 통과 초록, 실패·에러 빨강. */
+function statusTone(status: string, run: StoredRun | null) {
+  if (IN_FLIGHT.includes(status)) return "text-chart-amber";
+  if (status === "failed") return "text-destructive";
+  if (status !== "done" || !run) return undefined;
+  return run.totals !== null && run.totals.failed === 0 ? "text-brand-mint" : "text-destructive";
 }
 
 /** folder-empty-state 의 "Recently opened" 상자와 같은 모양. */
@@ -214,7 +219,7 @@ function RunSummary({ run, jobError }: { run: StoredRun | null; jobError: string
 
   if (run.totals === null) {
     return (
-      <p>
+      <p className="text-destructive">
         Dante could not finish the run.
         {run.errorMessage && (
           <span className="text-muted-foreground mt-1 block font-mono">{run.errorMessage}</span>
@@ -225,7 +230,12 @@ function RunSummary({ run, jobError }: { run: StoredRun | null; jobError: string
 
   return (
     <>
-      <p className="font-medium">
+      <p
+        className={cn(
+          "font-medium",
+          run.totals.failed === 0 ? "text-brand-mint" : "text-destructive"
+        )}
+      >
         {run.totals.failed === 0
           ? `All ${run.totals.passed} tests passed`
           : `${run.totals.failed} of ${run.totals.total} tests failed`}

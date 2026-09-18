@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Loader2, Play, RotateCcw, Sparkles } from "lucide-react";
 import { unstable_rethrow, useRouter } from "next/navigation";
-import { TerminalBody, useLiveRun, type RunView } from "@/components/run-terminal";
+import { StoredRunLog, TerminalBody, useLiveRun, type RunView } from "@/components/run-terminal";
 import type { TestRunView } from "@/lib/projects/run-version";
 import { cn } from "@/lib/utils";
 import { regenerateFromFailure, type RegenerateResult } from "../../actions";
@@ -15,8 +15,8 @@ import { regenerateFromFailure, type RegenerateResult } from "../../actions";
 // 실행이 실패하면 "Regenerate & retry" — 실패 로그로 AI 가 테스트를 고쳐 새 버전을 만들고 그 세션으로
 // 이동해 자동 실행한다(?run=1). 완전 자동 재시도는 하지 않는다 — 매번 사용자가 버튼을 누른다.
 //
-// 처음 열 때는 저장된 마지막 실행(initialRun)의 로그를 보여준다 — 그건 단계 정보가 없는 blob 이라
-// 단순 로그로 찍고, 새로 실행을 돌리면 그때부터 단계별 뷰(TerminalBody)로 바뀐다.
+// 처음 열 때는 저장된 마지막 실행(initialRun)의 로그를 같은 터미널 모양(StoredRunLog)으로 보여주고,
+// 새로 실행을 돌리면 그때부터 실시간 뷰(TerminalBody)로 바뀐다.
 
 type Display = TestRunView["status"] | "idle" | "running";
 
@@ -26,13 +26,6 @@ const REGEN_ERROR: Record<Extract<RegenerateResult, { ok: false }>["reason"], st
   "not-failed": "There's no failed run to fix.",
   error: "Regeneration failed. Check your API key and AI settings.",
 };
-
-// vitest/jest 로그의 색상 코드(SGR)만 걷어낸다 — <pre> 는 escape 를 그대로 글자로 찍는다.
-const ANSI_SGR = /\[[0-9;]*m/g;
-
-function stripAnsi(text: string): string {
-  return text.replace(ANSI_SGR, "");
-}
 
 /** 라이브 실행 뷰 → 헤더 상태 라벨. 실행 전이면 initialRun, 그것도 없으면 idle. */
 function displayStatus(view: RunView | null, initialRun: TestRunView | null): Display {
@@ -77,7 +70,6 @@ export function TestRunPanel({
   // 한 번이라도 돈 적이 있으면(라이브 뷰 또는 저장된 실행) 버튼은 "Re-run".
   const ran = Boolean(view) || Boolean(initialRun);
   const busy = running || regenerating;
-  const initialLogs = initialRun?.logs ? stripAnsi(initialRun.logs).trimEnd() : "";
   const message = regenError ?? (!view ? (initialRun?.errorMessage ?? null) : null);
 
   function regenerate() {
@@ -151,17 +143,13 @@ export function TestRunPanel({
 
       {view ? (
         <TerminalBody view={view} />
+      ) : initialRun?.logs ? (
+        <StoredRunLog logs={initialRun.logs} />
       ) : (
-        <pre className="min-h-0 flex-1 overflow-auto p-3 font-mono text-xs leading-relaxed text-[#eeedf0]">
-          {initialLogs ? (
-            initialLogs
-          ) : (
-            <span className="text-[#8a8790]">
-              {runnerConfigured
-                ? "Run the tests to see live install and test logs here."
-                : "The test runner is not configured in this environment."}
-            </span>
-          )}
+        <pre className="min-h-0 flex-1 overflow-auto p-3 font-mono text-xs leading-relaxed text-[#8a8790]">
+          {runnerConfigured
+            ? "Run the tests to see live install and test logs here."
+            : "The test runner is not configured in this environment."}
         </pre>
       )}
     </div>
@@ -181,9 +169,9 @@ function StatusLabel({ status }: { status: Display }) {
       className={cn(
         "shrink-0 text-xs font-medium",
         status === "passed" && "text-brand-mint",
-        status === "failed" && "text-brand-orange",
-        status === "error" && "text-destructive",
-        (status === "idle" || status === "running") && "text-[#8a8790]"
+        (status === "failed" || status === "error") && "text-destructive",
+        status === "running" && "text-chart-amber",
+        status === "idle" && "text-[#8a8790]"
       )}
     >
       {labels[status]}

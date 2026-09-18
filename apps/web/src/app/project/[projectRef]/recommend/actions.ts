@@ -1,5 +1,6 @@
 "use server";
 
+import { stripAnsi } from "@dante/sandbox";
 import { revalidatePath } from "next/cache";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/user";
@@ -285,7 +286,8 @@ export async function regenerateFromFailure(
   if (!projectId) return { ok: false, reason: "not-found" };
 
   // 실패 원인은 로그 끝에 있어 뒤에서 자른다. 로그가 없으면 errorMessage 라도 준다.
-  const failureLogs = (run.logs ?? run.errorMessage ?? "").slice(-MAX_FAILURE_LOG);
+  // 저장 로그에는 색 코드가 남아 있다. AI 에게는 글자만 준다.
+  const failureLogs = stripAnsi(run.logs ?? run.errorMessage ?? "").slice(-MAX_FAILURE_LOG);
   const result = await generateTestForFile({
     repo,
     userId: user.id,

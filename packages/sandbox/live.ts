@@ -8,6 +8,7 @@ import {
   cloneDirName,
   gitSource,
   joinLogs,
+  keepColorCodes,
   readReport,
   type RunRequest,
   type RunResult,
@@ -182,7 +183,7 @@ export async function runTestLive(
  * 명령 하나를 돌리며 출력 조각을 onText 로 넘기고, 끝나면 로그 블록(runTest 의 section 과 같은 모양)을 만든다.
  *
  * 러너는 터미널이 아니면 색을 끈다. 화면이 색을 그리므로 FORCE_COLOR 로 켠다(리포트 JSON 파일에는 영향 없음).
- * 조각(onText)은 색 코드를 그대로, 저장용 로그 블록은 색 코드를 뺀다.
+ * 조각(onText)도 저장용 로그 블록도 색 코드를 남긴다. 저장된 로그도 같은 터미널 모양으로 그린다.
  * stdout 과 stderr 를 한 흐름으로 합친다 — vitest 가 둘에 걸쳐 출력해 나누면 순서가 어그러진다.
  */
 async function runStreaming(
@@ -221,8 +222,8 @@ async function runStreaming(
     stdout: sink(),
     stderr: sink(),
   });
-  // DB(TestRun.logs)에는 색 코드를 빼고 남긴다. 추천 화면 터미널은 로그를 글자 그대로 보여준다.
-  const output = stripAnsi(chunks.join(""));
+  // DB(TestRun.logs)에는 색 코드만 남긴다. 커서 이동 같은 나머지 제어 코드는 화면에서 글자로 찍힌다.
+  const output = keepColorCodes(chunks.join(""));
   return {
     exitCode: result.exitCode,
     section: [`$ ${opts.command}`, output, `(exit ${result.exitCode})`].filter(Boolean).join("\n"),

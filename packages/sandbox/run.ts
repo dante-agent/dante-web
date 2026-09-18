@@ -155,7 +155,7 @@ export async function runTest(req: RunRequest, signal?: AbortSignal): Promise<Ru
 
     const install = await sandbox.runCommand({
       cmd: "sh",
-      args: ["-c", req.commands.install],
+      args: ["-c", withColor(req.commands.install)],
       cwd: repoDir,
       timeoutMs: remainingMs(),
       signal,
@@ -173,7 +173,7 @@ export async function runTest(req: RunRequest, signal?: AbortSignal): Promise<Ru
     );
     const test = await sandbox.runCommand({
       cmd: "sh",
-      args: ["-c", command],
+      args: ["-c", withColor(command)],
       cwd: repoDir,
       timeoutMs: remainingMs(),
       signal,
@@ -238,6 +238,22 @@ export function gitSource(repo: RunRequest["repo"]) {
   return { ...base, username: "x-access-token", password: repo.token };
 }
 
+/** 색(SGR, ESC [ … m)만 남기고 나머지 ANSI 제어 코드를 뺀다. 저장 로그용. */
+export function keepColorCodes(text: string): string {
+  return text.replace(
+    /\u001b\[[0-9;?]*[ -/]*[@-ln-~]|\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g,
+    ""
+  );
+}
+
+/**
+ * 러너는 터미널이 아니면 색을 끈다. 저장된 로그를 화면이 색으로 그리므로 FORCE_COLOR 로 켠다
+ * (live.ts 의 runStreaming 과 같다. 리포트 JSON 파일에는 영향 없음).
+ */
+function withColor(command: string) {
+  return `export FORCE_COLOR=1; ${command}`;
+}
+
 /**
  * 명령 하나의 로그 블록. stdout 과 stderr 를 나누지 않고 합치는 이유는
  * vitest 가 둘에 걸쳐 출력해서, 나눠 놓으면 사람이 읽을 때 순서가 어그러져서다.
@@ -248,7 +264,9 @@ async function section(command: string, result: CommandFinished) {
     // 실행을 실패로 만들지 않고 로그만 포기한다.
     return `(Could not read logs: ${err instanceof Error ? err.message : String(err)})`;
   });
-  return [`$ ${command}`, output, `(exit ${result.exitCode})`].filter(Boolean).join("\n");
+  return [`$ ${command}`, keepColorCodes(output), `(exit ${result.exitCode})`]
+    .filter(Boolean)
+    .join("\n");
 }
 
 /**
