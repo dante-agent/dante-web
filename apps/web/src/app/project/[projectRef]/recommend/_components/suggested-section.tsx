@@ -1,14 +1,15 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { AlertTriangle, ListChecks, LoaderCircle, Sparkles } from "lucide-react";
-import { unstable_rethrow, useRouter } from "next/navigation";
+import { AlertTriangle, ListChecks, Sparkles } from "lucide-react";
+import { useRouter } from "next/navigation";
 import type {
   RecommendationOutcome,
   AiRecommendationResult,
 } from "@/lib/projects/ai-recommendations";
 import type { TestRecommendation } from "@/lib/projects/recommendations";
-import { generatePlannedTests, rerankRecommendations, saveRecommendChat } from "../actions";
+import { rerankRecommendations } from "../actions";
+import { generateHref } from "./generate-test-button";
 import { PanelHeader } from "./panel-header";
 import { SuggestedList } from "./suggested-list";
 
@@ -38,8 +39,8 @@ const MAX_SELECT = 3;
  * 추천 목록 + "AI 로 정렬" + 여러 개를 골라 한 번에 만드는 배치 생성.
  *
  * 처음 뜨는 목록(initial)은 서버가 경로 휴리스틱으로 공짜로 만든 것이다. "Sort with AI"는
- * 재정렬만 하고, 카드를 체크해 "Generate selected"를 누르면 프롬프트 경로와 같은 배치 생성으로
- * 세션(탭)으로 이동한다.
+ * 재정렬만 하고, 카드를 체크해 "Generate selected"를 누르면 생성 화면(/recommend/generate)으로
+ * 넘어가 한 번에 만든 뒤 세션(탭)으로 이동한다.
  */
 export function SuggestedSection({
   projectRef,
@@ -52,9 +53,7 @@ export function SuggestedSection({
   const [recommendations, setRecommendations] = useState(initial);
   const [status, setStatus] = useState<Status>("initial");
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [genError, setGenError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const [generating, startGenerate] = useTransition();
 
   function rerank() {
     startTransition(async () => {
@@ -77,37 +76,10 @@ export function SuggestedSection({
     });
   }
 
+  // 생성 화면이 요청·연출·오류 표시를 맡는다. 여기선 고른 파일들을 넘겨 이동만 한다.
   function generateSelected() {
-    if (selected.size === 0 || generating) return;
-    setGenError(null);
-    const paths = [...selected];
-    startGenerate(async () => {
-      try {
-        const result = await generatePlannedTests(projectRef, paths);
-        if (!result.ok) {
-          setGenError(
-            result.reason === "budget"
-              ? "You've exceeded this month's AI budget."
-              : result.reason === "preview"
-                ? "Generated a preview, but it can't be saved because you don't own this project."
-                : "Test generation failed. Check your API key and AI settings."
-          );
-          return;
-        }
-        await saveRecommendChat(projectRef, result.versionId, [
-          {
-            id: crypto.randomUUID(),
-            role: "assistant",
-            text: `Generated ${result.generated} test file${result.generated > 1 ? "s" : ""} from your selection.`,
-          },
-        ]);
-        const tests = result.versionIds.join(",");
-        router.push(`/project/${projectRef}/recommend/${result.versionId}?tests=${tests}&run=1`);
-      } catch (error) {
-        unstable_rethrow(error);
-        setGenError("Couldn't run test generation. Please try again in a moment.");
-      }
-    });
+    if (selected.size === 0) return;
+    router.push(generateHref(projectRef, [...selected]));
   }
 
   const message = MESSAGE[status];
@@ -141,32 +113,20 @@ export function SuggestedSection({
             {selected.size} selected{selected.size >= MAX_SELECT ? ` (max ${MAX_SELECT})` : ""}
           </span>
           <div className="flex items-center gap-2">
-            {genError && (
-              <span className="text-destructive flex items-center gap-1 text-xs">
-                <AlertTriangle className="size-3 shrink-0" />
-                {genError}
-              </span>
-            )}
             <button
               type="button"
               onClick={() => setSelected(new Set())}
-              disabled={generating}
-              className="text-muted-foreground hover:text-foreground text-xs disabled:opacity-50"
+              className="text-muted-foreground hover:text-foreground text-xs"
             >
               Clear
             </button>
             <button
               type="button"
               onClick={generateSelected}
-              disabled={generating}
-              className="bg-primary text-primary-foreground flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+              className="bg-primary text-primary-foreground flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium"
             >
-              {generating ? (
-                <LoaderCircle className="size-3.5 animate-spin" />
-              ) : (
-                <Sparkles className="size-3.5" />
-              )}
-              {generating ? "Generating..." : `Generate ${selected.size} selected`}
+              <Sparkles className="size-3.5" />
+              Generate {selected.size} selected
             </button>
           </div>
         </div>
