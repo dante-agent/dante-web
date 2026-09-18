@@ -457,6 +457,8 @@ export function TerminalBody({ view }: { view: RunView }) {
   const failed = (step: StepView) => step.state === "done" && !step.ok;
   const showInstall = installOpen || failed(view.steps.install);
   const showToolkit = toolkitOpen || failed(view.steps.toolkit);
+  const waiting =
+    view.running && Object.values(view.steps).every((step) => step.state === "pending");
 
   // 맨 아래를 보고 있을 때만 새 출력을 따라 내려간다. 위로 올려 읽는 중이면 붙잡지 않는다.
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -477,6 +479,13 @@ export function TerminalBody({ view }: { view: RunView }) {
       role="log"
       aria-live="polite"
     >
+      {/* 첫 단계 소식이 오기 전(요청·샌드박스 준비 대기)엔 줄이 하나도 없어 빈 화면이 된다. */}
+      {waiting && (
+        <div className="text-muted-foreground flex items-center gap-2 py-0.5">
+          <Loader2 className="text-chart-amber size-3.5 animate-spin" />
+          Starting run…
+        </div>
+      )}
       <StepRow step="setup" view={view.steps.setup} />
       <StepRow
         step="install"
