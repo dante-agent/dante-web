@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { AlertTriangle, LoaderCircle, Sparkles } from "lucide-react";
+import { AlertTriangle, ListChecks, LoaderCircle, Sparkles } from "lucide-react";
 import { unstable_rethrow, useRouter } from "next/navigation";
 import type {
   RecommendationOutcome,
@@ -9,6 +9,7 @@ import type {
 } from "@/lib/projects/ai-recommendations";
 import type { TestRecommendation } from "@/lib/projects/recommendations";
 import { generatePlannedTests, rerankRecommendations, saveRecommendChat } from "../actions";
+import { PanelHeader } from "./panel-header";
 import { SuggestedList } from "./suggested-list";
 
 // "initial" = 아직 버튼을 안 눌러 휴리스틱만 본 상태. 나머지는 액션이 준 outcome.
@@ -113,25 +114,29 @@ export function SuggestedSection({
   const isError = message.tone === "error" || message.tone === "warn";
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between gap-3">
-        <p className={`flex items-center gap-1.5 text-xs ${TONE_CLASS[message.tone]}`}>
-          {isError && <AlertTriangle className="size-3.5 shrink-0" />}
-          {message.text}
-        </p>
-        <button
-          type="button"
-          onClick={rerank}
-          disabled={pending}
-          className="border-border hover:bg-muted flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
-        >
-          <Sparkles className="size-3.5" />
-          {pending ? "Sorting..." : "Sort with AI"}
-        </button>
-      </div>
+    <>
+      <PanelHeader
+        icon={ListChecks}
+        title="Suggested"
+        action={
+          <button
+            type="button"
+            onClick={rerank}
+            disabled={pending}
+            className="border-border hover:bg-muted flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+          >
+            <Sparkles className="size-3.5" />
+            {pending ? "Sorting..." : "Sort with AI"}
+          </button>
+        }
+      />
+      <p className={`flex items-center gap-1.5 text-xs ${TONE_CLASS[message.tone]}`}>
+        {isError && <AlertTriangle className="size-3.5 shrink-0" />}
+        {message.text}
+      </p>
 
       {selected.size > 0 && (
-        <div className="border-border bg-card flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
+        <div className="border-border bg-card flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2">
           <span className="text-muted-foreground text-xs">
             {selected.size} selected{selected.size >= MAX_SELECT ? ` (max ${MAX_SELECT})` : ""}
           </span>
@@ -174,6 +179,6 @@ export function SuggestedSection({
         onToggle={toggle}
         selectionFull={selected.size >= MAX_SELECT}
       />
-    </div>
+    </>
   );
 }
