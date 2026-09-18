@@ -120,3 +120,35 @@ export async function getGeneratedSessionDetail(
     latestRun: version.runs[0] ?? null,
   };
 }
+
+/**
+ * 세션(= TestFileVersion) 하나를 지운다. 실행 기록(TestRun)·대화(TestChatThread)는 FK Cascade 로
+ * 함께 지워진다. 그 파일에 남은 버전이 하나도 없으면 빈 Component·TestFile 도 정리한다.
+ *
+ * versionId 는 클라이언트에서 오므로 믿지 않는다 — 이 사용자 소유 프로젝트의, repo 가 아닌
+ * (추천/사용자가 만든) 버전일 때만 지운다. 지웠으면 true.
+ */
+export async function deleteGeneratedSession(
+  projectRef: string,
+  userId: string,
+  versionId: string
+): Promise<boolean> {
+  const projectId = await getOwnedProjectId(projectRef, userId);
+  if (!projectId) return false;
+
+  const version = await prisma.testFileVersion.findFirst({
+    where: { id: versionId, source: { not: "repo" }, testFile: { component: { projectId } } },
+    select: { id: true, testFileId: true, testFile: { select: { componentId: true } } },
+  });
+  if (!version) return false;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.testFileVersion.delete({ where: { id: version.id } });
+    // 이 파일에 남은 버전(레포 포함)이 없으면 Component 를 지운다 — TestFile 은 Cascade 로 따라온다.
+    const remaining = await tx.testFileVersion.count({ where: { testFileId: version.testFileId } });
+    if (remaining === 0) {
+      await tx.component.delete({ where: { id: version.testFile.componentId } });
+    }
+  });
+  return true;
+}

@@ -1,6 +1,7 @@
 import { CheckCircle2, CircleDot, HelpCircle } from "lucide-react";
 import Link from "next/link";
 import type { GeneratedSession, SessionStatus } from "@/lib/projects/generated-sessions";
+import { SessionDeleteButton } from "./session-delete-button";
 
 const STATUS_ICON: Record<SessionStatus, typeof CheckCircle2> = {
   needs_clarification: HelpCircle,
@@ -34,14 +35,24 @@ export function SessionNavList({
       {sessions.map((session) => {
         const Icon = STATUS_ICON[session.status];
         return (
-          <Link
+          <div
             key={session.id}
-            href={`/project/${projectRef}/recommend/${session.id}`}
-            className="hover:bg-sidebar-accent/60 flex items-center gap-2 rounded-md px-2 py-1.5 text-left"
+            className="group hover:bg-sidebar-accent/60 flex items-center gap-1 rounded-md pr-1"
           >
-            <Icon className={`size-3.5 shrink-0 ${STATUS_COLOR[session.status]}`} />
-            <span className="text-sidebar-foreground truncate text-xs">{session.title}</span>
-          </Link>
+            <Link
+              href={`/project/${projectRef}/recommend/${session.id}`}
+              className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left"
+            >
+              <Icon className={`size-3.5 shrink-0 ${STATUS_COLOR[session.status]}`} />
+              <span className="text-sidebar-foreground truncate text-xs">{session.title}</span>
+            </Link>
+            <SessionDeleteButton
+              projectRef={projectRef}
+              versionId={session.id}
+              title={session.title}
+              className="opacity-0 group-hover:opacity-100 focus:opacity-100"
+            />
+          </div>
         );
       })}
     </div>

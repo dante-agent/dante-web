@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/user";
 import { matchFilesToPrompt, MAX_MATCHES } from "@/lib/projects/ai-file-match";
@@ -8,7 +9,10 @@ import {
   type AiRecommendationResult,
 } from "@/lib/projects/ai-recommendations";
 import { saveGeneratedChat, type StoredChatMessage } from "@/lib/projects/generated-chat";
-import { getGeneratedSessionDetail } from "@/lib/projects/generated-sessions";
+import {
+  deleteGeneratedSession,
+  getGeneratedSessionDetail,
+} from "@/lib/projects/generated-sessions";
 import { saveGeneratedVersion } from "@/lib/projects/generated-versions";
 import { getOwnedProjectId, getProjectRepo, type ProjectRepo } from "@/lib/projects/queries";
 import { getTestRecommendations, type TestRecommendation } from "@/lib/projects/recommendations";
@@ -288,4 +292,19 @@ export async function saveRecommendChat(
 ): Promise<void> {
   const user = await requireUser();
   await saveGeneratedChat(projectRef, user.id, versionId, messages);
+}
+
+/**
+ * 세션 내역에서 세션 하나를 지운다. 실행 기록·대화도 함께 지워진다(Cascade).
+ * 소유·존재 검증은 deleteGeneratedSession 이 한다. 지웠으면 목록·사이드바가 갱신되도록
+ * 추천 경로를 revalidate 한다.
+ */
+export async function deleteRecommendSession(
+  projectRef: string,
+  versionId: string
+): Promise<{ ok: boolean }> {
+  const user = await requireUser();
+  const ok = await deleteGeneratedSession(projectRef, user.id, versionId);
+  if (ok) revalidatePath(`/project/${projectRef}/recommend`);
+  return { ok };
 }
