@@ -51,18 +51,22 @@ describe("discordAction", () => {
   const events = DEFAULT_DISCORD_EVENTS;
 
   it("posts the first failure and edits the ones that follow", () => {
-    assert.deepEqual(discordAction("failed", null, events), { kind: "post" });
-    assert.deepEqual(discordAction("failed", "failed", events), { kind: "edit" });
+    assert.deepEqual(discordAction("failed", null, events), { kind: "post", event: "failed" });
+    assert.deepEqual(discordAction("failed", "failed", events), { kind: "edit", event: "failed" });
   });
 
   it("posts a recovery so the channel hears about it", () => {
-    assert.deepEqual(discordAction("passed", "failed", events), { kind: "post" });
+    assert.deepEqual(discordAction("passed", "failed", events), {
+      kind: "post",
+      event: "recovered",
+    });
   });
 
   it("stays quiet on passing runs by default", () => {
     assert.equal(discordAction("passed", null, events).kind, "skip");
     assert.deepEqual(discordAction("passed", "passed", { ...events, passed: true }), {
       kind: "edit",
+      event: "passed",
     });
   });
 
@@ -88,6 +92,15 @@ describe("renderDiscordMessage", () => {
     assert.ok(
       text.includes("[Open the pull request](<https://github.com/wlrnjs/my-blog/pull/42>)")
     );
+  });
+
+  it("tells a recovery apart from an ordinary pass", () => {
+    assert.ok(
+      renderDiscordMessage(passing, { ...context, recovered: true }).includes(
+        "**dante · fixed — all 24 tests passed**"
+      )
+    );
+    assert.ok(renderDiscordMessage(passing, context).includes("**dante · all 24 tests passed**"));
   });
 
   it("marks test notifications so nobody mistakes them for a real failure", () => {

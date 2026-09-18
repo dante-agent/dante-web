@@ -104,6 +104,7 @@ export async function deliverDiscord(
     prNumber: target.prNumber,
     prUrl: target.prUrl,
     failedLimit: settings.prCommentFailedLimit,
+    recovered: action.event === "recovered",
   });
 
   try {

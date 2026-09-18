@@ -66,7 +66,9 @@ export function discordOutcome(run: RunSummary): DiscordOutcome | null {
 }
 
 export type DiscordAction =
-  { kind: "post" } | { kind: "edit" } | { kind: "skip"; reason: string } | { kind: "none" };
+  | { kind: "post" | "edit"; event: DiscordEventId }
+  | { kind: "skip"; reason: string }
+  | { kind: "none" };
 
 /**
  * 보낼지, 고칠지, 넘길지.
@@ -95,7 +97,7 @@ export function discordAction(
           : "passed";
 
   if (!events[event]) return { kind: "skip", reason: `${event} is turned off` };
-  return previous === outcome ? { kind: "edit" } : { kind: "post" };
+  return { kind: previous === outcome ? "edit" : "post", event };
 }
 
 /** Discord 메시지 본문 상한. 넘으면 400 이 난다. */
@@ -117,13 +119,15 @@ export function renderDiscordMessage(
     prNumber: number | null;
     prUrl: string | null;
     failedLimit: number;
+    /** 직전이 실패였던 통과. 제목으로 구분하지 않으면 그냥 통과와 똑같이 읽힌다 */
+    recovered?: boolean;
     test?: boolean;
   }
 ) {
   const lines: string[] = [];
   if (context.test) lines.push("-# Test notification from Dante settings. Nothing actually ran.");
 
-  lines.push(`**dante · ${headline(run)}**`);
+  lines.push(`**dante · ${context.recovered ? "fixed — " : ""}${headline(run)}**`);
   lines.push(context.prNumber === null ? context.repo : `${context.repo} #${context.prNumber}`);
 
   if (run.status === "failed" && run.error) lines.push("", run.error);
