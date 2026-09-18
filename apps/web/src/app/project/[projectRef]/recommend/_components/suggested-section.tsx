@@ -94,13 +94,17 @@ export function SuggestedSection({
           );
           return;
         }
-        await saveRecommendChat(projectRef, result.versionId, [
+        // 배치의 모든 세션에 같은 대화를 저장한다 — 사이드바에서 어느 세션을 열어도 보이게.
+        const chat = [
           {
             id: crypto.randomUUID(),
-            role: "assistant",
+            role: "assistant" as const,
             text: `Generated ${result.generated} test file${result.generated > 1 ? "s" : ""} from your selection.`,
           },
-        ]);
+        ];
+        await Promise.all(
+          result.versionIds.map((versionId) => saveRecommendChat(projectRef, versionId, chat))
+        );
         const tests = result.versionIds.join(",");
         router.push(`/project/${projectRef}/recommend/${result.versionId}?tests=${tests}&run=1`);
       } catch (error) {
