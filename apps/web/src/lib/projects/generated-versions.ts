@@ -27,6 +27,8 @@ export async function saveGeneratedVersion(args: {
   code: string;
   /** "ai"(생성) | "user"(사용자가 직접 고침) | "repo"(레포 테스트를 가져옴). 기본 "ai". */
   source?: "ai" | "user" | "repo";
+  /** 한 프롬프트로 여러 파일을 배치 생성할 때 공유하는 묶음 id. 단건이면 생략. */
+  batchId?: string;
   /**
    * 레포 동기화용. 켜면 최신 버전이 없거나 "레포에서 온 버전인데 내용이 다를 때"만 쌓고,
    * 아니면 아무것도 쓰지 않고 null. AI·사용자 버전 위로 레포 내용을 덮지 않는다.
@@ -98,6 +100,7 @@ function insertVersion(args: Parameters<typeof saveGeneratedVersion>[0]): Promis
         content: args.code,
         version: (last?.version ?? 0) + 1,
         source: args.source ?? "ai",
+        batchId: args.batchId ?? null,
       },
       select: { id: true },
     });

@@ -1,21 +1,20 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
-import { Dialog } from "@base-ui/react/dialog";
-import { AlertTriangle, ArrowRight, Check, Copy, LoaderCircle, Sparkles } from "lucide-react";
-import Link from "next/link";
-import { unstable_rethrow } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { generateTest, type GenerateTestActionResult } from "../actions";
+import { useState, useTransition } from "react";
+import { AlertTriangle, LoaderCircle, Sparkles } from "lucide-react";
+import { unstable_rethrow, useRouter } from "next/navigation";
+import { generateTest, saveRecommendChat } from "../actions";
 
-const ERROR_MESSAGE: Record<"budget" | "not-found" | "error" | "failed", string> = {
+// 추천 카드의 "Generate tests" 버튼. 프롬프트 경로와 같은 도착지로 통일한다 — 모달로 코드를
+// 보여주는 대신, 만든 뒤 세션 상세(채팅 + Monaco + 실행)로 바로 이동한다. 세션엔 무엇을
+// 만들었는지 짧은 대화를 심어 프롬프트로 만든 세션과 같은 모양이 되게 한다.
+const ERROR_MESSAGE: Record<"budget" | "not-found" | "error" | "failed" | "preview", string> = {
   budget: "You've exceeded this month's AI budget, so tests can't be generated.",
   "not-found": "Couldn't find the recommended file. Refresh the list and try again.",
   error: "Test generation failed. Check your API key and AI settings.",
   failed: "Couldn't run test generation. Please try again in a moment.",
+  preview: "Generated a preview, but it can't be saved because you don't own this project.",
 };
-
-type State = GenerateTestActionResult | { ok: false; reason: "failed" } | null;
 
 export function GenerateTestButton({
   projectRef,
@@ -26,44 +25,49 @@ export function GenerateTestButton({
   filePath: string;
   componentName: string;
 }) {
-  const [open, setOpen] = useState(false);
-  const [result, setResult] = useState<State>(null);
-  const [copied, setCopied] = useState(false);
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => () => clearTimeout(copyTimer.current ?? undefined), []);
 
   function createTest() {
-    setResult(null);
-    setCopied(false);
-    setOpen(true);
+    setError(null);
     startTransition(async () => {
       try {
-        setResult(await generateTest(projectRef, filePath));
-      } catch (error) {
+        const result = await generateTest(projectRef, filePath);
+        if (!result.ok) {
+          setError(ERROR_MESSAGE[result.reason]);
+          return;
+        }
+        if (!result.versionId) {
+          setError(ERROR_MESSAGE.preview);
+          return;
+        }
+        // 세션에 초기 대화를 심어 프롬프트 경로와 같은 모양으로 만든다.
+        await saveRecommendChat(projectRef, result.versionId, [
+          { id: crypto.randomUUID(), role: "user", text: `Generate tests for ${componentName}` },
+          {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            text: `Generated \`${result.testPath}\`. Review it on the right and run it when you're ready.`,
+          },
+        ]);
+        // run=1 로 열자마자 실행해 통과 여부를 바로 보여준다.
+        router.push(`/project/${projectRef}/recommend/${result.versionId}?run=1`);
+      } catch (err) {
         // redirect()/notFound() 같은 프레임워크 신호는 삼키지 않고 되던진다.
-        unstable_rethrow(error);
-        setResult({ ok: false, reason: "failed" });
+        unstable_rethrow(err);
+        setError(ERROR_MESSAGE.failed);
       }
     });
   }
 
-  async function copy() {
-    if (!result?.ok || !navigator.clipboard) return;
-    await navigator.clipboard.writeText(result.code);
-    setCopied(true);
-    clearTimeout(copyTimer.current ?? undefined);
-    copyTimer.current = setTimeout(() => setCopied(false), 1500);
-  }
-
   return (
-    <Dialog.Root open={open} onOpenChange={setOpen}>
+    <div className="flex shrink-0 flex-col items-end gap-1">
       <button
         type="button"
         onClick={createTest}
         disabled={pending}
-        className="border-border hover:bg-muted flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+        className="border-border hover:bg-muted flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
       >
         {pending ? (
           <LoaderCircle className="size-3.5 animate-spin" />
@@ -72,63 +76,12 @@ export function GenerateTestButton({
         )}
         {pending ? "Generating..." : "Generate tests"}
       </button>
-
-      <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/40 transition-opacity duration-150 data-ending-style:opacity-0 data-starting-style:opacity-0" />
-        <Dialog.Popup className="border-border bg-popover fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100vh-2rem)] w-[52rem] max-w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 rounded-xl border p-5 shadow-lg transition-[scale,opacity] duration-100 ease-out outline-none data-ending-style:scale-[0.98] data-ending-style:opacity-0 data-starting-style:scale-[0.98] data-starting-style:opacity-0">
-          <div className="flex min-w-0 flex-col gap-1">
-            <Dialog.Title className="text-base font-medium">{componentName} tests</Dialog.Title>
-            <Dialog.Description className="text-muted-foreground truncate font-mono text-xs">
-              {result?.ok ? result.testPath : filePath}
-            </Dialog.Description>
-          </div>
-
-          {pending && (
-            <div className="text-muted-foreground flex min-h-48 items-center justify-center gap-2 text-sm">
-              <LoaderCircle className="size-4 animate-spin" />
-              Generating test code.
-            </div>
-          )}
-
-          {!pending && result?.ok && (
-            <pre className="border-border bg-muted min-h-48 overflow-auto rounded-lg border p-4 font-mono text-xs leading-relaxed">
-              <code>{result.code}</code>
-            </pre>
-          )}
-
-          {!pending && result && !result.ok && (
-            <div
-              role="alert"
-              className="text-destructive flex min-h-48 items-center justify-center gap-2 text-sm"
-            >
-              <AlertTriangle className="size-4 shrink-0" />
-              {ERROR_MESSAGE[result.reason]}
-            </div>
-          )}
-
-          <div className="flex justify-end gap-2">
-            <Dialog.Close render={<Button type="button" variant="ghost" size="sm" />}>
-              Close
-            </Dialog.Close>
-            {result?.ok && (
-              <Button type="button" variant="outline" size="sm" onClick={copy}>
-                {copied ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}
-                {copied ? "Copied" : "Copy code"}
-              </Button>
-            )}
-            {result?.ok && result.versionId && (
-              <Button
-                size="sm"
-                nativeButton={false}
-                render={<Link href={`/project/${projectRef}/recommend/${result.versionId}`} />}
-              >
-                Open session
-                <ArrowRight data-icon="inline-end" />
-              </Button>
-            )}
-          </div>
-        </Dialog.Popup>
-      </Dialog.Portal>
-    </Dialog.Root>
+      {error && (
+        <span className="text-destructive flex max-w-48 items-center gap-1 text-right text-[11px]">
+          <AlertTriangle className="size-3 shrink-0" />
+          {error}
+        </span>
+      )}
+    </div>
   );
 }

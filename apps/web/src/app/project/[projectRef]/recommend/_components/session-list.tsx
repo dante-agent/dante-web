@@ -1,19 +1,21 @@
 import { formatDistanceToNow } from "date-fns";
-import { MoreHorizontal } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import type { GeneratedSession, SessionStatus } from "@/lib/projects/generated-sessions";
+import { SessionDeleteButton } from "./session-delete-button";
 
 const STATUS_LABEL: Record<SessionStatus, string> = {
-  needs_clarification: "Needs clarification",
-  in_progress: "In progress",
-  completed: "Completed",
+  not_run: "Not run",
+  running: "Running",
+  passed: "Passed",
+  failed: "Failed",
 };
 
-const STATUS_VARIANT: Record<SessionStatus, "outline" | "secondary" | "default"> = {
-  needs_clarification: "outline",
-  in_progress: "secondary",
-  completed: "default",
+const STATUS_VARIANT: Record<SessionStatus, "outline" | "info" | "success" | "destructive"> = {
+  not_run: "outline",
+  running: "info",
+  passed: "success",
+  failed: "destructive",
 };
 
 export function SessionList({
@@ -37,12 +39,12 @@ export function SessionList({
               {formatDistanceToNow(new Date(session.updatedAt), { addSuffix: true })}
             </span>
           </Link>
-          <button
-            type="button"
-            className="text-muted-foreground hover:text-foreground shrink-0 pr-2"
-          >
-            <MoreHorizontal className="size-4" />
-          </button>
+          <SessionDeleteButton
+            projectRef={projectRef}
+            versionId={session.id}
+            title={session.title}
+            className="mr-1"
+          />
         </li>
       ))}
     </ul>

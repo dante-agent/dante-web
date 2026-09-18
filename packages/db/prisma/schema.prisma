@@ -417,13 +417,39 @@ model TestFileVersion {
   /// 문자열인 이유는 Project.testFramework 와 같다(값이 늘 때 마이그레이션 회피).
   source String
 
+  /// 한 번의 프롬프트로 여러 파일을 배치 생성하면 같은 batchId 를 공유한다(최대 3).
+  /// 사이드바가 같은 배치의 세션들을 묶어 보여주는 데 쓴다. 단건 생성이면 null.
+  batchId String? @map("batch_id") @db.Uuid
+
+  /// 사용자가 이 결과에 남긴 피드백. "up" | "down" | null. 품질 개선 신호로만 모은다.
+  feedback String?
+
   createdAt DateTime @default(now()) @map("created_at")
 
-  testFile TestFile  @relation(fields: [testFileId], references: [id], onDelete: Cascade)
-  runs     TestRun[]
+  testFile   TestFile        @relation(fields: [testFileId], references: [id], onDelete: Cascade)
+  runs       TestRun[]
+  chatThread TestChatThread?
 
   @@unique([testFileId, version])
   @@map("test_file_versions")
+}
+
+/// 추천 세션(= TestFileVersion) 하나의 대화. 전체 메시지를 JSON 배열로 통째 저장한다.
+///
+/// 메시지당 행이 아니라 JSON 한 덩이인 이유: 화면(FollowUp)이 이미 메시지 배열을 통으로
+/// 다루고 순서·클라이언트 생성 id 를 그대로 쓰면 된다. 조회도 "이 세션의 대화" 한 번뿐이라
+/// 행별로 쪼갤 이득이 없다. 세션이 지워지면 대화도 함께 지운다(Cascade).
+model TestChatThread {
+  testFileVersionId String @id @map("test_file_version_id") @db.Uuid
+
+  /// [{ id, role: "user" | "assistant", text }] 형태의 메시지 배열.
+  messages Json
+
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  testFileVersion TestFileVersion @relation(fields: [testFileVersionId], references: [id], onDelete: Cascade)
+
+  @@map("test_chat_threads")
 }
 
 /// 테스트 실행 1건. runner 가 만들고 갱신한다 (실행 환경은 ADR-0001).
