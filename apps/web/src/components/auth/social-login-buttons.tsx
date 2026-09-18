@@ -52,15 +52,13 @@ export function SocialLoginButtons({ next }: { next: string }) {
         <GitHubIcon className="size-4" />
         Continue with GitHub
       </Button>
-      <Button
-        variant="outline"
-        size="lg"
-        className="h-10 w-full gap-2.5"
-        onClick={() => signIn("google")}
-        disabled={pending !== null}
-      >
+      {/* Google 로그인은 아직 열지 않는다. 자리만 보여주고 누르지 못하게 막아 둔다. */}
+      <Button variant="outline" size="lg" className="h-10 w-full gap-2.5" disabled>
         <GoogleIcon className="size-4" />
         Continue with Google
+        <span className="text-muted-foreground border-border border px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-[0.12em]">
+          COMING SOON
+        </span>
       </Button>
 
       {failed && (
