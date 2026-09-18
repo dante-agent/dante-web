@@ -10,6 +10,7 @@ import {
 import { requireProjectContext } from "@/lib/projects/queries";
 import type { TestRunView } from "@/lib/projects/run-version";
 import { GeneratedTestsPanel, type GeneratedFile } from "./_components/generated-tests-panel";
+import { RegenerationProvider } from "./_components/regeneration";
 import { ResizableSplit } from "./_components/resizable-split";
 import { ReviewPanel } from "./_components/review-panel";
 import type { SessionDetail } from "./session-detail";
@@ -64,26 +65,31 @@ export default async function SessionDetailPage({
   // 좌우 구분선은 드래그로 폭 조절. 우측은 (파일이 여럿이면 탭 +) diff(위) + 실행 터미널(아래)을
   // 세로 구분선(VerticalSplit)으로 나눠 높이를 조절한다 — 터미널은 Run 버튼 줄만 남을 때까지
   // 내릴 수 있고, 코드는 넘치면 스크롤된다.
+  // RegenerationProvider — 좌측 채팅이 고치기를 시작하면 우측 코드 패널이 같은 연출 상태를 읽는다.
   return (
-    <ResizableSplit
-      left={
-        <ReviewPanel
-          projectName={project.name}
-          projectRef={projectRef}
-          session={session}
-          initialMessages={chat}
-          feedback={detail.feedback === "up" || detail.feedback === "down" ? detail.feedback : null}
-        />
-      }
-      right={
-        <GeneratedTestsPanel
-          projectRef={projectRef}
-          files={files}
-          runnerConfigured={runnerConfigured}
-          autoRun={autoRun}
-        />
-      }
-    />
+    <RegenerationProvider projectRef={projectRef}>
+      <ResizableSplit
+        left={
+          <ReviewPanel
+            projectName={project.name}
+            projectRef={projectRef}
+            session={session}
+            initialMessages={chat}
+            feedback={
+              detail.feedback === "up" || detail.feedback === "down" ? detail.feedback : null
+            }
+          />
+        }
+        right={
+          <GeneratedTestsPanel
+            projectRef={projectRef}
+            files={files}
+            runnerConfigured={runnerConfigured}
+            autoRun={autoRun}
+          />
+        }
+      />
+    </RegenerationProvider>
   );
 }
 

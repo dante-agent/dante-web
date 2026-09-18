@@ -252,7 +252,7 @@ export async function generatePlannedTests(
 const MAX_FAILURE_LOG = 6_000;
 
 export type RegenerateResult =
-  | { ok: true; versionId: string }
+  | { ok: true; versionId: string; testPath: string; code: string }
   | { ok: false; reason: "budget" | "not-found" | "not-failed" | "error" };
 
 /**
@@ -309,7 +309,7 @@ export async function regenerateFromFailure(
     text: "Fixed the test based on the failure logs, and re-running it now.",
   });
 
-  return { ok: true, versionId: newVersionId };
+  return { ok: true, versionId: newVersionId, testPath: result.testPath, code: result.code };
 }
 
 /**
@@ -366,7 +366,7 @@ export async function regenerateFromInstruction(
     },
   ]);
 
-  return { ok: true, versionId: newVersionId };
+  return { ok: true, versionId: newVersionId, testPath: result.testPath, code: result.code };
 }
 
 /** 한 세션의 대화를 다른 버전으로 옮기고 note 한 줄을 덧붙인다(재생성 시 대화 연속성). */

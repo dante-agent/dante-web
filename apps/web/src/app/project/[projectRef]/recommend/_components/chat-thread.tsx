@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ArrowRight, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -26,6 +26,7 @@ export function ChatThread({
   messages,
   pending,
   pendingLabel = "Thinking…",
+  pendingContent,
   onSend,
   onAction,
   disabled,
@@ -36,6 +37,8 @@ export function ChatThread({
   messages: ChatMessage[];
   pending?: boolean;
   pendingLabel?: string;
+  /** 기다리는 동안 라벨 대신 보여줄 내용(생성 연출 등). */
+  pendingContent?: ReactNode;
   onSend: (text: string) => void;
   onAction?: (messageId: string, actionKey: string) => void;
   disabled?: boolean;
@@ -85,11 +88,18 @@ export function ChatThread({
             </div>
           )
         )}
-        {pending && (
-          <div className="text-muted-foreground flex items-center gap-2 text-sm">
-            <Sparkles className="text-brand-cobalt size-4 shrink-0 animate-pulse" />
-            {pendingLabel}
+        {pending && pendingContent ? (
+          <div className="flex gap-2">
+            <Sparkles className="text-brand-cobalt mt-0.5 size-4 shrink-0" />
+            <div className="min-w-0 flex-1">{pendingContent}</div>
           </div>
+        ) : (
+          pending && (
+            <div className="text-muted-foreground flex items-center gap-2 text-sm">
+              <Sparkles className="text-brand-cobalt size-4 shrink-0 animate-pulse" />
+              {pendingLabel}
+            </div>
+          )
         )}
       </div>
 
