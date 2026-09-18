@@ -1,14 +1,18 @@
 "use client";
 
 import { startTransition, useActionState, useState, type FormEvent } from "react";
-import { Check } from "lucide-react";
 import {
   saveDiscordNotifications,
   sendDiscordTest,
   type DiscordTestState,
   type SaveState,
 } from "@/app/project/[projectRef]/settings/notifications/actions";
-import { RadioRow, Section, ToggleRow } from "@/components/settings/notifications/controls";
+import {
+  FormStatus,
+  RadioRow,
+  Section,
+  ToggleRow,
+} from "@/components/settings/notifications/controls";
 import { Button } from "@/components/ui/button";
 import { DISCORD_EVENTS, DISCORD_LOCALES } from "@/lib/notifications/discord";
 import type { NotificationSettings } from "@/lib/notifications/settings";
@@ -143,35 +147,5 @@ export function DiscordNotificationsForm({
         />
       </div>
     </form>
-  );
-}
-
-function FormStatus({
-  pending,
-  pendingLabel,
-  done,
-  doneLabel,
-  error,
-}: {
-  pending: boolean;
-  pendingLabel: string;
-  done?: boolean;
-  doneLabel: string;
-  error?: string;
-}) {
-  if (pending) return <span className="text-muted-foreground text-[13px]">{pendingLabel}</span>;
-  if (error) {
-    return (
-      <span role="alert" className="text-destructive text-[13px]">
-        {error}
-      </span>
-    );
-  }
-  if (!done) return null;
-  return (
-    <span className="text-brand-mint flex items-center gap-1.5 text-[13px]">
-      <Check className="size-3.5" />
-      {doneLabel}
-    </span>
   );
 }

@@ -525,7 +525,7 @@ model SlackInstallation {
 ///
 /// Slack·Discord·Email 이 붙을 것을 전제로 테이블 하나에 모은다. 채널마다 테이블을
 /// 나누면 "이 프로젝트의 알림 설정"을 읽는 데 조인이 늘고, 스누즈처럼 채널을
-/// 가로지르는 값이 어디 붙어야 할지 애매해진다. 지금은 GitHub 과 Discord 열이 있다.
+/// 가로지르는 값이 어디 붙어야 할지 애매해진다. 지금은 GitHub·Discord·Slack 열이 있다.
 ///
 /// 행이 없으면 "아직 한 번도 저장하지 않음"이다. 읽는 쪽은 없을 때 기본값을 쓴다
 /// (`lib/notifications/settings.ts`). 프로젝트를 만들 때 미리 넣지 않는 이유는,
@@ -576,6 +576,17 @@ model ProjectNotificationSetting {
   discordEvents              Json?   @map("discord_events")
   /// 메시지 언어 "en" | "ko". 문자열인 이유는 prCommentMode 와 같다.
   discordLocale              String  @default("en") @map("discord_locale")
+
+  // ── Slack ──────────────────────────────────────────
+  // 워크스페이스는 팀에 붙는다(SlackInstallation). 여기는 이 프로젝트가 어느 채널로
+  // 무엇을 보낼지만 적는다 (docs/notifications-slack.md §2).
+  slackEnabled     Boolean @default(false) @map("slack_enabled")
+  /// 채널 id ("C0123"). 이름은 바뀌므로 표시용으로만 캐시한다.
+  slackChannelId   String? @map("slack_channel_id")
+  slackChannelName String? @map("slack_channel_name")
+  /// 어떤 결과를 보낼지. 모양은 lib/notifications/settings.ts 의 SlackEvents.
+  /// prCommentFields 와 같은 이유로 JSON 이고, 빈 객체면 기본값을 쓴다.
+  slackEvents      Json    @default("{}") @map("slack_events")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -690,7 +701,7 @@ model PullRequestTest {
 model NotificationDelivery {
   id        String  @id @default(uuid()) @db.Uuid
   projectId String  @map("project_id") @db.Uuid
-  /// "github_comment" | "github_check" | "discord" | (나중에) "slack" | "email"
+  /// "github_comment" | "github_check" | "discord" | "slack" | (나중에) "email"
   surface   String
   prNumber  Int?    @map("pr_number")
   /// "ok" | "skipped" | "failed"
