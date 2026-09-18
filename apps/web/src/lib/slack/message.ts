@@ -1,3 +1,4 @@
+import type { DiscordLocale } from "@/lib/notifications/discord";
 import type { RunSummary } from "@/lib/notifications/run-summary";
 import type { SlackEventId } from "@/lib/notifications/settings";
 
@@ -19,18 +20,57 @@ export type SlackMessageInput = {
   failedLimit: number;
   /** 설정 화면의 "테스트 알림". 진짜 실패로 오해하지 않게 맨 위에 밝힌다 */
   test?: boolean;
+  /** 우리가 쓰는 문장의 언어. 테스트 이름·실패 사유·run.error 는 원문 그대로 둔다 (discord.ts 와 같다) */
+  locale: DiscordLocale;
+};
+
+/** 메시지에 들어가는 문장 전부. discord.ts 의 COPY 와 같은 이유로 표 하나로 둔다. */
+const COPY: Record<
+  DiscordLocale,
+  {
+    test: string;
+    failed: (failed: number, total: number) => string;
+    recovered: (total: number) => string;
+    passed: (total: number) => string;
+    cannotFinish: string;
+    more: (rest: number) => string;
+    openPullRequest: string;
+    openInDante: string;
+  }
+> = {
+  en: {
+    test: "Test notification from Dante — sample results, nothing actually ran.",
+    failed: (failed, total) => `${failed} of ${total} ${total === 1 ? "test" : "tests"} failed`,
+    recovered: (total) => `Fixed — all ${total} ${total === 1 ? "test passes" : "tests pass"} now`,
+    passed: (total) => `All ${total} ${total === 1 ? "test" : "tests"} passed`,
+    cannotFinish: "Dante couldn't finish this run",
+    more: (rest) => `…and ${rest} more`,
+    openPullRequest: "Open the pull request",
+    openInDante: "Open in Dante",
+  },
+  ko: {
+    test: "Dante 테스트 알림입니다 — 표본 결과이고, 실제로 실행된 것은 없습니다.",
+    failed: (failed, total) => `테스트 ${total}개 중 ${failed}개 실패`,
+    recovered: (total) => `복구됨 — 이제 테스트 ${total}개 모두 통과`,
+    passed: (total) => `테스트 ${total}개 모두 통과`,
+    cannotFinish: "Dante 가 실행을 끝내지 못했습니다",
+    more: (rest) => `…외 ${rest}개`,
+    openPullRequest: "PR 열기",
+    openInDante: "Dante 에서 보기",
+  },
 };
 
 export function renderSlackMessage(input: SlackMessageInput) {
   const { run, repo, prNumber } = input;
   const repoUrl = `https://github.com/${repo.owner}/${repo.name}`;
   const prUrl = prNumber === null ? null : `${repoUrl}/pull/${prNumber}`;
+  const copy = COPY[input.locale];
 
   const lines: string[] = [];
   if (input.test) {
-    lines.push("_Test notification from Dante — sample results, nothing actually ran._");
+    lines.push(`_${copy.test}_`);
   }
-  lines.push(`*dante* · ${headline(input.event, run)}`);
+  lines.push(`*dante* · ${headline(input.event, run, copy)}`);
   lines.push(
     prUrl
       ? link(prUrl, `${repo.owner}/${repo.name} #${prNumber}`)
@@ -44,7 +84,7 @@ export function renderSlackMessage(input: SlackMessageInput) {
       lines.push(`• \`${escape(failure.file)}\` › ${escape(failure.name)}${reason}`);
     }
     const rest = run.failures.length - input.failedLimit;
-    if (rest > 0) lines.push(`…and ${rest} more`);
+    if (rest > 0) lines.push(copy.more(rest));
   }
 
   if (input.event === "cannotFinish" && run.error) {
@@ -52,24 +92,24 @@ export function renderSlackMessage(input: SlackMessageInput) {
   }
 
   const links: string[] = [];
-  if (prUrl) links.push(link(prUrl, "Open the pull request"));
-  if (run.detailUrl) links.push(link(run.detailUrl, "Open in Dante"));
+  if (prUrl) links.push(link(prUrl, copy.openPullRequest));
+  if (run.detailUrl) links.push(link(run.detailUrl, copy.openInDante));
   if (links.length > 0) lines.push("", links.join(" · "));
 
   return lines.join("\n");
 }
 
-function headline(event: SlackEventId, run: RunSummary) {
+function headline(event: SlackEventId, run: RunSummary, copy: (typeof COPY)[DiscordLocale]) {
   const { total, failed } = run.totals;
   switch (event) {
     case "failed":
-      return `${failed} of ${total} ${total === 1 ? "test" : "tests"} failed`;
+      return copy.failed(failed, total);
     case "recovered":
-      return `Fixed — all ${total} ${total === 1 ? "test passes" : "tests pass"} now`;
+      return copy.recovered(total);
     case "passed":
-      return `All ${total} ${total === 1 ? "test" : "tests"} passed`;
+      return copy.passed(total);
     case "cannotFinish":
-      return "Dante couldn't finish this run";
+      return copy.cannotFinish;
   }
 }
 

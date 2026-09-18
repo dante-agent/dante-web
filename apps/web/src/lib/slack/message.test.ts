@@ -13,6 +13,7 @@ describe("renderSlackMessage", () => {
       repo,
       prNumber: 42,
       failedLimit: 2,
+      locale: "en",
     });
     const lines = text.split("\n");
 
@@ -28,7 +29,14 @@ describe("renderSlackMessage", () => {
       ...SAMPLE_RUNS.failing,
       failures: [{ file: "A.test.tsx", name: "renders <Button>", message: "a & b" }],
     };
-    const text = renderSlackMessage({ event: "failed", run, repo, prNumber: 1, failedLimit: 10 });
+    const text = renderSlackMessage({
+      event: "failed",
+      run,
+      repo,
+      prNumber: 1,
+      failedLimit: 10,
+      locale: "en",
+    });
 
     assert.ok(text.includes("renders &lt;Button&gt; — a &amp; b"));
   });
@@ -41,6 +49,7 @@ describe("renderSlackMessage", () => {
       prNumber: null,
       failedLimit: 10,
       test: true,
+      locale: "en",
     });
 
     assert.ok(text.startsWith("_Test notification from Dante"));
@@ -56,9 +65,26 @@ describe("renderSlackMessage", () => {
       repo,
       prNumber: 42,
       failedLimit: 10,
+      locale: "en",
     });
 
     assert.ok(text.startsWith("*dante* · Fixed — all 24 tests pass now"));
     assert.ok(!text.includes("•"));
+  });
+
+  it("writes our own sentences in Korean but keeps test names as they are", () => {
+    const text = renderSlackMessage({
+      event: "failed",
+      run: SAMPLE_RUNS.failing,
+      repo,
+      prNumber: 42,
+      failedLimit: 1,
+      locale: "ko",
+    });
+
+    assert.ok(text.startsWith("*dante* · 테스트 24개 중 3개 실패"));
+    assert.ok(text.includes("› renders disabled state"));
+    assert.ok(text.includes("…외 2개"));
+    assert.ok(text.includes("|PR 열기>"));
   });
 });

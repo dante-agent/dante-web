@@ -189,6 +189,8 @@ export type NotificationSettings = {
   slackChannelId: string | null;
   slackChannelName: string | null;
   slackEvents: SlackEvents;
+  /** 언어 목록은 Discord 와 같이 쓴다. 두 표면의 선택지가 어긋나지 않게 */
+  slackLocale: DiscordLocale;
 };
 
 export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
@@ -212,6 +214,7 @@ export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
   slackChannelId: null,
   slackChannelName: null,
   slackEvents: DEFAULT_SLACK_EVENTS,
+  slackLocale: "en",
 };
 
 /** 실패 목록에 적을 개수의 범위. 0 이면 목록 토글을 끄는 것과 같아 1부터 받는다. */
@@ -271,6 +274,7 @@ export function toNotificationSettings(
     slackChannelId: row.slackChannelId,
     slackChannelName: row.slackChannelName,
     slackEvents: parseSlackEvents(row.slackEvents),
+    slackLocale: parseDiscordLocale(row.slackLocale),
   };
 }
 

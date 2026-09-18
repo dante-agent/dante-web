@@ -56,6 +56,7 @@ export async function saveNotificationSettings(
     ...(patch.slackChannelId !== undefined && { slackChannelId: patch.slackChannelId }),
     ...(patch.slackChannelName !== undefined && { slackChannelName: patch.slackChannelName }),
     ...(patch.slackEvents !== undefined && { slackEvents: patch.slackEvents }),
+    ...(patch.slackLocale !== undefined && { slackLocale: patch.slackLocale }),
   } satisfies Prisma.ProjectNotificationSettingUncheckedUpdateInput;
 
   await prisma.projectNotificationSetting.upsert({

@@ -589,6 +589,8 @@ model ProjectNotificationSetting {
   /// 어떤 결과를 보낼지. 모양은 lib/notifications/settings.ts 의 SlackEvents.
   /// prCommentFields 와 같은 이유로 JSON 이고, 빈 객체면 기본값을 쓴다.
   slackEvents      Json    @default("{}") @map("slack_events")
+  /// "en" | "ko". 모양과 해석은 Discord 와 같다(lib/notifications/discord.ts 의 DiscordLocale).
+  slackLocale      String  @default("en") @map("slack_locale")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

@@ -7,7 +7,12 @@ import {
   type SaveState,
   type SlackTestState,
 } from "@/app/project/[projectRef]/settings/notifications/actions";
-import { FormStatus, Section, ToggleRow } from "@/components/settings/notifications/controls";
+import {
+  FormStatus,
+  RadioRow,
+  Section,
+  ToggleRow,
+} from "@/components/settings/notifications/controls";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -16,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { DISCORD_LOCALES, type DiscordLocale } from "@/lib/notifications/discord";
 import { SLACK_EVENTS, type SlackEvents } from "@/lib/notifications/settings";
 import type { SlackChannel } from "@/lib/slack/channels";
 
@@ -41,6 +47,7 @@ export function SlackNotificationsForm({
     slackChannelId: string | null;
     slackChannelName: string | null;
     slackEvents: SlackEvents;
+    slackLocale: DiscordLocale;
   };
 }) {
   const [saveState, saveAction, saving] = useActionState<SaveState, FormData>(
@@ -55,6 +62,7 @@ export function SlackNotificationsForm({
   const [enabled, setEnabled] = useState(initial.slackEnabled);
   const [channelId, setChannelId] = useState(initial.slackChannelId ?? "");
   const [events, setEvents] = useState(initial.slackEvents);
+  const [locale, setLocale] = useState(initial.slackLocale);
   const [last, setLast] = useState<"save" | "test" | null>(null);
 
   // action 대신 onSubmit 으로 보낸다. React 19 는 <form action> 이 끝나면 폼을 reset 해서
@@ -138,6 +146,22 @@ export function SlackNotificationsForm({
             checked={events[event.id]}
             disabled={!enabled}
             onChange={(next) => setEvents((prev) => ({ ...prev, [event.id]: next }))}
+          />
+        ))}
+      </Section>
+
+      <Section
+        title="Message language"
+        description="Test names and error messages stay as they are."
+      >
+        {DISCORD_LOCALES.map((option) => (
+          <RadioRow
+            key={option.id}
+            name="slackLocale"
+            value={option.id}
+            label={option.label}
+            selected={locale === option.id}
+            onSelect={() => setLocale(option.id)}
           />
         ))}
       </Section>
