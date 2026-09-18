@@ -34,6 +34,7 @@ import {
   X,
 } from "lucide-react";
 import { ChatMarkdown } from "@/components/chat-markdown";
+import { requestTestTyping } from "@/components/generation/test-typing-request";
 import { requestTestRun } from "@/components/run-terminal";
 import { Button } from "@/components/ui/button";
 import { splitStream } from "@/lib/chat/stream-tail";
@@ -430,6 +431,8 @@ function ChatPanel({
 
       // 채팅이 테스트를 고쳤으면 Test Code 칸을 다시 읽고, 실행을 부탁받았으면 터미널에서 돌린다.
       // 대화 저장과 상관없이 이미 일어난 일이라 먼저 처리한다.
+      // 고친 코드는 Test Code 칸에서 타이핑 연출로 보여준다(새로 읽어 온 뒤 FileView 가 재생).
+      if (tail?.actions.edited && file) requestTestTyping(file);
       if (tail?.actions.edited) router.refresh();
       if (tail?.actions.runVersionId) {
         requestTestRun({ file, versionId: tail.actions.runVersionId });

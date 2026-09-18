@@ -25,10 +25,12 @@ import { iconForFile } from "@/components/file-icons";
 import { CodeSkeleton } from "@/components/generation/code-skeleton";
 import { GenerationSteps } from "@/components/generation/generation-steps";
 import { SendingFiles } from "@/components/generation/sending-files";
+import { onTestTypingRequest } from "@/components/generation/test-typing-request";
 import {
   useGenerationPerformance,
   type GenerationOutcome,
 } from "@/components/generation/use-generation-performance";
+import { useTypewriter } from "@/components/generation/use-typewriter";
 import { onTestRunRequest, RunPanel, useLiveRun } from "@/components/run-terminal";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { MONACO_THEME as THEME, setupMonaco } from "@/lib/monaco-theme";
@@ -187,13 +189,15 @@ function GenerateTest({ projectRef, file }: { projectRef: string; file: string }
   }, [projectRef, file]);
   const finish = useCallback(() => router.refresh(), [router]);
 
-  const { stage, files, typing, error, start } = useGenerationPerformance({ generate, finish });
+  const { stage, files, typing, error, start } = useGenerationPerformance<{ code: string }>({
+    finish,
+  });
 
   if (stage === null || stage === "error") {
     return (
       <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
         <p className="text-sm">No tests yet.</p>
-        <Button size="sm" onClick={start}>
+        <Button size="sm" onClick={() => start(generate)}>
           <Sparkles data-icon="inline-start" />
           Generate tests
         </Button>
@@ -235,6 +239,9 @@ function Cell({
   if (!show) return null;
   return <div className={cn("border-border min-w-0", className)}>{children}</div>;
 }
+
+/** 채팅의 타이핑 요청 뒤 이 시간 안에 테스트가 바뀌어야 연출한다(새로 읽어 오는 데 걸리는 시간 여유). */
+const TYPING_REQUEST_WINDOW_MS = 15_000;
 
 /** 본문 높이. 헤더 47px 만 빼면 화면 끝까지. */
 const PANE_HEIGHT = "h-[calc(100svh-47px)]";
@@ -339,6 +346,34 @@ export function FileView({
     const r = gridRef.current.getBoundingClientRect();
     setLeftPct(Math.min(80, Math.max(20, ((e.clientX - r.left) / r.width) * 100)));
   };
+
+  // AI 채팅이 테스트를 고치면 새로 읽어 온 코드를 Test Code 칸에 타이핑 연출로 보여준다.
+  // 요청(이벤트)을 받으면 대기 상태로 두고, 곧이어 테스트 내용이 바뀌면 그 내용을 재생한다.
+  // 저장·생성처럼 요청 없이 바뀐 경우엔 재생하지 않는다(생성은 자체 연출이 이미 끝났다).
+  const typer = useTypewriter();
+  const [typingArmed, setTypingArmed] = useState(false);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const unsubscribe = onTestTypingRequest(file, () => {
+      setTypingArmed(true);
+      // 내용이 그대로라 바뀌지 않으면 나중의 다른 변경(저장 등)에 재생하지 않도록 풀어 둔다.
+      clearTimeout(timer);
+      timer = setTimeout(() => setTypingArmed(false), TYPING_REQUEST_WINDOW_MS);
+    });
+    return () => {
+      unsubscribe();
+      clearTimeout(timer);
+    };
+  }, [file]);
+  // 바뀐 내용은 렌더 중에 바로 재생을 건다 — effect 로 미루면 새 코드가 한 번 통째로 보였다가 지워진다.
+  const [lastTest, setLastTest] = useState(content.test);
+  if (lastTest !== content.test) {
+    setLastTest(content.test);
+    if (typingArmed) {
+      setTypingArmed(false);
+      if (content.test) typer.play(content.test);
+    }
+  }
 
   // 실행 상태는 파일마다 따로다(부모가 key={file} 로 새로 띄운다). 파일을 옮기면 실행도 멈춘다.
   const run = useLiveRun(projectRef);
@@ -609,7 +644,11 @@ export function FileView({
         </Cell>
         <Cell show={showRight} className="bg-black">
           {content.test ? (
-            <CodePane lang={lang} value={content.test} />
+            <CodePane
+              lang={lang}
+              value={typer.shown ?? content.test}
+              follow={typer.shown !== null}
+            />
           ) : (
             <GenerateTest projectRef={projectRef} file={file} />
           )}
