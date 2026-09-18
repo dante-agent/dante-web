@@ -31,42 +31,46 @@ export function SuggestedList({
   selectionFull: boolean;
 }) {
   return (
-    <ul className="flex flex-col gap-3">
+    <ul className="-mx-1 flex flex-col">
       {recommendations.map((rec) => {
         const checked = selected.has(rec.filePath);
         return (
           <li
             key={rec.id}
-            className="bg-card border-border flex items-start gap-3 rounded-xl border p-4"
+            className="border-border/60 flex items-start gap-2 border-b pl-2 last:border-0"
           >
+            {/* 체크박스는 카드 버튼 바깥에 둔다 — 버튼 안에 넣으면 클릭이 겹친다. */}
             <input
               type="checkbox"
               checked={checked}
               disabled={!checked && selectionFull}
               onChange={() => onToggle(rec.filePath)}
               aria-label={`Select ${rec.componentName} for batch generation`}
-              className="accent-primary mt-1 size-4 shrink-0 disabled:opacity-40"
+              className="accent-primary mt-4 size-4 shrink-0 disabled:opacity-40"
             />
-            <div className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-lg">
-              <FileCode2 className="text-muted-foreground size-4" />
-            </div>
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-sm font-medium">{rec.componentName}</span>
-                <Badge variant={PRIORITY_VARIANT[rec.priority]}>
-                  {PRIORITY_LABEL[rec.priority]}
-                </Badge>
-              </div>
-              <p className="text-muted-foreground mt-0.5 truncate font-mono text-xs">
-                {rec.filePath}
-              </p>
-              <p className="text-foreground mt-1.5 text-sm">{rec.reason}</p>
+              <GenerateTestButton
+                projectRef={projectRef}
+                filePath={rec.filePath}
+                componentName={rec.componentName}
+              >
+                <span className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-lg">
+                  <FileCode2 className="text-muted-foreground size-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-2">
+                    <span className="font-mono text-sm font-medium">{rec.componentName}</span>
+                    <Badge variant={PRIORITY_VARIANT[rec.priority]}>
+                      {PRIORITY_LABEL[rec.priority]}
+                    </Badge>
+                  </span>
+                  <span className="text-muted-foreground mt-0.5 block truncate font-mono text-xs">
+                    {rec.filePath}
+                  </span>
+                  <span className="text-foreground mt-1.5 block text-sm">{rec.reason}</span>
+                </span>
+              </GenerateTestButton>
             </div>
-            <GenerateTestButton
-              projectRef={projectRef}
-              filePath={rec.filePath}
-              componentName={rec.componentName}
-            />
           </li>
         );
       })}

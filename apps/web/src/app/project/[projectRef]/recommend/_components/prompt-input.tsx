@@ -38,7 +38,7 @@ export function PromptInput({ projectRef }: { projectRef: string }) {
     <div className="flex flex-col gap-2">
       <form
         onSubmit={handleSubmit}
-        className="bg-card border-border flex items-center gap-3 rounded-xl border p-2 pl-4"
+        className="bg-background/60 border-border flex min-h-16 items-center gap-3 rounded-xl border p-2 pl-4"
       >
         <input
           type="text"
