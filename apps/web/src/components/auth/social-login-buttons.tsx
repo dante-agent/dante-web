@@ -53,12 +53,19 @@ export function SocialLoginButtons({ next }: { next: string }) {
         Continue with GitHub
       </Button>
       {/* Google 로그인은 아직 열지 않는다. 자리만 보여주고 누르지 못하게 막아 둔다. */}
-      {/* 배지는 오른쪽 끝에 띄워서, 아이콘·문구가 GitHub 버튼과 같은 가운데에 오게 한다. */}
-      <Button variant="outline" size="lg" className="relative h-10 w-full gap-2.5" disabled>
+      {/* 배지는 오른쪽 끝에 띄워서, 아이콘·문구가 GitHub 버튼과 같은 가운데에 오게 한다.
+          버튼 폭이 360px 보다 좁으면 배지가 문구와 겹치므로 숨긴다(버튼은 비활성이라 눌리지 않는다).
+          화면 폭이 아니라 버튼 폭을 보는 건, 데스크톱에서도 로그인 칸이 좁아지는 구간이 있어서다. */}
+      <Button
+        variant="outline"
+        size="lg"
+        className="@container relative h-10 w-full gap-2.5"
+        disabled
+      >
         <GoogleIcon className="size-4" />
         Continue with Google
-        <span className="text-muted-foreground border-border absolute right-3 border px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-[0.12em]">
-          SOON
+        <span className="text-muted-foreground border-border absolute right-2.5 hidden border px-1 py-0.5 font-mono text-[9px] font-bold tracking-[0.06em] @min-[360px]:block">
+          COMING SOON
         </span>
       </Button>
 
