@@ -1,4 +1,5 @@
 import { Prisma, prisma } from "@dante/db";
+import { isUuid } from "@/lib/chat/cursor";
 import { getOwnedProjectId } from "@/lib/projects/queries";
 
 // 추천 세션(TestFileVersion)별 대화를 DB(TestChatThread)에 통째로 저장/조회한다 (서버 전용).
@@ -24,6 +25,8 @@ async function ownedVersion(
   userId: string,
   versionId: string
 ): Promise<string | null> {
+  // uuid 모양이 아니면 Prisma 캐스팅에서 던진다. 없는 버전으로 친다(generated-sessions.ts 와 같다).
+  if (!isUuid(versionId)) return null;
   const projectId = await getOwnedProjectId(projectRef, userId);
   if (!projectId) return null;
   const version = await prisma.testFileVersion.findFirst({

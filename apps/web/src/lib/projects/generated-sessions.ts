@@ -1,4 +1,5 @@
 import { prisma } from "@dante/db";
+import { isUuid } from "@/lib/chat/cursor";
 import { getOwnedProjectId } from "@/lib/projects/queries";
 
 // 저장된 테스트 버전을 "세션"으로 조회한다 (서버 전용).
@@ -92,6 +93,9 @@ export async function getGeneratedSessionDetail(
   userId: string,
   versionId: string
 ): Promise<GeneratedSessionDetail | null> {
+  // 세션 id 는 URL(/recommend/<id>, ?tests=)에서 온다. uuid 모양이 아니면 Prisma 가
+  // @db.Uuid 캐스팅에서 던져 404 대신 500 이 난다 — 쿼리 전에 없는 세션으로 친다.
+  if (!isUuid(versionId)) return null;
   const projectId = await getOwnedProjectId(projectRef, userId);
   if (!projectId) return null;
 
@@ -143,6 +147,7 @@ export async function deleteGeneratedSession(
   userId: string,
   versionId: string
 ): Promise<boolean> {
+  if (!isUuid(versionId)) return false;
   const projectId = await getOwnedProjectId(projectRef, userId);
   if (!projectId) return false;
 
@@ -170,6 +175,7 @@ export async function setSessionFeedback(
   versionId: string,
   value: "up" | "down" | null
 ): Promise<boolean> {
+  if (!isUuid(versionId)) return false;
   const projectId = await getOwnedProjectId(projectRef, userId);
   if (!projectId) return false;
   const res = await prisma.testFileVersion.updateMany({
