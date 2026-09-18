@@ -25,7 +25,7 @@ export default async function RecommendPage({
   const sessions = activeTab === "sessions" ? await loadSessions(projectRef) : [];
 
   return (
-    <div className="mx-auto flex w-2/3 flex-col gap-8 p-8">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 p-4 sm:p-6 lg:p-8">
       <PromptInput projectRef={projectRef} />
 
       <RecommendTabs projectRef={projectRef} active={activeTab} />
@@ -48,9 +48,14 @@ export default async function RecommendPage({
           </p>
         ))}
       {activeTab === "scheduled" && (
-        <p className="text-muted-foreground py-12 text-center text-sm">
-          No scheduled test generation jobs yet.
-        </p>
+        <div className="text-muted-foreground flex flex-col items-center gap-1 py-12 text-center text-sm">
+          <p className="text-foreground font-medium">Scheduled generation isn’t available yet.</p>
+          <p className="max-w-md">
+            This will let you run test generation on a schedule (e.g. nightly for files that
+            changed) without opening this page. For now, generate tests from the prompt or the
+            Suggested tab.
+          </p>
+        </div>
       )}
     </div>
   );
