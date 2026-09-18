@@ -213,7 +213,7 @@ function StepRow({
   if (view.state === "pending") return null;
   const icon =
     view.state === "running" ? (
-      <Loader2 className="text-muted-foreground size-3.5 animate-spin" />
+      <Loader2 className="text-chart-amber size-3.5 animate-spin" />
     ) : view.ok ? (
       <CheckCircle2 className="text-brand-mint size-3.5" />
     ) : (
@@ -307,7 +307,7 @@ function barStatus(view: RunView | null): {
     return {
       label: "Running",
       detail: current ? STEP_LABEL[current] : null,
-      className: "text-muted-foreground",
+      className: "text-chart-amber",
     };
   }
   const result = view.result;

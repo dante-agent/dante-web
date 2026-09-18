@@ -169,9 +169,9 @@ function StatusLabel({ status }: { status: Display }) {
       className={cn(
         "shrink-0 text-xs font-medium",
         status === "passed" && "text-brand-mint",
-        status === "failed" && "text-brand-orange",
-        status === "error" && "text-destructive",
-        (status === "idle" || status === "running") && "text-[#8a8790]"
+        (status === "failed" || status === "error") && "text-destructive",
+        status === "running" && "text-chart-amber",
+        status === "idle" && "text-[#8a8790]"
       )}
     >
       {labels[status]}
