@@ -112,6 +112,24 @@ Dante — 24 passed · 3 components updated · 12s
 [Open in Dante](https://…/project/abc123/pull/42) · [Re-run](…)
 ```
 
+### 3.5 언어 (English / 한국어)
+
+코멘트와 체크(§5)를 같은 언어로 쓴다. 기본값은 영어 — 외부 기여자가 드나드는 레포도 있어서.
+
+- 문구는 `comment.ts` · `check-run.ts` 의 `COPY` 표에 둔다. Discord · Slack 과 같은 방식이다.
+- **번역하지 않는 것**: 테스트 이름, 파일 경로, 실패 사유, 건너뛴 사유(`skipReason`), Dante 오류
+  문장(`run.error`). 원문이어야 검색해서 답을 찾을 수 있다.
+
+```markdown
+### Dante — 테스트 24개 중 3개 실패
+
+|           |                                          |
+| --------- | ---------------------------------------- |
+| 테스트    | 전체 24개 · **21개 통과** · **3개 실패** |
+| 컴포넌트  | 추가 2개 · 변경 1개                      |
+| 소요 시간 | 14s                                      |
+```
+
 ---
 
 ## 4. PR 코멘트 — 표시 항목 토글
@@ -154,6 +172,8 @@ Dante — 24 passed · 3 components updated · 12s
   → 토글 옆에 **"레포 설정에서 required 로 추가하기"** 딥링크와, 현재 required 인지
   아닌지 감지해서 보여주는 배지를 같이 둔다. 이게 없으면 "켰는데 왜 안 막지?" 문의가 온다.
 - Check 상세 화면의 "Re-run" 버튼 → `check_run.rerequested` 웹훅으로 재실행.
+- 제목과 summary 는 코멘트와 같은 언어로 쓴다(§3.5). 체크 이름 `dante` 는 required check 목록에
+  들어가는 문자열이라 번역하지 않는다.
 
 ### 끝나지 않는 체크를 만들지 않는다
 
@@ -244,6 +264,12 @@ GitHub 문서 범위에서는 하나만 관련된다:
 - 토글을 바꾸면 옆 패널에 코멘트가 실시간으로 다시 그려진다.
 - 데이터는 이 프로젝트의 **가장 최근 실제 실행 결과**를 쓴다. 없으면 샘플 데이터.
 - 실패 있음 / 전부 통과 두 가지를 탭으로 전환해서 볼 수 있게 한다 (접힘 상태 확인용).
+- 마크다운 원문이 아니라 **GitHub 에서 보일 모양으로 렌더**한다 (`comment-markdown.tsx`).
+  - `<details>` 는 GitHub 처럼 접힌 채로 시작한다. 전부 통과해 접힌 상세 안에 컴포넌트 표
+    `<details>` 가 또 들어가는데, 둘 다 따로 접힌다.
+  - 링크는 모양만 있고 눌러도 이동하지 않는다.
+  - 실제 실행 결과의 테스트 이름이 들어올 수 있어서 원본 HTML 은 버리고 `<details><summary>`
+    만 직접 잘라 그린다. `rehype-raw` 는 쓰지 않는다.
 
 목적은 같다 — **저장 전에 결과물을 눈으로 확인**해서, PR 을 만들어 보는 왕복을 없앤다.
 
@@ -262,7 +288,8 @@ Notifications
 │  │  ├─ 동작: Sticky | 매번 새 코멘트
 │  │  ├─ 변경 없으면 코멘트 안 달기        [✓]
 │  │  ├─ 전부 통과 시 접기                 [✓]
-│  │  └─ 표시 항목: Compact | Detailed | Customize ▾
+│  │  ├─ 표시 항목: Compact | Detailed | Customize ▾
+│  │  └─ 언어: English | 한국어 (체크도 따른다, §3.5)
 │  ├─ Check Run
 │  │  ├─ 켜기/끄기
 │  │  └─ 테스트 실패 시 머지 차단  [ ]  (required check 상태 배지)
@@ -299,6 +326,8 @@ model ProjectNotificationSetting {
   /// { counts, failedList, failedReason, components, coverage, duration, link, rerun }
   prCommentFields         Json    @map("pr_comment_fields")
   prCommentFailedLimit    Int     @default(10)       @map("pr_comment_failed_limit")
+  /// "en" | "ko" — 코멘트와 체크가 같이 따른다 (§3.5)
+  prCommentLocale         String  @default("en")     @map("pr_comment_locale")
 
   // ── GitHub Check Run ───────────────────────────────
   checkRunEnabled  Boolean @default(true)  @map("check_run_enabled")

@@ -547,7 +547,8 @@ model ProjectNotificationSetting {
   /// 표시 항목 토글 묶음. 항목이 늘어도 마이그레이션이 필요 없게 JSON 으로 둔다.
   /// 모양은 lib/notifications/settings.ts 의 CommentFields.
   prCommentFields         Json    @map("pr_comment_fields")
-  /// 코멘트 언어 "en" | "ko". 모양과 해석은 Discord 와 같다(lib/notifications/discord.ts 의 DiscordLocale).
+  /// GitHub 에 쓰는 언어 "en" | "ko" — 코멘트와 체크가 같이 따른다(이름에 check 가 없는 건 코멘트에 먼저 붙인 탓).
+  /// 모양과 해석은 Discord 와 같다(lib/notifications/discord.ts 의 DiscordLocale).
   prCommentLocale         String  @default("en") @map("pr_comment_locale")
   /// 실패 목록에 몇 개까지 적을지. 나머지는 "…and N more" 로 접는다.
   prCommentFailedLimit    Int     @default(10) @map("pr_comment_failed_limit")

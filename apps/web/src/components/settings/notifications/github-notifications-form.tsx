@@ -176,8 +176,8 @@ export function GithubNotificationsForm({
           </Section>
 
           <Section
-            title="Comment language"
-            description="Test names and error messages stay as they are."
+            title="Language"
+            description="For the comment and the check run. Test names and error messages stay as they are."
           >
             {DISCORD_LOCALES.map((option) => (
               <RadioRow
