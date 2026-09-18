@@ -53,11 +53,12 @@ export function SocialLoginButtons({ next }: { next: string }) {
         Continue with GitHub
       </Button>
       {/* Google 로그인은 아직 열지 않는다. 자리만 보여주고 누르지 못하게 막아 둔다. */}
-      <Button variant="outline" size="lg" className="h-10 w-full gap-2.5" disabled>
+      {/* 배지는 오른쪽 끝에 띄워서, 아이콘·문구가 GitHub 버튼과 같은 가운데에 오게 한다. */}
+      <Button variant="outline" size="lg" className="relative h-10 w-full gap-2.5" disabled>
         <GoogleIcon className="size-4" />
         Continue with Google
-        <span className="text-muted-foreground border-border border px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-[0.12em]">
-          COMING SOON
+        <span className="text-muted-foreground border-border absolute right-3 border px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-[0.12em]">
+          SOON
         </span>
       </Button>
 
