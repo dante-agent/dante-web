@@ -1,6 +1,6 @@
-import type { DiscordLocale } from "@/lib/notifications/discord";
-import { isTerminal, type RunSummary } from "@/lib/notifications/run-summary";
-import type { NotificationSettings } from "@/lib/notifications/settings";
+import type { DiscordLocale } from "./discord.ts";
+import { isTerminal, type RunSummary } from "./run-summary.ts";
+import type { NotificationSettings } from "./settings.ts";
 
 // Check Run 쪽. 코멘트와 목적이 다르다.
 //

@@ -5,7 +5,7 @@ import {
   parseDiscordLocale,
   type DiscordEvents,
   type DiscordLocale,
-} from "@/lib/notifications/discord";
+} from "./discord.ts";
 
 // 알림 설정값의 모양과 기본값. 서버·클라이언트 양쪽에서 읽으므로 여기에는
 // DB 도 GitHub 도 부르지 않는 순수 값만 둔다 (화면이 이 파일을 import 한다).
