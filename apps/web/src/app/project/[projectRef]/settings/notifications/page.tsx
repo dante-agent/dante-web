@@ -3,6 +3,7 @@ import { prisma } from "@dante/db";
 import { ConnectionBanner } from "@/components/settings/github/connection-banner";
 import { StatusBadge } from "@/components/settings/notifications/controls";
 import { DeliveryLog } from "@/components/settings/notifications/delivery-log";
+import { DiscordNotificationsForm } from "@/components/settings/notifications/discord-form";
 import { GithubNotificationsForm } from "@/components/settings/notifications/github-notifications-form";
 import { NotificationScopeForm } from "@/components/settings/notifications/scope-form";
 import { SnoozeBanner } from "@/components/settings/notifications/snooze";
@@ -26,7 +27,7 @@ export const maxDuration = 800;
 
 // 알림 — 언제, 어디로 알릴지.
 //
-// 지금은 GitHub 만 있다. Slack 은 두 층으로 나뉜다 — 워크스페이스를 붙이는
+// 지금은 GitHub 과 Discord 가 있다. Discord 는 웹훅 URL 하나로 붙어 프로젝트에만 둔다. Slack 은 두 층으로 나뉜다 — 워크스페이스를 붙이는
 // OAuth 는 팀마다 한 번만 하면 되는 일이라 팀 설정(/team/<id>/settings)에 붙이고,
 // 어느 채널로 무엇을 보낼지는 프로젝트마다 다르니 여기 남긴다. 둘 다 아직 없다.
 export default async function ProjectNotificationsPage({
@@ -95,7 +96,7 @@ export default async function ProjectNotificationsPage({
     <>
       <SettingsHeader
         title="Notifications"
-        description="Which events reach you, and where — a comment on the pull request, a check that can block the merge."
+        description="Which events reach you, and where — a comment on the pull request, a check that can block the merge, a message in Discord."
       />
 
       {notice && <ConnectionBanner notice={notice} projectRef={project.ref} />}
@@ -123,10 +124,14 @@ export default async function ProjectNotificationsPage({
       />
       <SnoozeControl projectRef={project.ref} />
 
+      <div className="mt-12">
+        <DiscordNotificationsForm projectRef={project.ref} initial={settings} />
+      </div>
+
       <div className="mt-12 max-w-2xl">
         <ComingSoon>
-          Slack, Discord and email. You&apos;ll connect a Slack workspace once in team settings,
-          then choose here which channel this project posts to.
+          Slack and email. You&apos;ll connect a Slack workspace once in team settings, then choose
+          here which channel this project posts to.
         </ComingSoon>
       </div>
 

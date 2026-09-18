@@ -20,6 +20,7 @@ type Delivery = {
 const SURFACE_LABEL: Record<string, string> = {
   github_comment: "comment",
   github_check: "check",
+  discord: "discord",
 };
 
 // 결과는 글자로 적는다. 기호 하나로 줄이면 스크린리더가 읽을 것이 없고,

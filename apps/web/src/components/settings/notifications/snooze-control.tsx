@@ -32,7 +32,7 @@ export function SnoozeControl({ projectRef }: { projectRef: string }) {
   return (
     <form action={submit} className="mt-4 flex max-w-2xl flex-wrap items-center gap-3">
       <input type="hidden" name="projectRef" value={projectRef} />
-      <span className="text-[13px]">Pause writing to GitHub for</span>
+      <span className="text-[13px]">Pause all notifications for</span>
 
       {/* 네이티브 <select> 대신 온보딩 레포 선택기(repo-picker.tsx)와 같은 것을
           쓴다. 네이티브는 OS 가 화살표를 그려서 좌우 여백이 어긋난다.

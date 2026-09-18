@@ -1,4 +1,5 @@
 import { prisma, type Prisma } from "@dante/db";
+import { decryptSecret, encryptSecret } from "@/lib/crypto/secret";
 import {
   DEFAULT_COMMENT_FIELDS,
   toNotificationSettings,
@@ -25,7 +26,7 @@ export async function loadNotificationSettings(projectId: string): Promise<Notif
  */
 export async function saveNotificationSettings(
   projectId: string,
-  patch: Partial<NotificationSettings>
+  patch: Partial<Omit<NotificationSettings, "discordWebhookSaved">>
 ) {
   // undefined 인 칸은 아예 넣지 않는다. Prisma 는 update 에서 undefined 를
   // "건드리지 마라"로 읽지만, 그렇더라도 넣지 않는 편이 create 쪽과 모양이 같다.
@@ -47,6 +48,9 @@ export async function saveNotificationSettings(
     ...(patch.branchFilters !== undefined && { branchFilters: patch.branchFilters }),
     ...(patch.skipDraftPr !== undefined && { skipDraftPr: patch.skipDraftPr }),
     ...(patch.snoozedUntil !== undefined && { snoozedUntil: patch.snoozedUntil }),
+    ...(patch.discordEnabled !== undefined && { discordEnabled: patch.discordEnabled }),
+    ...(patch.discordEvents !== undefined && { discordEvents: patch.discordEvents }),
+    ...(patch.discordLocale !== undefined && { discordLocale: patch.discordLocale }),
   } satisfies Prisma.ProjectNotificationSettingUncheckedUpdateInput;
 
   await prisma.projectNotificationSetting.upsert({
@@ -58,8 +62,39 @@ export async function saveNotificationSettings(
   });
 }
 
+/** Discord 웹훅 URL 을 암호화해 저장한다. 설정 행이 없으면 기본값으로 만든다. */
+export async function saveDiscordWebhookUrl(projectId: string, url: string) {
+  const encryptedDiscordWebhookUrl = encryptSecret(url);
+  await prisma.projectNotificationSetting.upsert({
+    where: { projectId },
+    create: { projectId, prCommentFields: DEFAULT_COMMENT_FIELDS, encryptedDiscordWebhookUrl },
+    update: { encryptedDiscordWebhookUrl },
+  });
+}
+
+/**
+ * 저장된 웹훅 URL. 없거나 복호화가 안 되면 null.
+ *
+ * 복호화 실패(ENCRYPTION_KEY 를 갈았거나 값이 변조됨)는 "안 붙어 있음"과 같게 다룬다.
+ * 던지면 알림 전달 전체가 멈추는데, 사용자가 할 일은 어느 쪽이든 URL 을 다시 붙이는 것이다.
+ */
+export async function loadDiscordWebhookUrl(projectId: string) {
+  const row = await prisma.projectNotificationSetting.findUnique({
+    where: { projectId },
+    select: { encryptedDiscordWebhookUrl: true },
+  });
+  if (!row?.encryptedDiscordWebhookUrl) return null;
+
+  try {
+    return decryptSecret(row.encryptedDiscordWebhookUrl);
+  } catch (error) {
+    console.error("[notifications] discord webhook url could not be decrypted", error);
+    return null;
+  }
+}
+
 /** 전달 로그 한 줄이 가리키는 표면. Slack·Email 이 붙으면 여기에 값이 는다. */
-export type DeliverySurface = "github_comment" | "github_check";
+export type DeliverySurface = "github_comment" | "github_check" | "discord";
 
 export type DeliveryStatus = "ok" | "skipped" | "failed";
 
