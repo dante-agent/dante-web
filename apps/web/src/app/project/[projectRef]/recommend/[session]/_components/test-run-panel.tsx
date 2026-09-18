@@ -100,7 +100,7 @@ export function TestRunPanel({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-black">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-col bg-black">
       <div className="border-border flex h-10 shrink-0 items-center gap-3 border-b px-3">
         <StatusLabel status={status} />
         {message && (
