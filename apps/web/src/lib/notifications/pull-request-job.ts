@@ -30,7 +30,11 @@ import {
 } from "@/lib/notifications/pr-test-run";
 import { finalRun, type LocatedComponent } from "@/lib/notifications/run-result";
 import { dispatchTestRuns } from "@/lib/notifications/test-run-queue";
-import { parseRunInput, type RunInput } from "@/lib/notifications/test-run-rules";
+import {
+  parseRunInput,
+  TEST_RUN_STALE_MS,
+  type RunInput,
+} from "@/lib/notifications/test-run-rules";
 import { packageDependencies } from "@/lib/projects/test-generation-prompt";
 import { queuedRun, type RunSummary } from "@/lib/notifications/run-summary";
 
@@ -90,6 +94,7 @@ const JOB_PROJECT_SELECT = {
  *
  * 같은 커밋에 대한 작업은 하나다(projectId·prNumber·headSha). GitHub 이 같은 배달을
  * 다시 보내거나 Re-run 을 누르면 새로 만들지 않고 그 작업을 다시 queued 로 되돌린다.
+ * 그 작업이 아직 돌고 있으면 아무것도 하지 않는다(claimJob).
  *
  * payer 는 AI 비용을 낼 사람이다. 푸시는 PR 작성자, Re-run 은 누른 사람을 넘긴다.
  */
@@ -99,10 +104,34 @@ export async function enqueuePullRequestJob(
   payer: Payer
 ) {
   const key = { projectId: project.id, prNumber: pr.number, headSha: pr.headSha };
-  const job = await prisma.pullRequestJob.upsert({
-    where: { projectId_prNumber_headSha: key },
-    create: { ...key, status: "queued" },
-    update: {
+  const jobId = await claimJob(key, new Date());
+  if (!jobId) return;
+
+  after(() => runPullRequestJob(jobId, project, pr, payer));
+}
+
+const IN_FLIGHT = ["queued", "running", "awaiting_run", "testing"];
+
+/**
+ * 같은 커밋의 작업을 queued 로 되돌리고 그 ID 를 돌려준다. 이미 돌고 있으면 null.
+ *
+ * 돌고 있는 작업을 또 돌리면 두 작업이 한 행을 같이 쓰면서 각자 GitHub 체크를 새로 만든다.
+ * 실행과 마지막 결과 전달은 한 번뿐이라 나머지 체크는 영영 in_progress 로 남는다
+ * (Re-run 을 연달아 누른 경우). 그래서 "돌고 있지 않을 때만 되돌린다" 를 UPDATE 한 번으로 한다 —
+ * 읽고 나서 쓰면 동시에 누른 두 요청이 둘 다 "안 돈다" 를 본다.
+ * 오래 멈춘 작업(함수가 죽음)은 돌고 있지 않은 것으로 본다. 기준은 죽은 실행 판정과 같다.
+ */
+async function claimJob(
+  key: { projectId: string; prNumber: number; headSha: string },
+  now: Date
+): Promise<string | null> {
+  const staleBefore = new Date(now.getTime() - TEST_RUN_STALE_MS);
+  const updated = await prisma.pullRequestJob.updateManyAndReturn({
+    where: {
+      ...key,
+      OR: [{ status: { notIn: IN_FLIGHT } }, { updatedAt: { lt: staleBefore } }],
+    },
+    data: {
       status: "queued",
       error: null,
       startedAt: null,
@@ -112,8 +141,21 @@ export async function enqueuePullRequestJob(
     },
     select: { id: true },
   });
+  if (updated.length > 0) return updated[0].id;
 
-  after(() => runPullRequestJob(job.id, project, pr, payer));
+  try {
+    const created = await prisma.pullRequestJob.create({
+      data: { ...key, status: "queued" },
+      select: { id: true },
+    });
+    return created.id;
+  } catch (error) {
+    // 행이 이미 있다 = 위 UPDATE 가 건너뛴 돌고 있는 작업, 또는 동시에 온 요청이 방금 만든 작업.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return null;
+    }
+    throw error;
+  }
 }
 
 async function runPullRequestJob(
