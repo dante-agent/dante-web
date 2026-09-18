@@ -6,6 +6,7 @@ import {
   saveGithubNotifications,
   type SaveState,
 } from "@/app/project/[projectRef]/settings/notifications/actions";
+import { CommentMarkdown } from "@/components/settings/notifications/comment-markdown";
 import { RadioRow, Section, ToggleRow } from "@/components/settings/notifications/controls";
 import { Button } from "@/components/ui/button";
 import { renderPrComment } from "@/lib/notifications/comment";
@@ -269,9 +270,8 @@ function RequiredCheckNote({
 /**
  * 미리보기 패널.
  *
- * 렌더한 그림이 아니라 코멘트의 마크다운 원문을 보여준다. 마크다운 렌더러를
- * 새로 넣을 만한 일이 아니고(AGENTS.md: 새 의존성은 사람 승인), 여기서 확인하고
- * 싶은 건 "무엇이 들어가고 무엇이 빠지는가"라서 원문으로도 충분하다.
+ * GitHub 에서 보일 모양으로 렌더해서 보여준다. 채팅이 쓰는 react-markdown 을 그대로
+ * 쓰고, 원본 HTML 을 다루는 방식은 CommentMarkdown 에 적어 두었다.
  */
 function CommentPreview({
   markdown,
@@ -313,9 +313,9 @@ function CommentPreview({
           Comments are off, so nothing is posted to the conversation tab.
         </p>
       ) : (
-        <pre className="border-border bg-card mt-3 max-h-[32rem] overflow-auto border p-4 font-mono text-[11px] leading-relaxed whitespace-pre-wrap">
-          {markdown}
-        </pre>
+        <div className="border-border bg-card mt-3 max-h-[32rem] overflow-auto border p-4">
+          <CommentMarkdown markdown={markdown} />
+        </div>
       )}
     </div>
   );
