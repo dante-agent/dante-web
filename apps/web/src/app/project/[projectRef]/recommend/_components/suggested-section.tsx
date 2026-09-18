@@ -106,7 +106,7 @@ export function SuggestedSection({
           result.versionIds.map((versionId) => saveRecommendChat(projectRef, versionId, chat))
         );
         const tests = result.versionIds.join(",");
-        router.push(`/project/${projectRef}/recommend/${result.versionId}?tests=${tests}&run=1`);
+        router.push(`/project/${projectRef}/recommend/${result.versionId}?tests=${tests}`);
       } catch (error) {
         unstable_rethrow(error);
         setGenError("Couldn't run test generation. Please try again in a moment.");
