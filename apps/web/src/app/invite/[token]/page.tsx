@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -7,6 +8,8 @@ import { buttonVariants } from "@/components/ui/button";
 import { displayName, requireUser } from "@/lib/auth/user";
 import { getTeamRole } from "@/lib/teams/access";
 import { findInvite } from "@/lib/teams/invites";
+
+export const metadata: Metadata = { title: "Team invite" };
 
 // 초대 메일의 링크가 오는 곳.
 //

@@ -1,8 +1,11 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, Lock } from "lucide-react";
 import { GitHubIcon } from "@/components/brand-icons";
 import { StepHeader } from "@/components/projects/step-header";
 import { buttonVariants } from "@/components/ui/button";
+
+export const metadata: Metadata = { title: "New project" };
 
 // 온보딩 1단계 — 어디에서 코드를 가져올지 고른다.
 //

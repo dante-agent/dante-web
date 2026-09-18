@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Image from "next/image";
 import { redirect } from "next/navigation";
@@ -7,6 +8,8 @@ import { LOGIN_PATH } from "@/lib/auth/redirect";
 import { displayName } from "@/lib/auth/user";
 import { parseAuthorizeParams, toAuthorizeParams } from "@/lib/extension/auth";
 import { createClient } from "@/lib/supabase/server";
+
+export const metadata: Metadata = { title: "Connect extension" };
 
 // 익스텐션 로그인 동의 화면 (dante-extension 결정 D-6). 익스텐션이 브라우저로 이 주소를 연다.
 //

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@dante/db";
 import { EngineCards } from "@/components/ai/engine-cards";
@@ -8,6 +9,8 @@ import { requireUser } from "@/lib/auth/user";
 import { accessibleProjectWhere } from "@/lib/teams/access";
 import { ACTIVE_ENGINE } from "@/lib/ai/engine";
 import { finishSetup } from "../actions";
+
+export const metadata: Metadata = { title: "AI engine" };
 
 // 온보딩 4단계 — 무엇이 테스트를 쓰는지 알리고 끝낸다.
 //
