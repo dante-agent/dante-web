@@ -33,8 +33,8 @@ export function InviteForm({ teamId }: { teamId: string }) {
           disabled={pending}
           className="rounded-[4px]"
         />
-        <Button type="submit" size="sm" disabled={pending} className="shrink-0 rounded-[4px]">
-          {pending ? "Sending…" : "Send invite"}
+        <Button type="submit" disabled={pending} className="shrink-0 rounded-[4px]">
+          <SteadyLabel labels={["Send invite", "Sending…"]} active={pending ? 1 : 0} />
         </Button>
       </div>
 
@@ -66,7 +66,6 @@ function InviteLink({ link }: { link: string }) {
       />
       <Button
         type="button"
-        size="sm"
         variant="secondary"
         className="shrink-0 rounded-[4px]"
         onClick={async () => {
@@ -74,9 +73,26 @@ function InviteLink({ link }: { link: string }) {
           setCopied(true);
         }}
       >
-        {copied ? "Copied" : "Copy link"}
+        <SteadyLabel labels={["Copy link", "Copied"]} active={copied ? 1 : 0} />
       </Button>
     </div>
+  );
+}
+
+// 문구를 한 칸에 겹쳐 두고 하나만 보인다. 폭이 가장 긴 문구에 맞춰져서, 문구가 바뀌어도
+// 버튼과 옆 입력창의 폭이 그대로다.
+function SteadyLabel({ labels, active }: { labels: string[]; active: number }) {
+  return (
+    <span className="grid">
+      {labels.map((label, index) => (
+        <span
+          key={label}
+          className={`col-start-1 row-start-1 ${index === active ? "" : "invisible"}`}
+        >
+          {label}
+        </span>
+      ))}
+    </span>
   );
 }
 
