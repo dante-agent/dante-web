@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { prisma } from "@dante/db";
 import { RuntimeForm } from "@/components/settings/runtime/runtime-form";
@@ -6,6 +7,8 @@ import { requireUser } from "@/lib/auth/user";
 import { accessibleProjectWhere } from "@/lib/teams/access";
 import { detectRuntimeCommands } from "@/lib/projects/detect-runtime";
 import { resolveRuntimeSettings } from "@/lib/projects/runtime";
+
+export const metadata: Metadata = { title: "Runtime settings" };
 
 // 실행 환경 — 테스트를 어디서 어떻게 돌리나.
 //

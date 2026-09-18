@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { prisma } from "@dante/db";
 import { ConnectionBanner } from "@/components/settings/github/connection-banner";
@@ -28,6 +29,8 @@ import { loadSlackConnection, markSlackRevoked } from "@/lib/slack/installation"
 
 /** 전달 로그의 재시도 서버 액션이 after() 로 PR 작업을 돈다. api/github/webhook/route.ts 와 같은 이유 */
 export const maxDuration = 800;
+
+export const metadata: Metadata = { title: "Notification settings" };
 
 // 알림 — 언제, 어디로 알릴지.
 //

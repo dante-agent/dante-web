@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { getMonthlyBudgetStatus } from "@/lib/ai/budget";
@@ -14,6 +15,8 @@ import { ProjectHeader } from "./_components/project-header";
 import { PullRequestsSection } from "./_components/pull-requests-section";
 import { RecentRunsSection } from "./_components/recent-runs-section";
 import { UpNextSection, UpNextSkeleton } from "./_components/up-next-section";
+
+export const metadata: Metadata = { title: "Dashboard" };
 
 // 프로젝트 대시보드. 위에서부터 프로젝트 한 줄 → 커버리지 → 최근 실행 | 다음에 할 것 → AI 지출 | PR.
 //

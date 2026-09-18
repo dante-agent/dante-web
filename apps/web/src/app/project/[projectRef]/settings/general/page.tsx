@@ -1,9 +1,12 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { prisma } from "@dante/db";
 import { DeleteProjectForm } from "@/components/settings/general/delete-project-form";
 import { SettingsHeader } from "@/components/settings/settings-section";
 import { requireUser } from "@/lib/auth/user";
 import { accessibleProjectWhere } from "@/lib/teams/access";
+
+export const metadata: Metadata = { title: "General settings" };
 
 // 프로젝트 일반. 읽기 전용 요약 + 맨 아래 삭제.
 //

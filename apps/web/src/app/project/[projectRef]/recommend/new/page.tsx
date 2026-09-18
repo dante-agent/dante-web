@@ -1,9 +1,12 @@
+import type { Metadata } from "next";
 import { ArrowLeft, GitBranch, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireProjectContext } from "@/lib/projects/queries";
 import { ResizableSplit } from "../[session]/_components/resizable-split";
 import { ChatSession } from "./_components/chat-session";
+
+export const metadata: Metadata = { title: "New session" };
 
 /**
  * AI 추천 입력창 제출 직후 바로 여기로 이동한다(확인 다이얼로그 없이). 아직 저장된

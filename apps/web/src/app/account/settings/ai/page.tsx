@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { EngineCards } from "@/components/ai/engine-cards";
 import { AiQualityForm } from "@/components/settings/ai/quality-form";
 import { ComingSoon, SettingsHeader } from "@/components/settings/settings-section";
@@ -13,6 +14,8 @@ import {
 } from "@/lib/ai/usage-format";
 import { getMonthlyUserAiUsage, type MonthlyAiUsage } from "@/lib/ai/usage-queries";
 import { requireUser } from "@/lib/auth/user";
+
+export const metadata: Metadata = { title: "AI settings" };
 
 // AI 엔진.
 //

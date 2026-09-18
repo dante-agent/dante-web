@@ -1,7 +1,10 @@
+import type { Metadata } from "next";
 import { prisma } from "@dante/db";
 import { ConnectedEditors } from "@/components/settings/extension/connected-editors";
 import { ComingSoon, SettingsHeader } from "@/components/settings/settings-section";
 import { requireUser } from "@/lib/auth/user";
+
+export const metadata: Metadata = { title: "Extension" };
 
 // 익스텐션 연결.
 //

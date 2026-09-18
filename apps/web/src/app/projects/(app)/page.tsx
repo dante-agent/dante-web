@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, GitBranch, Plus } from "lucide-react";
 import { prisma } from "@dante/db";
@@ -8,6 +9,8 @@ import { buttonVariants } from "@/components/ui/button";
 import { accessibleInstallationWhere, accessibleProjectWhere } from "@/lib/teams/access";
 import { requireCurrentTeam } from "@/lib/teams/current";
 import { installationSettingsUrl } from "@/lib/github/app";
+
+export const metadata: Metadata = { title: "Projects" };
 
 // 로그인 후 착륙 지점. 지금 팀(lib/teams/current.ts)의 프로젝트만 보여준다.
 //

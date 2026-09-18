@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { ArrowRight } from "lucide-react";
 import { prisma } from "@dante/db";
 import { GitHubIcon } from "@/components/brand-icons";
@@ -9,6 +10,8 @@ import { accessibleInstallationWhere, accessibleProjectWhere } from "@/lib/teams
 import { requireCurrentTeam } from "@/lib/teams/current";
 import { installationSettingsUrl } from "@/lib/github/app";
 import { cachedInstallationRepos, type InstallationRepo } from "@/lib/github/repos";
+
+export const metadata: Metadata = { title: "Choose repository" };
 
 // 온보딩 2단계 — GitHub 레포 고르기.
 //

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { SettingsShell } from "@/components/settings/settings-shell";
 import { displayName, requireUser } from "@/lib/auth/user";
 
@@ -14,6 +15,11 @@ const ITEMS = [
   { href: "/account/settings/ai", label: "AI" },
   { href: "/account/settings/extension", label: "Extension" },
 ];
+
+// 탭 제목: "Teams · Account · Dante". 루트 템플릿은 여기서 한 번 덮이므로 " · Dante" 까지 적는다.
+export const metadata: Metadata = {
+  title: { default: "Account", template: "%s · Account · Dante" },
+};
 
 export default async function AccountSettingsLayout({
   children,

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
@@ -9,6 +10,8 @@ import { requireUser } from "@/lib/auth/user";
 import { accessibleProjectWhere } from "@/lib/teams/access";
 import { installationSettingsUrl } from "@/lib/github/app";
 import { connectionNotice, projectConnection } from "@/lib/github/connection";
+
+export const metadata: Metadata = { title: "GitHub settings" };
 
 // 깃허브 연결. 읽기 + 복구 전용이다.
 //
