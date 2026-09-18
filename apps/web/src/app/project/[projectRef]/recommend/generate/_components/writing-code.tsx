@@ -1,10 +1,8 @@
 import { Check, LoaderCircle } from "lucide-react";
+import { CodeSkeleton } from "@/components/generation/code-skeleton";
 import { cn } from "@/lib/utils";
 import { CodePanel } from "../../[session]/_components/code-panel";
 import type { GeneratedTestFile } from "../../actions";
-
-// 스켈레톤 줄 폭(%). 코드처럼 들쭉날쭉하게 보이도록 고정 패턴을 쓴다.
-const SKELETON = [38, 62, 0, 54, 80, 72, 46, 0, 58, 86, 66, 30, 0, 50, 74];
 
 /**
  * 우측 "테스트 코드가 써지는" 연출. AI 응답 전엔 스켈레톤 줄이 깜빡이고, 코드를 받으면
@@ -78,22 +76,7 @@ export function WritingCode({
               )}
             </span>
           </div>
-          <div className="min-h-0 flex-1 space-y-2.5 overflow-hidden bg-black px-6 py-4">
-            {SKELETON.map((width, index) =>
-              width === 0 ? (
-                <div key={index} className="h-3" />
-              ) : (
-                <div
-                  key={index}
-                  className={cn(
-                    "bg-muted/60 h-3 rounded",
-                    waiting && "animate-pulse motion-reduce:animate-none"
-                  )}
-                  style={{ width: `${width}%`, animationDelay: `${index * 60}ms` }}
-                />
-              )
-            )}
-          </div>
+          <CodeSkeleton pulsing={waiting} />
         </section>
       )}
     </div>

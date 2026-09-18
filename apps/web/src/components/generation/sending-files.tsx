@@ -1,9 +1,9 @@
 import { Check, FileCode2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { Stage } from "./generate-performance";
+import type { Stage } from "./use-generation-performance";
 
 /**
- * 좌측 "파일을 AI 로 보내는" 연출. 파일마다 한 줄: 경로 → 선(점이 흘러감) → AI.
+ * "파일을 AI 로 보내는" 연출(추천 생성 화면·폴더 보기 공용). 파일마다 한 줄: 경로 → 선(점이 흘러감) → AI.
  * 전송 단계에선 점이 흐르고, 작성 단계부터는 선이 채워지고 AI 가 생각 중(깜빡임)으로 바뀐다.
  */
 export function SendingFiles({ files, stage }: { files: string[]; stage: Stage }) {
