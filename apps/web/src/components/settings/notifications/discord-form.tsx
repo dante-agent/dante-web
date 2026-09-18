@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { startTransition, useActionState, useState, type FormEvent } from "react";
 import { Check } from "lucide-react";
 import {
   saveDiscordNotifications,
@@ -38,9 +38,23 @@ export function DiscordNotificationsForm({
   const [enabled, setEnabled] = useState(initial.discordEnabled);
   const [events, setEvents] = useState(initial.discordEvents);
   const [locale, setLocale] = useState(initial.discordLocale);
+  /** 마지막으로 누른 버튼. 상태 문구는 그 결과 하나만 보인다 — 둘이 나란히 쌓이면 무엇의 결과인지 헷갈린다 */
+  const [last, setLast] = useState<"save" | "test" | null>(null);
+
+  // action 대신 onSubmit 으로 보낸다. React 19 는 <form action> 이 끝나면 폼을 reset 하는데,
+  // 그러면 라디오·체크박스가 처음 그렸을 때 값으로 돌아가 보인다(상태는 그대로라 다시 그려지지도
+  // 않는다). 한국어를 저장했는데 English 에 점이 찍혀 있던 이유다.
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const submitter = (event.nativeEvent as SubmitEvent).submitter;
+    const formData = new FormData(event.currentTarget, submitter);
+    const test = submitter?.dataset.action === "test";
+    setLast(test ? "test" : "save");
+    startTransition(() => (test ? testAction : saveAction)(formData));
+  };
 
   return (
-    <form action={saveAction}>
+    <form onSubmit={submit}>
       <input type="hidden" name="projectRef" value={projectRef} />
 
       <Section
@@ -102,40 +116,62 @@ export function DiscordNotificationsForm({
         ))}
       </Section>
 
+      {/* 버튼 글자는 진행 중에도 바꾸지 않는다. 폭이 바뀌면 옆 버튼과 상태 문구가 밀린다.
+          진행 표시는 오른쪽 상태 자리 하나에서만 한다. */}
       <div className="mt-6 flex max-w-2xl flex-wrap items-center gap-3">
-        <Button type="submit" size="sm" disabled={saving} className="rounded-[4px]">
-          {saving ? "Saving..." : "Save"}
+        <Button type="submit" size="sm" disabled={saving || testing} className="rounded-[4px]">
+          Save
         </Button>
-        {/* 같은 폼을 다른 액션으로 보낸다. 붙여 넣고 아직 저장하지 않은 URL 로도 시험할 수 있다. */}
+        {/* 같은 폼을 테스트 액션으로 보낸다(submit 참고). 붙여 넣고 아직 저장하지 않은 URL 로도 시험할 수 있다. */}
         <Button
           type="submit"
           size="sm"
           variant="outline"
-          formAction={testAction}
-          disabled={testing}
+          data-action="test"
+          disabled={saving || testing}
           className="rounded-[4px]"
         >
-          {testing ? "Sending..." : "Send a test notification"}
+          Send a test notification
         </Button>
 
-        {saveState?.saved && (
-          <span className="text-brand-mint flex items-center gap-1.5 text-[13px]">
-            <Check className="size-3.5" />
-            Saved
-          </span>
-        )}
-        {testState?.sent && (
-          <span className="text-brand-mint flex items-center gap-1.5 text-[13px]">
-            <Check className="size-3.5" />
-            Sent — check the channel
-          </span>
-        )}
-        {(saveState?.error ?? testState?.error) && (
-          <span role="alert" className="text-destructive text-[13px]">
-            {saveState?.error ?? testState?.error}
-          </span>
-        )}
+        <FormStatus
+          pending={last === "save" ? saving : testing}
+          pendingLabel={last === "save" ? "Saving…" : "Sending…"}
+          done={last === "save" ? saveState?.saved : testState?.sent}
+          doneLabel={last === "save" ? "Saved" : "Sent — check the channel"}
+          error={last === "save" ? saveState?.error : testState?.error}
+        />
       </div>
     </form>
+  );
+}
+
+function FormStatus({
+  pending,
+  pendingLabel,
+  done,
+  doneLabel,
+  error,
+}: {
+  pending: boolean;
+  pendingLabel: string;
+  done?: boolean;
+  doneLabel: string;
+  error?: string;
+}) {
+  if (pending) return <span className="text-muted-foreground text-[13px]">{pendingLabel}</span>;
+  if (error) {
+    return (
+      <span role="alert" className="text-destructive text-[13px]">
+        {error}
+      </span>
+    );
+  }
+  if (!done) return null;
+  return (
+    <span className="text-brand-mint flex items-center gap-1.5 text-[13px]">
+      <Check className="size-3.5" />
+      {doneLabel}
+    </span>
   );
 }
