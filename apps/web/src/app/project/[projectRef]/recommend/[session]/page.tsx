@@ -17,7 +17,17 @@ import type { SessionDetail } from "./session-detail";
 // 한 번에 만들 수 있는 최대 파일 수와 맞춘다(ai-file-match 의 MAX_MATCHES). 탭 상한.
 const MAX_TABS = 3;
 
-export const metadata: Metadata = { title: "Session" };
+// 탭 제목: "Button test · v2 · my-repo · Dante". 채팅 헤더(session.title)와 같은 이름이다.
+// 없는 세션이면 제목을 비워 두고, 페이지가 notFound() 를 낸다.
+export async function generateMetadata({
+  params,
+}: PageProps<"/project/[projectRef]/recommend/[session]">): Promise<Metadata> {
+  const { projectRef, session: versionId } = await params;
+  const { user } = await requireProjectContext(projectRef);
+  const detail = await getGeneratedSessionDetail(projectRef, user.id, versionId);
+  if (!detail) return {};
+  return { title: `${detail.componentName} test · v${detail.version}` };
+}
 
 // AI 추천 세션 상세. 좌측 세션 사이드바는 recommend/layout.tsx 가 제공하고,
 // 여기서는 중앙 리뷰(채팅) 패널 + 우측 코드/실행 패널의 2-pane 을 채운다.
@@ -29,8 +39,6 @@ export default async function SessionDetailPage({
 }: PageProps<"/project/[projectRef]/recommend/[session]">) {
   const { projectRef, session: versionId } = await params;
   const query = await searchParams;
-  // 재생성 직후 이동에 붙는 ?run=1 — 새 버전을 열자마자 한 번 자동 실행한다.
-  const autoRun = query.run === "1";
   const { user, project } = await requireProjectContext(projectRef);
 
   const detail = await getGeneratedSessionDetail(projectRef, user.id, versionId);
@@ -80,7 +88,6 @@ export default async function SessionDetailPage({
           projectRef={projectRef}
           files={files}
           runnerConfigured={runnerConfigured}
-          autoRun={autoRun}
         />
       }
     />

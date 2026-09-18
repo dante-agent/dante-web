@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
+import { siteUrl } from "@/lib/site-url";
 import { Providers } from "./providers";
 
 // DESIGN.md §3 — sans: Geist(400/600), mono: Hack(400/700)
@@ -41,7 +42,10 @@ const DESCRIPTION = "AI test code generation and management.";
 //
 // 기본값은 noindex. 로그인해야 보이는 화면이 대부분이라 새 페이지가 실수로 검색에
 // 걸리지 않게 막아 두고, 공개 페이지(/, /privacy, /terms)만 각자 index 로 연다.
+// metadataBase: og:image 같은 상대 경로를 절대 URL 로 바꿀 때 쓰는 기준 주소.
+// 안 주면 Next 가 Vercel 기본 도메인을 쓰는데, 공유 미리보기에는 실제 서비스 주소가 박혀야 한다.
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl()),
   title: { default: "Dante", template: "%s · Dante" },
   description: DESCRIPTION,
   applicationName: "Dante",
@@ -50,7 +54,8 @@ export const metadata: Metadata = {
     type: "website",
     siteName: "Dante",
   },
-  twitter: { card: "summary" },
+  // 이미지(app/opengraph-image.tsx)가 가로형이라 큰 카드로 띄운다. X 는 og:image 를 그대로 가져간다.
+  twitter: { card: "summary_large_image" },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

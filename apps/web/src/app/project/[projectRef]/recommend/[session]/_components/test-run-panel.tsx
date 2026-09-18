@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { Loader2, Play, RotateCcw, Sparkles } from "lucide-react";
 import { unstable_rethrow, useRouter } from "next/navigation";
 import { StoredRunLog, TerminalBody, useLiveRun, type RunView } from "@/components/run-terminal";
@@ -13,7 +13,7 @@ import { regenerateFromFailure, type RegenerateResult } from "../../actions";
 // 개수 요약이 뜬다. 스트림 처리·표시(useLiveRun/TerminalBody)는 run-terminal 의 것을 그대로 쓴다.
 //
 // 실행이 실패하면 "Regenerate & retry" — 실패 로그로 AI 가 테스트를 고쳐 새 버전을 만들고 그 세션으로
-// 이동해 자동 실행한다(?run=1). 완전 자동 재시도는 하지 않는다 — 매번 사용자가 버튼을 누른다.
+// 이동한다. 실행은 자동으로 하지 않는다 — 매번 사용자가 버튼을 누른다.
 //
 // 처음 열 때는 저장된 마지막 실행(initialRun)의 로그를 같은 터미널 모양(StoredRunLog)으로 보여주고,
 // 새로 실행을 돌리면 그때부터 실시간 뷰(TerminalBody)로 바뀐다.
@@ -42,27 +42,16 @@ export function TestRunPanel({
   versionId,
   initialRun,
   runnerConfigured,
-  autoRun,
 }: {
   projectRef: string;
   versionId: string;
   initialRun: TestRunView | null;
   runnerConfigured: boolean;
-  autoRun?: boolean;
 }) {
   const router = useRouter();
   const { view, start } = useLiveRun(projectRef);
   const [regenerating, startRegen] = useTransition();
   const [regenError, setRegenError] = useState<string | null>(null);
-
-  // 재생성 직후 이동(?run=1)이면 열자마자 한 번 자동 실행하고, 새로고침 때 또 돌지 않게 쿼리를 지운다.
-  const autoRanRef = useRef(false);
-  useEffect(() => {
-    if (autoRanRef.current || !autoRun || !runnerConfigured) return;
-    autoRanRef.current = true;
-    start(versionId);
-    window.history.replaceState(null, "", window.location.pathname);
-  }, [autoRun, runnerConfigured, versionId, start]);
 
   const running = view?.running ?? false;
   const status = displayStatus(view, initialRun);
@@ -78,8 +67,8 @@ export function TestRunPanel({
       try {
         const result = await regenerateFromFailure(projectRef, versionId);
         if (result.ok) {
-          // 고친 새 버전으로 이동하며 자동 실행을 건다.
-          router.push(`/project/${projectRef}/recommend/${result.versionId}?run=1`);
+          // 고친 새 버전으로 이동한다. 실행은 사용자가 Run 을 눌러 한다.
+          router.push(`/project/${projectRef}/recommend/${result.versionId}`);
           return;
         }
         setRegenError(REGEN_ERROR[result.reason]);
@@ -106,7 +95,7 @@ export function TestRunPanel({
               type="button"
               onClick={regenerate}
               disabled={busy}
-              className="border-border hover:bg-muted/40 flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium text-[#eeedf0] disabled:cursor-not-allowed disabled:opacity-50"
+              className="border-border hover:bg-muted/40 flex cursor-pointer items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium text-[#eeedf0] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {regenerating ? (
                 <Loader2 className="size-3.5 animate-spin" />

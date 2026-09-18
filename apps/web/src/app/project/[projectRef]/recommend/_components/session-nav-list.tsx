@@ -1,7 +1,20 @@
+"use client";
+
+import { useMemo, useState } from "react";
 import { CheckCircle2, Circle, LoaderCircle, XCircle } from "lucide-react";
 import Link from "next/link";
 import type { GeneratedSession, SessionStatus } from "@/lib/projects/generated-sessions";
+import { cn } from "@/lib/utils";
 import { SessionDeleteButton } from "./session-delete-button";
+
+// 상태 필터 칩. 폴더 보기 파일 트리(components/file-tree.tsx)의 필터와 같은 모양·같은 자리를 쓴다.
+// 다만 여기 칩은 토글이다 — 켜진 칩을 다시 누르면 꺼지고 전체가 보인다. 그래서 "All" 칩이 없다.
+// running 은 몇 초 만에 다른 상태로 바뀌어 칩으로 고를 값이 아니라 뺐다(아이콘으로만 보인다).
+const FILTERS: { key: SessionStatus; label: string; title: string }[] = [
+  { key: "passed", label: "Passed", title: "Sessions whose tests passed" },
+  { key: "failed", label: "Failed", title: "Sessions whose tests failed" },
+  { key: "not_run", label: "Not run", title: "Sessions that were never run" },
+];
 
 const STATUS_ICON: Record<SessionStatus, typeof CheckCircle2> = {
   not_run: Circle,
@@ -60,32 +73,67 @@ export function SessionNavList({
   projectRef: string;
   sessions: GeneratedSession[];
 }) {
-  const groups = groupByBatch(sessions);
+  // null = 전체. 켜진 칩을 다시 누르면 null 로 돌아간다.
+  const [filter, setFilter] = useState<SessionStatus | null>(null);
+  const visible = useMemo(
+    () => (filter ? sessions.filter((session) => session.status === filter) : sessions),
+    [sessions, filter]
+  );
+  const groups = groupByBatch(visible);
+
   return (
-    <div className="flex flex-col gap-1 overflow-y-auto pt-10">
-      <p className="text-muted-foreground px-2 text-[11px] font-medium tracking-wide uppercase">
-        Recent sessions
-      </p>
-      {sessions.length === 0 && (
-        <p className="text-muted-foreground px-2 py-3 text-xs leading-5">
-          No generated test sessions yet.
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
+      {/* 접기 버튼(SubSidebar absolute top-2 right-1) 과 같은 선. pr-12 로 겹침 회피 */}
+      <div className="-mt-1 flex h-9 items-center gap-1 pr-12">
+        {FILTERS.map(({ key, label, title }) => (
+          <button
+            key={key}
+            type="button"
+            title={title}
+            aria-pressed={filter === key}
+            onClick={() => setFilter((prev) => (prev === key ? null : key))}
+            className={cn(
+              "rounded-md px-1.5 py-0.5 text-xs transition-colors",
+              filter === key
+                ? "bg-sidebar-accent text-sidebar-primary"
+                : "text-muted-foreground hover:text-sidebar-foreground"
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
+        <p className="text-muted-foreground px-2 text-[11px] font-medium tracking-wide uppercase">
+          Recent sessions
         </p>
-      )}
-      {groups.map((group) =>
-        group.length > 1 ? (
-          // 한 프롬프트로 배치 생성된 세션들 — 왼쪽 선과 라벨로 묶어 보여준다.
-          <div key={group[0].id} className="border-border ml-2 flex flex-col gap-1 border-l pl-2">
-            <p className="text-muted-foreground px-1 text-[10px] font-medium tracking-wide uppercase">
-              Batch · {group.length}
-            </p>
-            {group.map((session) => (
-              <SessionRow key={session.id} projectRef={projectRef} session={session} />
-            ))}
-          </div>
-        ) : (
-          <SessionRow key={group[0].id} projectRef={projectRef} session={group[0]} />
-        )
-      )}
+        {sessions.length === 0 && (
+          <p className="text-muted-foreground px-2 py-3 text-xs leading-5">
+            No generated test sessions yet.
+          </p>
+        )}
+        {sessions.length > 0 && visible.length === 0 && (
+          <p className="text-muted-foreground px-2 py-3 text-xs leading-5">
+            No sessions in this state.
+          </p>
+        )}
+        {groups.map((group) =>
+          group.length > 1 ? (
+            // 한 프롬프트로 배치 생성된 세션들 — 왼쪽 선과 라벨로 묶어 보여준다.
+            <div key={group[0].id} className="border-border ml-2 flex flex-col gap-1 border-l pl-2">
+              <p className="text-muted-foreground px-1 text-[10px] font-medium tracking-wide uppercase">
+                Batch · {group.length}
+              </p>
+              {group.map((session) => (
+                <SessionRow key={session.id} projectRef={projectRef} session={session} />
+              ))}
+            </div>
+          ) : (
+            <SessionRow key={group[0].id} projectRef={projectRef} session={group[0]} />
+          )
+        )}
+      </div>
     </div>
   );
 }
