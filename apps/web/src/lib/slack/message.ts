@@ -1,4 +1,4 @@
-import type { DiscordLocale } from "@/lib/notifications/discord";
+import type { NotificationLocale } from "@/lib/notifications/locale";
 import type { RunSummary } from "@/lib/notifications/run-summary";
 import type { SlackEventId } from "@/lib/notifications/settings";
 
@@ -21,12 +21,12 @@ export type SlackMessageInput = {
   /** 설정 화면의 "테스트 알림". 진짜 실패로 오해하지 않게 맨 위에 밝힌다 */
   test?: boolean;
   /** 우리가 쓰는 문장의 언어. 테스트 이름·실패 사유·run.error 는 원문 그대로 둔다 (discord.ts 와 같다) */
-  locale: DiscordLocale;
+  locale: NotificationLocale;
 };
 
 /** 메시지에 들어가는 문장 전부. discord.ts 의 COPY 와 같은 이유로 표 하나로 둔다. */
 const COPY: Record<
-  DiscordLocale,
+  NotificationLocale,
   {
     test: string;
     failed: (failed: number, total: number) => string;
@@ -99,7 +99,7 @@ export function renderSlackMessage(input: SlackMessageInput) {
   return lines.join("\n");
 }
 
-function headline(event: SlackEventId, run: RunSummary, copy: (typeof COPY)[DiscordLocale]) {
+function headline(event: SlackEventId, run: RunSummary, copy: (typeof COPY)[NotificationLocale]) {
   const { total, failed } = run.totals;
   switch (event) {
     case "failed":

@@ -1,4 +1,4 @@
-import type { DiscordLocale } from "./discord.ts";
+import type { NotificationLocale } from "./locale.ts";
 import { isTerminal, type RunSummary } from "./run-summary.ts";
 import type { NotificationSettings } from "./settings.ts";
 
@@ -31,7 +31,7 @@ export const RUNNER_REPORTS_BACK = true;
  * 테스트 이름·파일 경로·건너뛴 사유·Dante 오류 문장은 번역하지 않는다(comment.ts 와 같다).
  */
 const COPY: Record<
-  DiscordLocale,
+  NotificationLocale,
   {
     notRunningYet: string;
     foundComponents: (count: number) => string;
@@ -100,7 +100,7 @@ const COPY: Record<
   },
 };
 
-type Copy = (typeof COPY)[DiscordLocale];
+type Copy = (typeof COPY)[NotificationLocale];
 
 export type CheckConclusion = "success" | "failure" | "neutral" | "skipped" | "cancelled";
 
@@ -203,7 +203,7 @@ export function checkRunResult(run: RunSummary, settings: NotificationSettings):
 }
 
 /** 러너가 시간 안에 답을 안 준 경우. 실패와 구분해야 재실행할지 판단할 수 있다. */
-export function timedOutCheckRun(locale: DiscordLocale): CheckRunResult {
+export function timedOutCheckRun(locale: NotificationLocale): CheckRunResult {
   return {
     status: "completed",
     conclusion: "cancelled",
@@ -213,7 +213,7 @@ export function timedOutCheckRun(locale: DiscordLocale): CheckRunResult {
 }
 
 /** 브랜치 필터·드래프트·스누즈로 건너뛴 경우. 실패로 보이면 안 된다. */
-export function skippedCheckRun(reason: string, locale: DiscordLocale): CheckRunResult {
+export function skippedCheckRun(reason: string, locale: NotificationLocale): CheckRunResult {
   return {
     status: "completed",
     conclusion: "skipped",
