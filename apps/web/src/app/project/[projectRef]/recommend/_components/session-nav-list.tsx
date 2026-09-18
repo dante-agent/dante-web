@@ -109,7 +109,8 @@ export function SessionNavList({
         ))}
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
+      {/* 스크롤은 되지만 스크롤바는 숨긴다(좁은 사이드바에서 폭을 먹지 않게). */}
+      <div className="flex min-h-0 flex-1 [scrollbar-width:none] flex-col gap-1 overflow-y-auto [&::-webkit-scrollbar]:hidden">
         <p className="text-muted-foreground px-2 text-[11px] font-medium tracking-wide uppercase">
           Recent sessions
         </p>
