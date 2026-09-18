@@ -151,7 +151,7 @@ async function deliverSkip(
       octokit,
       { owner: project.repoOwner, repo: project.repoName },
       pr.headSha,
-      skippedCheckRun(reason),
+      skippedCheckRun(reason, settings.prCommentLocale),
       { cachedCheckRunId: surface.checkRunId, detailsUrl: null }
     );
     await saveSurface(project.id, pr.number, { checkRunId, lastConclusion: "skipped" });

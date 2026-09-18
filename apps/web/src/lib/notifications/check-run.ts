@@ -1,3 +1,4 @@
+import type { DiscordLocale } from "@/lib/notifications/discord";
 import { isTerminal, type RunSummary } from "@/lib/notifications/run-summary";
 import type { NotificationSettings } from "@/lib/notifications/settings";
 
@@ -23,6 +24,84 @@ export const CHECK_RUN_NAME = "dante";
  */
 export const RUNNER_REPORTS_BACK = true;
 
+/**
+ * 체크에 들어가는 문장 전부. 언어는 PR 코멘트와 같은 설정(prCommentLocale)을 따른다 —
+ * 같은 PR 화면 안에서 코멘트는 한국어, 체크는 영어로 섞여 보이지 않게.
+ *
+ * 테스트 이름·파일 경로·건너뛴 사유·Dante 오류 문장은 번역하지 않는다(comment.ts 와 같다).
+ */
+const COPY: Record<
+  DiscordLocale,
+  {
+    notRunningYet: string;
+    foundComponents: (count: number) => string;
+    notRunningYetSummary: string;
+    running: string;
+    runningSummary: string;
+    unchanged: string;
+    unchangedSummary: string;
+    skippedGeneration: string;
+    skippedGenerationSummary: string;
+    couldNotFinish: string;
+    stoppedEarly: string;
+    passed: (count: number) => string;
+    allPassed: (total: number) => string;
+    failed: (count: number) => string;
+    someFailed: (failed: number, total: number) => string;
+    more: (rest: number) => string;
+    timedOut: string;
+    timedOutSummary: string;
+    skipped: string;
+  }
+> = {
+  en: {
+    notRunningYet: "Not running tests yet",
+    foundComponents: (count) => `Found ${count} changed component${count === 1 ? "" : "s"}. `,
+    notRunningYetSummary:
+      "Dante does not generate or run tests yet. This check will report a real result once the runner lands.",
+    running: "Running",
+    runningSummary: "Dante is scanning components and running the generated tests.",
+    unchanged: "No components changed",
+    unchangedSummary: "Nothing in this pull request touches a component Dante tracks.",
+    skippedGeneration: "Skipped test generation",
+    skippedGenerationSummary: "Dante skipped test generation for this pull request.",
+    couldNotFinish: "Could not finish",
+    stoppedEarly: "The run stopped before any tests were reported.",
+    passed: (count) => `${count} passed`,
+    allPassed: (total) => `All ${total} tests passed.`,
+    failed: (count) => `${count} failed`,
+    someFailed: (failed, total) => `${failed} of ${total} tests failed.`,
+    more: (rest) => `…and ${rest} more`,
+    timedOut: "Timed out",
+    timedOutSummary: "The runner did not report back in time. Re-run to try again.",
+    skipped: "Skipped",
+  },
+  ko: {
+    notRunningYet: "아직 테스트를 돌리지 않습니다",
+    foundComponents: (count) => `바뀐 컴포넌트 ${count}개를 찾았습니다. `,
+    notRunningYetSummary:
+      "Dante 는 아직 테스트를 만들거나 돌리지 않습니다. 러너가 붙으면 이 체크가 실제 결과를 알려줍니다.",
+    running: "실행 중",
+    runningSummary: "Dante 가 컴포넌트를 찾고 만든 테스트를 돌리는 중입니다.",
+    unchanged: "바뀐 컴포넌트 없음",
+    unchangedSummary: "이 PR 은 Dante 가 추적하는 컴포넌트를 건드리지 않습니다.",
+    skippedGeneration: "테스트 생성 건너뜀",
+    skippedGenerationSummary: "Dante 가 이 PR 의 테스트 생성을 건너뛰었습니다.",
+    couldNotFinish: "실행을 끝내지 못함",
+    stoppedEarly: "테스트 결과가 나오기 전에 실행이 멈췄습니다.",
+    passed: (count) => `${count}개 통과`,
+    allPassed: (total) => `테스트 ${total}개 모두 통과했습니다.`,
+    failed: (count) => `${count}개 실패`,
+    someFailed: (failed, total) => `테스트 ${total}개 중 ${failed}개가 실패했습니다.`,
+    more: (rest) => `…외 ${rest}개`,
+    timedOut: "시간 초과",
+    timedOutSummary: "러너가 제때 답하지 않았습니다. 다시 실행해 보세요.",
+    skipped: "건너뜀",
+  },
+};
+
+type Copy = (typeof COPY)[DiscordLocale];
+
 export type CheckConclusion = "success" | "failure" | "neutral" | "skipped" | "cancelled";
 
 export type CheckRunResult = {
@@ -43,6 +122,8 @@ export type CheckRunResult = {
  * 이 토글을 켜도 아무 일도 일어나지 않는다(화면에서 그 사실을 같이 알린다).
  */
 export function checkRunResult(run: RunSummary, settings: NotificationSettings): CheckRunResult {
+  const copy = COPY[settings.prCommentLocale];
+
   if (!isTerminal(run.status)) {
     // 끝나지 않은 체크는 누군가 결론을 채워줄 때만 만들어도 된다. 지금은 스캔·
     // 생성·실행이 없어서 그 "누군가"가 없다 — in_progress 로 두면 PR 마다
@@ -53,20 +134,20 @@ export function checkRunResult(run: RunSummary, settings: NotificationSettings):
     // 걸려 있어도 아무것도 막지 않고, 자리는 잡아둔다.
     if (!RUNNER_REPORTS_BACK) {
       const count = run.components.length;
-      const found = count > 0 ? `Found ${count} changed component${count === 1 ? "" : "s"}. ` : "";
+      const found = count > 0 ? copy.foundComponents(count) : "";
       return {
         status: "completed",
         conclusion: "neutral",
-        title: "Not running tests yet",
-        summary: `${found}Dante does not generate or run tests yet. This check will report a real result once the runner lands.`,
+        title: copy.notRunningYet,
+        summary: `${found}${copy.notRunningYetSummary}`,
       };
     }
 
     return {
       status: "in_progress",
       conclusion: null,
-      title: "Running",
-      summary: "Dante is scanning components and running the generated tests.",
+      title: copy.running,
+      summary: copy.runningSummary,
     };
   }
 
@@ -74,8 +155,8 @@ export function checkRunResult(run: RunSummary, settings: NotificationSettings):
     return {
       status: "completed",
       conclusion: "neutral",
-      title: "No components changed",
-      summary: "Nothing in this pull request touches a component Dante tracks.",
+      title: copy.unchanged,
+      summary: copy.unchangedSummary,
     };
   }
 
@@ -84,8 +165,8 @@ export function checkRunResult(run: RunSummary, settings: NotificationSettings):
     return {
       status: "completed",
       conclusion: "neutral",
-      title: "Skipped test generation",
-      summary: run.skipReason ?? "Dante skipped test generation for this pull request.",
+      title: copy.skippedGeneration,
+      summary: run.skipReason ?? copy.skippedGenerationSummary,
     };
   }
 
@@ -95,8 +176,8 @@ export function checkRunResult(run: RunSummary, settings: NotificationSettings):
     return {
       status: "completed",
       conclusion: settings.checkRunBlocking ? "failure" : "neutral",
-      title: "Could not finish",
-      summary: run.error ?? "The run stopped before any tests were reported.",
+      title: copy.couldNotFinish,
+      summary: run.error ?? copy.stoppedEarly,
     };
   }
 
@@ -106,49 +187,49 @@ export function checkRunResult(run: RunSummary, settings: NotificationSettings):
     return {
       status: "completed",
       conclusion: "success",
-      title: `${passed} passed`,
-      summary: `All ${total} tests passed.`,
+      title: copy.passed(passed),
+      summary: copy.allPassed(total),
     };
   }
 
   return {
     status: "completed",
     conclusion: settings.checkRunBlocking ? "failure" : "neutral",
-    title: `${failed} failed`,
+    title: copy.failed(failed),
     // summary 는 Checks 탭에서 제목 아래 한 덩어리로 보인다. 실패한 이름 몇 개만
     // 적고 나머지는 코멘트로 보내는 편이 읽기 쉽다.
-    summary: failureSummary(run),
+    summary: failureSummary(run, copy),
   };
 }
 
 /** 러너가 시간 안에 답을 안 준 경우. 실패와 구분해야 재실행할지 판단할 수 있다. */
-export function timedOutCheckRun(): CheckRunResult {
+export function timedOutCheckRun(locale: DiscordLocale): CheckRunResult {
   return {
     status: "completed",
     conclusion: "cancelled",
-    title: "Timed out",
-    summary: "The runner did not report back in time. Re-run to try again.",
+    title: COPY[locale].timedOut,
+    summary: COPY[locale].timedOutSummary,
   };
 }
 
 /** 브랜치 필터·드래프트·스누즈로 건너뛴 경우. 실패로 보이면 안 된다. */
-export function skippedCheckRun(reason: string): CheckRunResult {
+export function skippedCheckRun(reason: string, locale: DiscordLocale): CheckRunResult {
   return {
     status: "completed",
     conclusion: "skipped",
-    title: "Skipped",
+    title: COPY[locale].skipped,
     summary: reason,
   };
 }
 
 const SUMMARY_FAILURE_LIMIT = 5;
 
-function failureSummary(run: RunSummary) {
+function failureSummary(run: RunSummary, copy: Copy) {
   const shown = run.failures.slice(0, SUMMARY_FAILURE_LIMIT);
   const rest = run.failures.length - shown.length;
 
   const lines = shown.map((failure) => `- ${failure.file} › ${failure.name}`);
-  if (rest > 0) lines.push(`- …and ${rest} more`);
+  if (rest > 0) lines.push(`- ${copy.more(rest)}`);
 
-  return [`${run.totals.failed} of ${run.totals.total} tests failed.`, "", ...lines].join("\n");
+  return [copy.someFailed(run.totals.failed, run.totals.total), "", ...lines].join("\n");
 }
