@@ -7,12 +7,8 @@ import {
   type SaveState,
   type SlackTestState,
 } from "@/app/project/[projectRef]/settings/notifications/actions";
-import {
-  FormStatus,
-  RadioRow,
-  Section,
-  ToggleRow,
-} from "@/components/settings/notifications/controls";
+import { RadioRow, Section, ToggleRow } from "@/components/settings/notifications/controls";
+import { FormStatus } from "@/components/settings/notifications/form-status";
 import { Button } from "@/components/ui/button";
 import {
   Select,

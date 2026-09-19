@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import { ChatMarkdown } from "@/components/chat-markdown";
 import { requestTestTyping } from "@/components/generation/test-typing-request";
+import { announce } from "@/components/live-announcer";
 import { requestTestRun } from "@/components/run-terminal";
 import { Button } from "@/components/ui/button";
 import { splitStream } from "@/lib/chat/stream-tail";
@@ -447,6 +448,8 @@ function ChatPanel({
         );
       }
       const { answer, tail } = splitStream(raw);
+      // 스트리밍 중에는 조각마다 읽히면 시끄러워서 알리지 않고, 다 받은 뒤 한 번에 알린다.
+      announce(`AI: ${answer}`);
       // 토큰 수를 못 받았으면 이전 값을 그대로 둔다.
       const contextTokens = tail?.contextTokens ?? undefined;
 
@@ -495,14 +498,18 @@ function ChatPanel({
             .filter((m) => m.role === "user" || m.content !== "")
             .map((m) => (m.role === "assistant" ? { ...m, aborted: true } : m))
         );
+        announce("Stopped. Not saved.");
         return;
       }
 
       if (e instanceof ResponseError && e.code === "conversation_full") setFullFromServer(true);
+      const message =
+        e instanceof Error ? e.message : "Request failed.\nPlease try again in a moment.";
       setError({
         kind: e instanceof ResponseError && e.status === 402 ? "limit" : "error",
-        message: e instanceof Error ? e.message : "Request failed.\nPlease try again in a moment.",
+        message,
       });
+      announce(message);
       // 저장되지 않은 턴은 화면에서 걷고 질문은 입력창에 돌려준다 — 다시 보내기 쉽게.
       // 보낸 것처럼 남겨두면 서버 대화와 화면이 어긋난다.
       setTail([]);

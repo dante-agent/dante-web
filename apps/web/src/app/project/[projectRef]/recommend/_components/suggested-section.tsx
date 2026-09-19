@@ -7,6 +7,7 @@ import type {
   RecommendationOutcome,
   AiRecommendationResult,
 } from "@/lib/projects/ai-recommendations";
+import { useAnnounce } from "@/components/live-announcer";
 import type { TestRecommendation } from "@/lib/projects/recommendations";
 import { cn } from "@/lib/utils";
 import { rerankRecommendations } from "../actions";
@@ -95,6 +96,11 @@ export function SuggestedSection({
 
   const message = MESSAGE[status];
   const isError = message.tone === "error" || message.tone === "warn";
+
+  // 정렬 결과 문구와 선택 개수는 화면 글자만 바뀌어서 스크린리더용으로 따로 알린다.
+  // 정렬은 끝났을 때(pending 이 풀릴 때)마다, 개수는 고를 때마다.
+  useAnnounce(pending ? null : message.text, pending);
+  useAnnounce(selectMode ? `${selected.size} of ${MAX_SELECT} selected` : null, selected);
 
   return (
     <>

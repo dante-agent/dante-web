@@ -6,6 +6,7 @@ import {
   saveGithubNotifications,
   type SaveState,
 } from "@/app/project/[projectRef]/settings/notifications/actions";
+import { useAnnounce } from "@/components/live-announcer";
 import { CommentMarkdown } from "@/components/settings/notifications/comment-markdown";
 import { RadioRow, Section, ToggleRow } from "@/components/settings/notifications/controls";
 import { Button } from "@/components/ui/button";
@@ -49,6 +50,8 @@ export function GithubNotificationsForm({
     saveGithubNotifications,
     null
   );
+  // "Saved" 는 조건부로 나타나서 스크린리더가 놓친다. 제출마다 새 state 라 연달아 저장해도 다시 읽힌다.
+  useAnnounce(state?.saved ? "Saved" : null, state);
 
   // 저장 전 값. 폼 제출은 아래 name 들이 하고, 이 상태는 미리보기를 그린다.
   const [settings, setSettings] = useState(initial);

@@ -7,12 +7,8 @@ import {
   type DiscordTestState,
   type SaveState,
 } from "@/app/project/[projectRef]/settings/notifications/actions";
-import {
-  FormStatus,
-  RadioRow,
-  Section,
-  ToggleRow,
-} from "@/components/settings/notifications/controls";
+import { RadioRow, Section, ToggleRow } from "@/components/settings/notifications/controls";
+import { FormStatus } from "@/components/settings/notifications/form-status";
 import { Button } from "@/components/ui/button";
 import { DISCORD_EVENTS } from "@/lib/notifications/discord";
 import { NOTIFICATION_LOCALES } from "@/lib/notifications/locale";

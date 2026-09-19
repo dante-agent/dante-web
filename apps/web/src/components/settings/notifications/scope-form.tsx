@@ -6,6 +6,7 @@ import {
   saveNotificationScope,
   type SaveState,
 } from "@/app/project/[projectRef]/settings/notifications/actions";
+import { useAnnounce } from "@/components/live-announcer";
 import { Section, ToggleRow } from "@/components/settings/notifications/controls";
 import { Button } from "@/components/ui/button";
 import { SKIP_LABEL } from "@/lib/notifications/scope";
@@ -26,6 +27,8 @@ export function NotificationScopeForm({
     saveNotificationScope,
     null
   );
+  // "Saved" 는 조건부로 나타나서 스크린리더가 놓친다. 제출마다 새 state 라 연달아 저장해도 다시 읽힌다.
+  useAnnounce(state?.saved ? "Saved" : null, state);
   const [skipDraftPr, setSkipDraftPr] = useState(initial.skipDraftPr);
 
   return (

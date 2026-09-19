@@ -32,6 +32,7 @@ import {
   type GenerationOutcome,
 } from "@/components/generation/use-generation-performance";
 import { useTypewriter } from "@/components/generation/use-typewriter";
+import { copyAndAnnounce } from "@/components/live-announcer";
 import { onTestRunRequest, RunPanel, useLiveRun } from "@/components/run-terminal";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { MONACO_THEME as THEME, setupMonaco } from "@/lib/monaco-theme";
@@ -120,7 +121,7 @@ function FileActions({
   filename: string;
   trailing?: ReactNode;
 }) {
-  const copy = () => void navigator.clipboard.writeText(text).catch(() => {});
+  const copy = () => void copyAndAnnounce(text);
   const download = () => {
     const url = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
     const a = document.createElement("a");

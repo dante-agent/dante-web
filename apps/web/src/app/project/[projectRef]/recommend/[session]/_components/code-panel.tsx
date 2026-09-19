@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Check, Copy, Loader2 } from "lucide-react";
 import type { MonacoDiffEditor } from "@monaco-editor/react";
 import dynamic from "next/dynamic";
+import { copyAndAnnounce } from "@/components/live-announcer";
 import { MONACO_THEME as THEME, setupMonaco } from "@/lib/monaco-theme";
 import type { SessionDetail } from "../session-detail";
 
@@ -61,13 +62,10 @@ export function CodePanel({
   }, [follow, content]);
 
   const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(content);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // 클립보드 권한이 없으면 조용히 무시.
-    }
+    // 결과는 스크린리더에도 알린다(실패 포함). 화면 표시는 성공일 때만 바뀐다.
+    if (!(await copyAndAnnounce(content))) return;
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   };
 
   return (

@@ -10,6 +10,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import Anser from "anser";
 import { CheckCircle2, ChevronRight, ChevronUp, Loader2, TimerOff, XCircle } from "lucide-react";
 import type { LiveRunMessage } from "@/app/api/projects/[projectRef]/runs/live/route";
+import { useAnnounce } from "@/components/live-announcer";
 import { parseStoredRunLog } from "@/lib/projects/stored-run-log";
 import { cn } from "@/lib/utils";
 
@@ -223,6 +224,10 @@ function StepRow({
     <>
       {icon}
       <span className="font-semibold">{STEP_LABEL[step]}</span>
+      {/* 결과는 아이콘 색으로만 보여서 스크린리더용 글자를 따로 둔다. */}
+      <span className="sr-only">
+        {view.state === "running" ? "running" : view.ok ? "passed" : "failed"}
+      </span>
       {view.state === "done" && view.ms !== null && (
         <span className="text-muted-foreground">{formatMs(view.ms)}</span>
       )}
@@ -460,6 +465,19 @@ export function TerminalBody({ view }: { view: RunView }) {
   const waiting =
     view.running && Object.values(view.steps).every((step) => step.state === "pending");
 
+  // 원본 출력은 읽지 않고(아래 aria-live="off") 단계가 바뀔 때와 끝났을 때만 공용 알림으로 알린다.
+  // 이 화면에서 실행을 지켜본 경우만 — 저장된 로그(StoredRunLog)를 열었을 때 결과를 읽으면 시끄럽다.
+  const [watched, setWatched] = useState(view.running);
+  if (view.running && !watched) setWatched(true);
+  const status = barStatus(view);
+  useAnnounce(
+    !watched
+      ? null
+      : view.running
+        ? status.detail
+        : `Run ${status.label.toLowerCase()}${status.detail ? `: ${status.detail}` : ""}`
+  );
+
   // 맨 아래를 보고 있을 때만 새 출력을 따라 내려간다. 위로 올려 읽는 중이면 붙잡지 않는다.
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickRef = useRef(true);
@@ -477,7 +495,10 @@ export function TerminalBody({ view }: { view: RunView }) {
       }}
       className="border-border min-h-0 flex-1 overflow-auto border-t px-3 py-2 font-mono text-xs leading-relaxed"
       role="log"
-      aria-live="polite"
+      aria-live="off"
+      aria-label="Run output"
+      // Safari 는 스크롤 영역에 저절로 포커스를 주지 않는다. 키보드로 내려 읽을 수 있게.
+      tabIndex={0}
     >
       {/* 첫 단계 소식이 오기 전(요청·샌드박스 준비 대기)엔 줄이 하나도 없어 빈 화면이 된다. */}
       {waiting && (

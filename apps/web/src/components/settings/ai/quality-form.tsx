@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { Check } from "lucide-react";
 import { saveAiQuality, type SaveState } from "@/app/account/settings/actions";
+import { useAnnounce } from "@/components/live-announcer";
 import { Button } from "@/components/ui/button";
 import { AI_QUALITIES, AI_QUALITY_OPTIONS, type AiQuality } from "@/lib/ai/quality";
 
@@ -10,6 +11,8 @@ import { AI_QUALITIES, AI_QUALITY_OPTIONS, type AiQuality } from "@/lib/ai/quali
 
 export function AiQualityForm({ initial }: { initial: AiQuality }) {
   const [state, formAction, pending] = useActionState<SaveState, FormData>(saveAiQuality, null);
+  // "Saved" 는 조건부로 나타나서 스크린리더가 놓친다. 제출마다 새 state 라 연달아 저장해도 다시 읽힌다.
+  useAnnounce(state?.saved ? "Saved" : null, state);
 
   return (
     <form action={formAction}>

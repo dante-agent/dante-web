@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Loader2, Play, RotateCcw, Sparkles } from "lucide-react";
 import { unstable_rethrow, useRouter } from "next/navigation";
+import { useAnnounce } from "@/components/live-announcer";
 import { StoredRunLog, TerminalBody, useLiveRun, type RunView } from "@/components/run-terminal";
 import type { TestRunView } from "@/lib/projects/run-version";
 import { cn } from "@/lib/utils";
@@ -94,7 +95,11 @@ export function TestRunPanel({
       <div className="border-border flex h-10 shrink-0 items-center gap-3 border-b px-3">
         <StatusLabel status={status} />
         {message && (
-          <span className="text-destructive min-w-0 flex-1 truncate text-xs" title={message}>
+          <span
+            role="alert"
+            className="text-destructive min-w-0 flex-1 truncate text-xs"
+            title={message}
+          >
             {message}
           </span>
         )}
@@ -162,6 +167,15 @@ function StatusLabel({ status }: { status: Display }) {
     failed: "Failed",
     error: "Run error",
   };
+  // 처음 그릴 때의 상태(지난 실행 결과)는 읽지 않고, 이 화면에서 바뀐 뒤부터 알린다.
+  // 끝났을 때는 터미널(TerminalBody)이 개수까지 붙여 한 번 더 알린다 — 나중 것이 이긴다.
+  const [shown, setShown] = useState(status);
+  const [changed, setChanged] = useState(false);
+  if (status !== shown) {
+    setShown(status);
+    setChanged(true);
+  }
+  useAnnounce(changed ? `Tests: ${labels[status]}` : null);
   return (
     <span
       className={cn(

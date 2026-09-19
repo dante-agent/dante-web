@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { inviteMember, revokeInvite } from "@/app/team/[teamId]/settings/actions";
+import { copyAndAnnounce } from "@/components/live-announcer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -69,8 +70,7 @@ function InviteLink({ link }: { link: string }) {
         variant="secondary"
         className="shrink-0 rounded-[4px]"
         onClick={async () => {
-          await navigator.clipboard.writeText(link);
-          setCopied(true);
+          if (await copyAndAnnounce(link)) setCopied(true);
         }}
       >
         <SteadyLabel labels={["Copy link", "Copied"]} active={copied ? 1 : 0} />

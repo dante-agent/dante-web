@@ -19,6 +19,7 @@ import type { Monaco } from "@monaco-editor/react";
 import { Check, Copy, FileCheck, Loader2 } from "lucide-react";
 import { applyTestCode } from "@/app/project/[projectRef]/folder/actions";
 import { requestTestApply } from "@/components/generation/test-apply-request";
+import { copyAndAnnounce } from "@/components/live-announcer";
 import { MONACO_THEME, setupMonaco } from "@/lib/monaco-theme";
 import { cn } from "@/lib/utils";
 
@@ -217,10 +218,9 @@ function CodeBlock({
           <button
             type="button"
             onClick={() => {
-              void navigator.clipboard.writeText(code).then(() => setCopied(true));
+              void copyAndAnnounce(code).then((ok) => ok && setCopied(true));
             }}
             className="hover:text-foreground hover:bg-muted flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors"
-            aria-label="Copy code"
           >
             {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
             {copied ? "Copied" : "Copy"}
