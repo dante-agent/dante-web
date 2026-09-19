@@ -391,6 +391,15 @@ function ChatPanel({
     // 받은 스트림을 따로 모아둔다 — 캐시에 붙일 때 state 가 반영되길 기다리지 않으려고.
     // 끝에 꼬리(토큰 수·저장 여부·채팅이 한 일)가 붙어 오므로 화면에는 그 앞까지만 쓴다(stream-tail.ts).
     let raw = "";
+    // 조각은 초당 수십 개 온다. 조각마다 나누고 렌더하지 않고 프레임마다 한 번만 반영한다
+    // (run-terminal.tsx 와 같은 방식). 끝나거나 끊기면 flush 로 남은 조각까지 바로 반영한다.
+    let frame = 0;
+    const flush = () => {
+      if (frame) cancelAnimationFrame(frame);
+      frame = 0;
+      const shown = splitStream(raw).answer;
+      setTail((prev) => prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: shown } : m)));
+    };
 
     try {
       const response = await fetch("/api/chat", {
@@ -419,11 +428,9 @@ function ChatPanel({
         const { done, value } = await reader.read();
         if (done) break;
         raw += value;
-        const shown = splitStream(raw).answer;
-        setTail((prev) =>
-          prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: shown } : m))
-        );
+        if (!frame) frame = requestAnimationFrame(flush);
       }
+      flush();
       const { answer, tail } = splitStream(raw);
       // 토큰 수를 못 받았으면 이전 값을 그대로 둔다.
       const contextTokens = tail?.contextTokens ?? undefined;
@@ -468,6 +475,7 @@ function ChatPanel({
       if (controller.signal.aborted) {
         // 서버는 중단된 턴을 저장하지 않는다. 받은 만큼은 보여주되 저장 안 됐다고 표시한다.
         // 새 대화였다면 conversationId 는 애초에 채우지 않았으니 null 그대로다.
+        flush();
         setTail((prev) =>
           prev
             .filter((m) => m.role === "user" || m.content !== "")
@@ -486,6 +494,8 @@ function ChatPanel({
       setTail([]);
       setInput((current) => current || content);
     } finally {
+      // 오류로 빠졌으면 걸어 둔 프레임이 다음 전송의 말풍선을 덮지 않게 걷는다.
+      if (frame) cancelAnimationFrame(frame);
       setPending(false);
       abortRef.current = null;
     }

@@ -19,6 +19,7 @@ import type { Monaco } from "@monaco-editor/react";
 import { Check, Copy, FileCheck, Loader2 } from "lucide-react";
 import { applyTestCode } from "@/app/project/[projectRef]/folder/actions";
 import { requestTestApply } from "@/components/generation/test-apply-request";
+import { splitMarkdownBlocks } from "@/lib/chat/markdown-blocks";
 import { MONACO_THEME, setupMonaco } from "@/lib/monaco-theme";
 import { cn } from "@/lib/utils";
 
@@ -357,9 +358,30 @@ export const ChatMarkdown = memo(function ChatMarkdown({
   );
   return (
     <div className="wrap-break-word">
-      <ReactMarkdown remarkPlugins={REMARK_PLUGINS} skipHtml components={components}>
-        {text}
-      </ReactMarkdown>
+      {streaming ? (
+        // 스트리밍 중엔 블록으로 나눠 자라는 마지막 블록만 다시 파싱한다(markdown-blocks.ts).
+        // 끝나면 통째로 한 번 파싱한다 — 저장된 답과 같은 결과가 되게.
+        splitMarkdownBlocks(text).map((block, i) => (
+          <MarkdownBlock key={i} text={block} components={components} />
+        ))
+      ) : (
+        <MarkdownBlock text={text} components={components} />
+      )}
     </div>
+  );
+});
+
+/** 글자와 components 가 그대로면 다시 파싱하지 않는다. */
+const MarkdownBlock = memo(function MarkdownBlock({
+  text,
+  components,
+}: {
+  text: string;
+  components: Components;
+}) {
+  return (
+    <ReactMarkdown remarkPlugins={REMARK_PLUGINS} skipHtml components={components}>
+      {text}
+    </ReactMarkdown>
   );
 });
