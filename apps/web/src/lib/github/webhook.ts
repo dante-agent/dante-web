@@ -1,13 +1,12 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { after } from "next/server";
 import { prisma } from "@dante/db";
-import {
-  fetchHeadCommitMessage,
-  fetchPullRequest,
-  installationClient,
-} from "@/lib/github/pull-request";
+import { fetchPullRequest, installationClient } from "@/lib/github/pull-request";
 import { invalidateInstallationRepos } from "@/lib/github/repos";
-import type { PullRequestContext } from "@/lib/notifications/deliver";
-import { enqueuePullRequestJob } from "@/lib/notifications/pull-request-job";
+import {
+  enqueuePullRequestJob,
+  type PullRequestTarget,
+} from "@/lib/notifications/pull-request-job";
 import { invalidateInstallationPermissions } from "@/lib/notifications/status";
 
 // ⚠️ 서버 전용. 웹훅 시크릿을 읽는다.
@@ -112,7 +111,9 @@ type CheckRunEvent = InstallationEvent & {
  * @returns 로그에 남길 한 줄. 처리하지 않은 이벤트면 null.
  */
 export async function handleWebhookEvent(event: string, payload: unknown) {
-  await recordWebhookDelivery(event, payload as WebhookPayload);
+  // 배달 기록은 차트용이다. 같은 배달을 가려내는 데 쓰지 않으므로(중복은 claimJob 과 덮어쓰기 규칙이
+  // 막는다) 응답 뒤에 남긴다. 실패해도 삼키는 함수라 after 에서 던질 일이 없다.
+  after(() => recordWebhookDelivery(event, payload as WebhookPayload));
 
   switch (event) {
     case "installation":
@@ -299,13 +300,13 @@ async function handlePullRequest(payload: PullRequestEvent) {
   if (projects.length === 0) return null;
 
   for (const project of projects) {
-    const context: PullRequestContext = {
+    // head 커밋 메시지(`[skip dante]`)는 응답 뒤에 작업이 읽는다(pull-request-job.ts).
+    const context: PullRequestTarget = {
       number: pr.number,
       headSha: pr.head.sha,
       baseRef: pr.base.ref,
       draft: pr.draft ?? false,
       labels: (pr.labels ?? []).map((label) => label.name),
-      headCommitMessage: await commitMessage(project, pr.head.sha),
       author: pr.user ? { githubId: pr.user.id, login: pr.user.login } : null,
     };
 
@@ -320,6 +321,10 @@ async function handlePullRequest(payload: PullRequestEvent) {
  *
  * 페이로드에는 PR 번호와 SHA 밖에 없어서 나머지(base 브랜치·드래프트·라벨)는
  * API 로 다시 읽는다. 그 값들이 없으면 브랜치 필터를 적용할 수 없다.
+ *
+ * PR 조회는 응답 전에 한다. 작업 키(headSha)가 여기서 정해지고, 중복 실행을 막는 claimJob 이
+ * 그 키로 응답 전에 돌아야 해서다 — 응답 뒤에 실패하면 GitHub 재시도로 되살릴 수 없다.
+ * head 커밋 메시지는 응답 뒤에 작업이 읽는다.
  */
 async function handleCheckRun(payload: CheckRunEvent) {
   const id = installationId(payload);
@@ -335,14 +340,10 @@ async function handleCheckRun(payload: CheckRunEvent) {
   for (const project of projects) {
     const ref = { owner: project.repoOwner, repo: project.repoName };
 
-    let context: PullRequestContext;
+    let context: PullRequestTarget;
     try {
       const octokit = await installationClient(project.installationId);
-      const pr = await fetchPullRequest(octokit, ref, prNumber);
-      context = {
-        ...pr,
-        headCommitMessage: await fetchHeadCommitMessage(octokit, ref, pr.headSha),
-      };
+      context = await fetchPullRequest(octokit, ref, prNumber);
     } catch (error) {
       console.error(`[github-webhook] re-run lookup failed for #${prNumber}`, error);
       continue;
@@ -386,23 +387,6 @@ function notifiableProjects(installationIdValue: bigint, repoId: number) {
       testTimeoutMs: true,
     },
   });
-}
-
-/** `[skip dante]` 를 보려고 head 커밋 메시지를 읽는다. 못 읽으면 null. */
-async function commitMessage(
-  project: { repoOwner: string; repoName: string; installationId: bigint },
-  sha: string
-) {
-  try {
-    const octokit = await installationClient(project.installationId);
-    return await fetchHeadCommitMessage(
-      octokit,
-      { owner: project.repoOwner, repo: project.repoName },
-      sha
-    );
-  } catch {
-    return null;
-  }
 }
 
 /** 페이로드의 설치 ID. App 으로 오는 이벤트에는 늘 붙지만 타입상 optional 이다. */

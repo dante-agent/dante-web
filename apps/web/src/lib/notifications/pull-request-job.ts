@@ -2,6 +2,7 @@ import { after } from "next/server";
 import { Prisma, prisma } from "@dante/db";
 import {
   fetchFileText,
+  fetchHeadCommitMessage,
   fetchPullRequestFiles,
   installationClient,
   type Octokit,
@@ -76,6 +77,12 @@ export type JobProject = {
 };
 
 /**
+ * 웹훅이 넘기는 PR. head 커밋 메시지는 응답 뒤에 작업이 읽는다(runPullRequestJob) —
+ * 웹훅이 200 을 돌려주기 전에 GitHub 을 한 번 덜 부르게.
+ */
+export type PullRequestTarget = Omit<PullRequestContext, "headCommitMessage">;
+
+/**
  * 생성 단계의 마감. 작업을 시작한 때부터 잰다.
  *
  * 라우트의 maxDuration(800초)에 잘리면 작업이 "running" 으로 남고 체크는 in_progress 로 돈다.
@@ -110,7 +117,7 @@ const JOB_PROJECT_SELECT = {
  */
 export async function enqueuePullRequestJob(
   project: JobProject,
-  pr: PullRequestContext,
+  pr: PullRequestTarget,
   payer: Payer
 ) {
   const key = { projectId: project.id, prNumber: pr.number, headSha: pr.headSha };
@@ -171,7 +178,7 @@ async function claimJob(
 async function runPullRequestJob(
   jobId: string,
   project: JobProject,
-  pr: PullRequestContext,
+  target: PullRequestTarget,
   payer: Payer
 ) {
   const deadline = Date.now() + GENERATION_DEADLINE_MS;
@@ -180,6 +187,11 @@ async function runPullRequestJob(
     data: { status: "running", startedAt: new Date(), attempts: { increment: 1 } },
   });
 
+  // `[skip dante]` 판정(scope.ts)에 쓴다. 결과를 처음 보내기 전에만 있으면 된다.
+  const pr: PullRequestContext = {
+    ...target,
+    headCommitMessage: await commitMessage(project, target.headSha),
+  };
   const progress = progressReporter(jobId, project, pr);
 
   try {
@@ -345,6 +357,20 @@ async function failJob(
     status: "failed",
     error: "Dante stopped before it could finish this run. Re-run to try again.",
   }).catch(() => {});
+}
+
+/** `[skip dante]` 를 보려고 head 커밋 메시지를 읽는다. 못 읽으면 null 이다(평소대로 보낸다). */
+async function commitMessage(project: JobProject, sha: string) {
+  try {
+    const octokit = await installationClient(project.installationId);
+    return await fetchHeadCommitMessage(
+      octokit,
+      { owner: project.repoOwner, repo: project.repoName },
+      sha
+    );
+  } catch {
+    return null;
+  }
 }
 
 function finish(jobId: string, status: "done" | "failed" | "superseded", error?: string) {
