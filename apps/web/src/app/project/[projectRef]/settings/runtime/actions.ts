@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/auth/user";
 import { accessibleProjectWhere } from "@/lib/teams/access";
 import { invalidateRepoLookups } from "@/lib/github/lookup-cache";
 import { detectRuntimeCommands } from "@/lib/projects/detect-runtime";
+import { isTestFramework } from "@/lib/projects/frameworks";
 import {
   DEFAULT_TIMEOUT_MS,
   validateRuntimeInput,
@@ -69,15 +70,26 @@ export async function saveRuntimeSettings(
   const testCommand = String(formData.get("testCommand") ?? "").trim();
   const timeoutMs = Number(formData.get("timeoutMs"));
 
+  // 빈 값은 "아직 안 고름" 이다. 고른 적 없는 프로젝트만 빈 값으로 올 수 있고, 그대로 둔다.
+  const submittedFramework = String(formData.get("testFramework") ?? "");
+  if (submittedFramework !== "" && !isTestFramework(submittedFramework)) {
+    return { error: "Unknown test runner." };
+  }
+  const testFramework = submittedFramework || project.testFramework;
+
   // 빈 칸은 "기본값으로 되돌린다" 는 뜻이다. 화면의 placeholder 가 그 기본값을
   // 이미 보여주고 있으므로, 지우고 저장하면 본 대로 돌아간다.
   //
   // 화면이 쓴 것과 같은 기본값이어야 한다 — 그래서 여기서도 레포를 다시 본다.
   // (같은 요청 안이라면 react cache 가 GitHub 왕복을 한 번으로 줄인다.)
-  const defaults = await detectRuntimeCommands(project.ref, project, project.testFramework);
+  //
+  // 기본 테스트 명령은 러너를 따른다. 러너만 바꾸고 Test 칸은 안 건드렸다면 칸에는
+  // 이전 러너의 기본값이 실려 온다 — 그건 "기본값 그대로" 라는 뜻이라 새 기본값으로 바꾼다.
+  const defaults = await detectRuntimeCommands(project.ref, project, testFramework);
+  const previousDefaults = await detectRuntimeCommands(project.ref, project, project.testFramework);
   const resolved = {
     installCommand: installCommand || defaults.install,
-    testCommand: testCommand || defaults.test,
+    testCommand: testCommand && testCommand !== previousDefaults.test ? testCommand : defaults.test,
     timeoutMs,
   };
 
@@ -89,6 +101,7 @@ export async function saveRuntimeSettings(
   await prisma.project.update({
     where: { id: project.id },
     data: {
+      testFramework,
       installCommand: resolved.installCommand === defaults.install ? null : resolved.installCommand,
       testCommand: resolved.testCommand === defaults.test ? null : resolved.testCommand,
       testTimeoutMs: resolved.timeoutMs === DEFAULT_TIMEOUT_MS ? null : resolved.timeoutMs,

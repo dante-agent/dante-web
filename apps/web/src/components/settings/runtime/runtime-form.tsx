@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useActionState, useEffect, useId } from "react";
+import { useActionState, useEffect, useId, useState } from "react";
 import { Check } from "lucide-react";
 import {
   saveRuntimeSettings,
@@ -17,12 +17,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { TEST_FRAMEWORKS, type TestFrameworkId } from "@/lib/projects/frameworks";
 import { TIMEOUT_CHOICES, type RuntimeCommands } from "@/lib/projects/runtime";
 
 // Select 는 값을 문자열로 주고받는다. 폼에 실릴 때도 문자열이라 서버에서 Number() 로 되돌린다.
 const TIMEOUT_OPTIONS = TIMEOUT_CHOICES.map((choice) => ({
   value: String(choice.value),
   label: choice.label,
+}));
+
+const RUNNER_OPTIONS = TEST_FRAMEWORKS.map((framework) => ({
+  value: framework.id,
+  label: framework.name,
 }));
 
 // 실행 환경 폼. 샌드박스가 레포를 클론한 뒤 순서대로 돌릴 명령이다.
@@ -35,12 +41,30 @@ export function RuntimeForm({
   projectRef,
   initial,
   placeholders,
+  testFramework,
+  testDefaults,
 }: {
   projectRef: string;
   initial: { installCommand: string; testCommand: string; timeoutMs: number };
   /** 비워두면 무엇이 돌게 되는지 보여준다. 레포에서 알아낸 값일 수도, 아닐 수도 있다. */
   placeholders: RuntimeCommands;
+  /** 온보딩에서 고른 러너. 고르지 않고 넘어온 프로젝트면 null. */
+  testFramework: TestFrameworkId | null;
+  /** 러너별 기본 테스트 명령. 러너를 바꾸면 Test 칸이 이 값을 따라간다. */
+  testDefaults: Record<TestFrameworkId, string>;
 }) {
+  const [runner, setRunner] = useState<string>(testFramework ?? "");
+  const [testCommand, setTestCommand] = useState(initial.testCommand);
+  // 러너를 바꿀 때 Test 칸이 이전 러너의 기본값 그대로면 새 기본값으로 바꿔 준다.
+  // 사용자가 직접 적은 명령은 러너와 상관없이 그대로 둔다.
+  const changeRunner = (next: string) => {
+    const previousDefault = runner ? testDefaults[runner as TestFrameworkId] : placeholders.test;
+    if (testCommand.trim() === "" || testCommand === previousDefault) {
+      setTestCommand(testDefaults[next as TestFrameworkId] ?? testCommand);
+    }
+    setRunner(next);
+  };
+
   const [state, formAction, pending] = useActionState<SaveState, FormData>(
     saveRuntimeSettings,
     null
@@ -58,6 +82,43 @@ export function RuntimeForm({
   return (
     <form action={formAction}>
       <input type="hidden" name="projectRef" value={projectRef} />
+
+      <Section
+        title="Test runner"
+        description="Decides the imports in the tests Dante writes and the default test command below."
+      >
+        <div className="p-4">
+          <Select
+            name="testFramework"
+            value={runner}
+            onValueChange={(value) => changeRunner(String(value ?? ""))}
+            items={RUNNER_OPTIONS}
+          >
+            <SelectFieldLabel className="block text-[13px] leading-tight">Runner</SelectFieldLabel>
+            <span
+              id="runner-hint"
+              className="text-muted-foreground mt-1 block text-[12px] leading-relaxed"
+            >
+              Tests already written for the old runner keep its imports. Regenerate them after
+              switching, or they will fail under the new one.
+            </span>
+            <SelectTrigger
+              aria-describedby="runner-hint"
+              size="sm"
+              className="mt-3 w-28 pr-2.5 text-[13px] data-[size=sm]:rounded-[4px]"
+            >
+              <SelectValue placeholder="Pick one" />
+            </SelectTrigger>
+            <SelectContent alignItemWithTrigger={false} align="start" sideOffset={6}>
+              {RUNNER_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </Section>
 
       <Section
         title="Commands"
@@ -79,8 +140,9 @@ export function RuntimeForm({
           name="testCommand"
           label="Test"
           hint="Its exit code decides pass or fail. Anything it prints becomes the run log."
-          defaultValue={initial.testCommand}
-          placeholder={placeholders.test}
+          value={testCommand}
+          onChange={setTestCommand}
+          placeholder={runner ? testDefaults[runner as TestFrameworkId] : placeholders.test}
           invalid={invalid("testCommand")}
           last
         />
@@ -181,6 +243,8 @@ function CommandField({
   label,
   hint,
   defaultValue,
+  value,
+  onChange,
   placeholder,
   invalid,
   last,
@@ -188,7 +252,10 @@ function CommandField({
   name: string;
   label: string;
   hint: string;
-  defaultValue: string;
+  defaultValue?: string;
+  /** 러너에 따라 바뀌는 칸만 제어한다. 나머지는 defaultValue 로 둔다. */
+  value?: string;
+  onChange?: (value: string) => void;
   placeholder: string;
   /** 서버가 이 칸을 잘못됐다고 돌려보냈나. */
   invalid?: boolean;
@@ -214,6 +281,8 @@ function CommandField({
         type="text"
         name={name}
         defaultValue={defaultValue}
+        value={value}
+        onChange={onChange && ((event) => onChange(event.target.value))}
         placeholder={placeholder}
         spellCheck={false}
         autoComplete="off"
