@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { ThumbsDown, ThumbsUp } from "lucide-react";
+import { announce } from "@/components/live-announcer";
 import { cn } from "@/lib/utils";
 import { setRecommendFeedback } from "../../actions";
 
@@ -25,8 +26,15 @@ export function FeedbackButtons({
     const prev = value;
     setValue(target); // 낙관적
     startTransition(async () => {
-      const result = await setRecommendFeedback(projectRef, versionId, target);
-      if (!result.ok) setValue(prev); // 실패 시 롤백
+      // 액션이 예외를 던져도 롤백되게 한다. 되돌린 것은 버튼 색만 바뀌어서 알림으로 한 번 읽는다.
+      try {
+        const result = await setRecommendFeedback(projectRef, versionId, target);
+        if (result.ok) return;
+      } catch {
+        // 아래에서 롤백한다.
+      }
+      setValue(prev);
+      announce("Couldn't save feedback");
     });
   }
 

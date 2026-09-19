@@ -39,23 +39,30 @@ export function PromptInput({ projectRef }: { projectRef: string }) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="bg-background/60 border-border flex flex-col gap-2 rounded-xl border p-3"
+      // 입력칸은 outline-none 이라 포커스 표시는 폼 테두리가 맡는다(chat-thread 와 같은 방식).
+      className="bg-background/60 border-border has-[input:focus]:border-ring flex flex-col gap-2 rounded-xl border p-3 transition-colors"
     >
       <div className="flex min-h-10 items-center gap-3">
         <input
           type="text"
           value={value}
           onChange={(event) => setValue(event.target.value)}
-          disabled={navigating}
+          // 이동 중에도 포커스를 잃지 않게 disabled 대신 readOnly 로 막는다.
+          readOnly={navigating}
+          aria-disabled={navigating}
           placeholder="Describe which component you need tests for..."
-          className="text-foreground placeholder:text-muted-foreground flex-1 bg-transparent pl-1 text-sm outline-none disabled:opacity-50"
+          aria-label="Describe which component you need tests for"
+          className="text-foreground placeholder:text-muted-foreground flex-1 bg-transparent pl-1 text-sm outline-none aria-disabled:opacity-50"
         />
         <button
           type="submit"
-          disabled={navigating || !trimmed}
+          // 비었을 때만 진짜 disabled. 보내는 중(navigating)은 포커스를 지키려고 aria-disabled 로
+          // 막고, 중복 전송은 go() 가 거른다.
+          disabled={!trimmed}
+          aria-disabled={navigating}
           title="Send"
           aria-label="Send"
-          className="bg-primary text-primary-foreground flex size-8 shrink-0 items-center justify-center rounded-lg disabled:opacity-50"
+          className="bg-primary text-primary-foreground flex size-8 shrink-0 items-center justify-center rounded-lg disabled:opacity-50 aria-disabled:opacity-50"
         >
           {navigating ? (
             <LoaderCircle className="size-4 animate-spin" />
@@ -75,6 +82,7 @@ export function PromptInput({ projectRef }: { projectRef: string }) {
               variant="outline"
               size="sm"
               disabled={navigating}
+              focusableWhenDisabled
               onClick={() => go(example)}
               className="animate-in fade-in slide-in-from-bottom-1 rounded-full duration-200"
             >

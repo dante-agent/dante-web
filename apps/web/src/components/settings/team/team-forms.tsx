@@ -11,6 +11,7 @@ import {
   type TeamFormState,
 } from "@/app/team/[teamId]/settings/actions";
 import { Button } from "@/components/ui/button";
+import { useInlineConfirm } from "@/components/use-inline-confirm";
 import { Input } from "@/components/ui/input";
 
 // 팀 설정의 폼들. 규칙은 서버(lib/teams/manage.ts)가 정하고, 여기서는 누를 수 없는
@@ -48,11 +49,21 @@ export function RenameTeamForm({
           name="name"
           defaultValue={name}
           maxLength={maxLength}
-          disabled={!canEdit || pending}
+          disabled={!canEdit}
+          readOnly={pending}
+          // 실패 문구(아래 status)를 이 칸의 설명으로 잇는다.
+          aria-invalid={state?.ok === false || undefined}
+          aria-describedby="team-name-status"
           className="rounded-[4px]"
         />
         {canEdit && (
-          <Button type="submit" size="sm" disabled={pending} className="shrink-0 rounded-[4px]">
+          <Button
+            type="submit"
+            size="sm"
+            disabled={pending}
+            focusableWhenDisabled
+            className="shrink-0 rounded-[4px]"
+          >
             {pending ? "Saving…" : "Save"}
           </Button>
         )}
@@ -60,6 +71,7 @@ export function RenameTeamForm({
 
       {/* min-h 고정: 문구가 생겼다 없어져도 카드 높이가 흔들리지 않는다. */}
       <p
+        id="team-name-status"
         role="status"
         aria-live="polite"
         className={`mt-2 min-h-5 text-[13px] ${state?.ok ? "text-muted-foreground" : "text-destructive"}`}
@@ -79,6 +91,7 @@ export function RenameTeamForm({
 export function MemberControls({
   teamId,
   userId,
+  name,
   role,
   isSelf,
   canManage,
@@ -87,6 +100,8 @@ export function MemberControls({
 }: {
   teamId: string;
   userId: string;
+  /** 줄마다 같은 버튼이 있어 스크린리더용으로 누구의 버튼인지 덧붙인다. */
+  name: string;
   role: "owner" | "member";
   isSelf: boolean;
   /** 이 줄을 내보낼 수 있는가. 보는 사람이 owner 이고 대상이 개인 팀 주인이 아닐 때. */
@@ -104,7 +119,7 @@ export function MemberControls({
     isSelf ? leaveTeam : removeMember,
     null
   );
-  const [confirming, setConfirming] = useState(false);
+  const { confirming, start, cancel, triggerRef, confirmRef } = useInlineConfirm();
 
   const pending = rolePending || removePending;
   const failure = [removeState, roleState].find((state): state is NonNullable<TeamFormState> =>
@@ -130,9 +145,11 @@ export function MemberControls({
               variant="ghost"
               size="sm"
               disabled={pending}
+              focusableWhenDisabled
               className="rounded-[4px]"
             >
               {nextRole === "owner" ? "Make owner" : "Make member"}
+              <span className="sr-only">: {name}</span>
             </Button>
           </form>
         )}
@@ -148,45 +165,51 @@ export function MemberControls({
                   variant="ghost"
                   size="sm"
                   disabled={pending}
-                  onClick={() => setConfirming(false)}
+                  focusableWhenDisabled
+                  onClick={cancel}
                   className="rounded-[4px]"
                 >
                   Cancel
                 </Button>
                 <Button
+                  ref={confirmRef}
                   type="submit"
                   variant="destructive"
                   size="sm"
                   disabled={pending}
+                  focusableWhenDisabled
                   className="rounded-[4px]"
                 >
                   {isSelf ? "Leave team" : "Remove"}
+                  {!isSelf && <span className="sr-only"> {name}</span>}
                 </Button>
               </>
             ) : (
               <Button
+                ref={triggerRef}
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => setConfirming(true)}
+                onClick={start}
                 className="text-destructive rounded-[4px]"
               >
                 {isSelf ? "Leave" : "Remove"}
+                {!isSelf && <span className="sr-only"> {name}</span>}
               </Button>
             )}
           </form>
         )}
       </div>
 
-      {failure && !pending && (
-        <p
-          role="status"
-          aria-live="polite"
-          className="text-destructive absolute top-full right-0 mt-0.5 text-[12px] whitespace-nowrap"
-        >
-          {failure.message}
-        </p>
-      )}
+      {/* live 영역은 늘 그려 둔다 — 문구와 함께 끼워 넣으면 스크린리더가 놓친다.
+          넘치지 않게 폭을 제한하고 줄바꿈을 허용한다. */}
+      <p
+        role="status"
+        aria-live="polite"
+        className="text-destructive absolute top-full right-0 mt-0.5 w-max max-w-64 text-right text-[12px]"
+      >
+        {failure && !pending ? failure.message : ""}
+      </p>
     </div>
   );
 }
@@ -216,15 +239,19 @@ function DeleteTeamDialogForm({ teamId, teamName }: { teamId: string; teamName: 
           autoCorrect="off"
           autoCapitalize="off"
           spellCheck={false}
+          aria-invalid={state?.ok === false || undefined}
+          aria-describedby="delete-team-status"
           className="rounded-[4px] font-mono"
         />
       </div>
 
       <div className="flex min-h-8 items-center justify-between gap-3">
+        {/* 오류 문구는 자르지 않고 줄바꿈한다 — 끝이 잘리면 무엇이 틀렸는지 알 수 없다. */}
         <p
+          id="delete-team-status"
           role="status"
           aria-live="polite"
-          className="text-destructive min-w-0 truncate text-[13px]"
+          className="text-destructive min-w-0 text-[13px] wrap-break-word"
         >
           {pending ? "" : (state?.message ?? "")}
         </p>
@@ -241,6 +268,7 @@ function DeleteTeamDialogForm({ teamId, teamName }: { teamId: string; teamName: 
             variant="destructive"
             size="sm"
             disabled={!matches || pending}
+            focusableWhenDisabled
             className="rounded-[4px]"
           >
             {pending ? "Deleting…" : "Delete this team"}

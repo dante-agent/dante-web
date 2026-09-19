@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { unstable_rethrow, useRouter } from "next/navigation";
+import { requestArrivalFocus } from "@/components/generation/arrival-focus";
 import {
   generatePlannedTests,
   planTestGeneration,
@@ -145,6 +146,7 @@ export function ChatSession({
         );
         // 배치로 만든 버전을 전부 tests 쿼리로 넘겨 탭으로 보여준다. 생성 직후에는 실행하지 않는다.
         const tests = result.versionIds.join(",");
+        requestArrivalFocus();
         router.push(`/project/${projectRef}/recommend/${result.versionId}?tests=${tests}`);
         // 좌측 사이드바는 레이아웃이라 이동만으로는 다시 그리지 않는다. 새 세션이 목록에 뜨게 새로고침한다.
         router.refresh();

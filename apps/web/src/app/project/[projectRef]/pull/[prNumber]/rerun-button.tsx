@@ -12,8 +12,13 @@ export function RerunButton({ disabled }: { disabled: boolean }) {
   return (
     <button
       type="submit"
-      disabled={disabled || pending}
-      className="bg-brand-orange flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
+      disabled={disabled}
+      // 보내는 중에는 disabled 대신 aria-disabled — 누른 버튼이 포커스를 잃지 않게. 제출은 여기서 막는다.
+      aria-disabled={pending}
+      onClick={(event) => {
+        if (pending) event.preventDefault();
+      }}
+      className="bg-brand-orange flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-40 aria-disabled:cursor-not-allowed aria-disabled:opacity-40"
     >
       {pending && <Loader2 className="size-3.5 animate-spin" />}
       Re-run

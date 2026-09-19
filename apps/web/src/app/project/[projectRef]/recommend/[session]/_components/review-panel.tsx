@@ -5,6 +5,7 @@ import type { ChatMessage } from "../../_components/chat-thread";
 import type { SessionDetail } from "../session-detail";
 import { FeedbackButtons } from "./feedback-buttons";
 import { FollowUp } from "./follow-up";
+import { SessionTitle } from "./session-title";
 
 // 중앙 리뷰 패널 — Jules 가운데 컬럼. 헤더(레포·태스크) 아래는 채팅 하나로 채운다:
 // 추천 입력에서 넘어온 프롬프트·추천 사유부터 후속 대화까지 한 스레드로 쌓인다(FollowUp).
@@ -39,7 +40,7 @@ export function ReviewPanel({
 
       {/* 태스크 타이틀 바 */}
       <div className="border-border flex h-12 shrink-0 items-center gap-2 border-b px-4">
-        <span className="truncate text-sm font-semibold">{session.title}</span>
+        <SessionTitle sessionId={session.id} title={session.title} />
         {session.readOnly && (
           <Badge variant="outline" className="gap-1">
             <Lock className="size-3" />

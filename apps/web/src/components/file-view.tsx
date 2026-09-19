@@ -32,8 +32,10 @@ import {
   type GenerationOutcome,
 } from "@/components/generation/use-generation-performance";
 import { useTypewriter } from "@/components/generation/use-typewriter";
+import { copyAndAnnounce } from "@/components/live-announcer";
 import { onTestRunRequest, RunPanel, useLiveRun } from "@/components/run-terminal";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { useElementSize, useResizeHandle } from "@/components/use-resize-handle";
 import { MONACO_THEME as THEME, setupMonaco } from "@/lib/monaco-theme";
 import { pushRecent } from "@/lib/recent-files";
 import { cn } from "@/lib/utils";
@@ -43,8 +45,9 @@ type FileContent = { source: string; test: string | null; testDraft: string | nu
 type Draft = { version: number; source: string };
 
 const Fallback = () => (
-  <div className="flex h-full items-center justify-center bg-black">
+  <div role="status" className="flex h-full items-center justify-center bg-black">
     <Loader2 className="text-muted-foreground size-5 animate-spin" />
+    <span className="sr-only">Loading editor…</span>
   </div>
 );
 
@@ -88,11 +91,14 @@ function guessTestName(path: string): string {
 }
 
 function CodePane({
+  label,
   lang,
   path,
   value,
   follow = false,
 }: {
+  /** 스크린리더가 읽는 에디터 이름("Source: src/foo.ts"). 없으면 모든 에디터가 "Editor content" 다. */
+  label: string;
   lang: string;
   /** 이 칸만의 모델 경로(modelPath). 확장자로 TSX 여부가 갈린다. */
   path: string;
@@ -114,7 +120,7 @@ function CodePane({
       beforeMount={setupMonaco}
       loading={<Fallback />}
       value={value}
-      options={OPTIONS}
+      options={{ ...OPTIONS, ariaLabel: label }}
       onMount={(editor) => {
         editorRef.current = editor;
       }}
@@ -131,7 +137,7 @@ function FileActions({
   filename: string;
   trailing?: ReactNode;
 }) {
-  const copy = () => void navigator.clipboard.writeText(text).catch(() => {});
+  const copy = () => void copyAndAnnounce(text);
   const download = () => {
     const url = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
     const a = document.createElement("a");
@@ -231,6 +237,7 @@ function GenerateTest({ projectRef, file }: { projectRef: string; file: string }
       {files ? (
         <div className="min-h-0 flex-1">
           <CodePane
+            label={`Generated test for ${file}`}
             lang={langOf(file)}
             path={modelPath("generating", guessTestName(file))}
             value={files[0].code.slice(0, typing.chars)}
@@ -279,13 +286,15 @@ function FileHeading({ name }: { name: string }) {
 }
 
 function ExpandButton({ active, onToggle }: { active: boolean; onToggle: () => void }) {
+  // 이름은 고정하고 상태는 aria-pressed 로 — 이름이 Expand ↔ Restore 로 바뀌면 눌렸는지 알 수 없다.
   return (
     <Button
       size="icon-sm"
       variant="ghost"
       onClick={onToggle}
       title={active ? "Restore" : "Expand"}
-      aria-label={active ? "Restore" : "Expand"}
+      aria-label="Expand"
+      aria-pressed={active}
     >
       {active ? <Minimize2 /> : <Maximize2 />}
     </Button>
@@ -294,23 +303,25 @@ function ExpandButton({ active, onToggle }: { active: boolean; onToggle: () => v
 
 function DragDivider({
   pct,
+  handle,
   onDown,
   onMove,
 }: {
   pct: number;
+  /** 키보드 조작·aria-value* (useResizeHandle). */
+  handle: ReturnType<typeof useResizeHandle>;
   onDown: (e: React.PointerEvent<HTMLDivElement>) => void;
   onMove: (e: React.PointerEvent<HTMLDivElement>) => void;
 }) {
   return (
     <div
-      role="separator"
-      aria-orientation="vertical"
+      {...handle}
       onPointerDown={onDown}
       onPointerMove={onMove}
       style={{ left: `${pct}%` }}
-      className="group absolute inset-y-0 z-10 flex w-2 -translate-x-1/2 cursor-col-resize touch-none justify-center"
+      className="group absolute inset-y-0 z-10 flex w-2 -translate-x-1/2 cursor-col-resize touch-none justify-center outline-none"
     >
-      <span className="group-hover:bg-brand-orange/70 h-full w-0.5 rounded-full bg-transparent transition-colors" />
+      <span className="group-hover:bg-brand-orange/70 group-focus-visible:bg-brand-orange h-full w-0.5 rounded-full bg-transparent transition-colors" />
     </div>
   );
 }
@@ -363,6 +374,15 @@ export function FileView({
     const r = gridRef.current.getBoundingClientRect();
     setLeftPct(Math.min(80, Math.max(20, ((e.clientX - r.left) / r.width) * 100)));
   };
+  const dividerHandle = useResizeHandle({
+    label: "Resize source and test panes",
+    orientation: "vertical",
+    value: leftPct,
+    min: 20,
+    max: 80,
+    step: 5,
+    onChange: setLeftPct,
+  });
 
   // AI 채팅이 테스트를 고치면 새로 읽어 온 코드를 Test Code 칸에 타이핑 연출로 보여준다.
   // 요청(이벤트)을 받으면 대기 상태로 두고, 곧이어 테스트 내용이 바뀌면 그 내용을 재생한다.
@@ -429,6 +449,17 @@ export function FileView({
     const r = shellRef.current.getBoundingClientRect();
     setTerminalHeight(Math.min(r.height * 0.7, Math.max(TERMINAL_MIN, r.bottom - e.clientY)));
   };
+  const shellSize = useElementSize(shellRef);
+  const terminalHandle = useResizeHandle({
+    label: "Resize terminal",
+    orientation: "horizontal",
+    value: terminalHeight,
+    min: TERMINAL_MIN,
+    max: shellSize.height * 0.7,
+    step: 24,
+    onChange: setTerminalHeight,
+    grow: "backward",
+  });
 
   const [expanded, setExpanded] = useState<null | "left" | "right">(null);
   const toggle = (s: "left" | "right") => setExpanded((e) => (e === s ? null : s));
@@ -485,11 +516,13 @@ export function FileView({
   if (mode === "edit") {
     return (
       <div className={cn(GRID, PANE_HEIGHT)} style={{ gridTemplateColumns: expandedCols }}>
+        {/* 화면 제목. sr-only 는 absolute 라 그리드 칸을 차지하지 않는다. */}
+        <h1 className="sr-only">Edit test: {testName}</h1>
         <Cell show={showLeft} className="bg-sidebar flex items-center border-b px-2.5 text-xs">
-          <span className="font-semibold">Before</span>
+          <h2 className="font-semibold">Before</h2>
         </Cell>
         <Cell show={showRight} className="bg-sidebar flex items-center border-b px-2.5 text-xs">
-          <span className="font-semibold">After</span>
+          <h2 className="font-semibold">After</h2>
           <div className="ml-auto flex items-center gap-1">
             {saveError && (
               <span role="alert" className="text-destructive mr-1 text-xs">
@@ -505,6 +538,8 @@ export function FileView({
               size="xs"
               onClick={saveEdit}
               disabled={!saveable || !dirty || saving}
+              // 누르면 바로 막힌다. 포커스를 잃지 않게 aria-disabled 로 막는다.
+              focusableWhenDisabled
               className="text-brand-orange"
             >
               {saving && <Loader2 className="animate-spin" />}
@@ -517,6 +552,7 @@ export function FileView({
               variant="ghost"
               onClick={() => setEditing(original)}
               disabled={!dirty || saving}
+              focusableWhenDisabled
               title="Revert changes"
               aria-label="Revert changes"
             >
@@ -553,7 +589,12 @@ export function FileView({
 
         <div className={cn("min-h-0 bg-black", !expanded && "col-span-2")}>
           {expanded === "left" ? (
-            <CodePane lang={lang} path={modelPath("before", testName)} value={original} />
+            <CodePane
+              label={`Before: ${testName}`}
+              lang={lang}
+              path={modelPath("before", testName)}
+              value={original}
+            />
           ) : expanded === "right" ? (
             <Editor
               language={lang}
@@ -563,7 +604,12 @@ export function FileView({
               loading={<Fallback />}
               value={editing}
               onChange={(value) => setEditing(value ?? "")}
-              options={{ ...OPTIONS, readOnly: false }}
+              // 쓰기 가능한 에디터에서는 Tab 이 들여쓰기라 빠져나가는 방법을 이름에 함께 알린다.
+              options={{
+                ...OPTIONS,
+                readOnly: false,
+                ariaLabel: `After: ${testName}. Press Ctrl+M (Ctrl+Shift+M on Mac) to move focus with Tab.`,
+              }}
             />
           ) : (
             <DiffEditor
@@ -589,6 +635,8 @@ export function FileView({
                 useInlineViewWhenSpaceIsLimited: false,
                 enableSplitViewResizing: false,
                 overviewRulerBorder: false,
+                originalAriaLabel: `Before: ${testName}`,
+                modifiedAriaLabel: `After: ${testName}. Press Ctrl+M (Ctrl+Shift+M on Mac) to move focus with Tab.`,
               }}
             />
           )}
@@ -601,6 +649,7 @@ export function FileView({
 
   return (
     <div ref={shellRef} className={cn("flex flex-col", PANE_HEIGHT)}>
+      <h1 className="sr-only">{file}</h1>
       <div
         ref={gridRef}
         className={cn(GRID, "min-h-0 flex-1")}
@@ -613,13 +662,13 @@ export function FileView({
             showRight && "border-r"
           )}
         >
-          <span className="font-semibold">Source Code</span>
+          <h2 className="font-semibold">Source Code</h2>
         </Cell>
         <Cell
           show={showRight}
           className="bg-sidebar flex items-center gap-1.5 border-b px-2.5 text-xs"
         >
-          <span className="font-semibold">Test Code</span>
+          <h2 className="font-semibold">Test Code</h2>
           {content.test && (
             <div className="ml-auto flex items-center gap-0.5">
               {/* 실행은 저장된 버전(레포에서 가져온 것·AI draft 모두)을 돌린다. 한 번에 하나만. */}
@@ -690,11 +739,17 @@ export function FileView({
         </Cell>
 
         <Cell show={showLeft} className={cn("bg-black", showRight && "border-r")}>
-          <CodePane lang={lang} path={modelPath("source", file)} value={content.source} />
+          <CodePane
+            label={`Source: ${file}`}
+            lang={lang}
+            path={modelPath("source", file)}
+            value={content.source}
+          />
         </Cell>
         <Cell show={showRight} className="bg-black">
           {content.test ? (
             <CodePane
+              label={`Test: ${testName}`}
               lang={lang}
               path={modelPath("test", testName)}
               value={typer.shown ?? content.test}
@@ -705,7 +760,14 @@ export function FileView({
           )}
         </Cell>
 
-        {!expanded && <DragDivider pct={leftPct} onDown={onDividerDown} onMove={onDividerMove} />}
+        {!expanded && (
+          <DragDivider
+            pct={leftPct}
+            handle={dividerHandle}
+            onDown={onDividerDown}
+            onMove={onDividerMove}
+          />
+        )}
       </div>
       {terminal && (
         <RunPanel
@@ -713,6 +775,7 @@ export function FileView({
           open={terminalOpen}
           height={terminalHeight}
           onToggle={() => setTerminalOpen((open) => !open)}
+          resizeHandle={terminalHandle}
           onResizeDown={onTerminalResizeDown}
           onResizeMove={onTerminalResizeMove}
         />

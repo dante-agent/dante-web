@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import danteLogo from "@/assets/dante-logo.png";
+import { MAIN_CONTENT_ID } from "@/components/skip-link";
 
 // 로그인 화면(src/app/page.tsx)의 분할 구조를 컴포넌트로 뽑은 것.
 // 로그인 · 프로젝트 목록 · 온보딩이 모두 이걸 쓴다 — 로그인부터 러너 선택까지
@@ -51,9 +52,9 @@ export function SplitShell({
         {/* flex-1 + items-center + justify-center: 로고·푸터 높이와 무관하게
             본문이 세로 중앙에 오고, 좁은 본문 블록이 컬럼 안에서 가로 중앙에 온다.
             로그인 화면(src/app/page.tsx)이 쓰는 방식 그대로다. */}
-        <div className="flex flex-1 items-center justify-center py-16">
+        <main id={MAIN_CONTENT_ID} className="flex flex-1 items-center justify-center py-16">
           <div className={width === "sm" ? "w-full max-w-sm" : "w-full max-w-md"}>{children}</div>
-        </div>
+        </main>
 
         {footer}
       </div>
@@ -63,9 +64,9 @@ export function SplitShell({
           그리드의 세로 중앙에 놓이기 때문에, 스크롤하면 같이 밀린다.
           self-start 로 늘어나는 걸 끄고 높이를 뷰포트로 못박은 뒤 sticky 로
           붙이면, 왼쪽만 흐르고 레일은 화면 중앙에 그대로 선다. */}
-      <div className="border-border relative hidden border-l lg:sticky lg:top-0 lg:flex lg:h-svh lg:items-center lg:justify-center lg:self-start">
+      <aside className="border-border relative hidden border-l lg:sticky lg:top-0 lg:flex lg:h-svh lg:items-center lg:justify-center lg:self-start">
         {aside}
-      </div>
+      </aside>
     </div>
   );
 }

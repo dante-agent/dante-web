@@ -30,10 +30,15 @@ export function WritingCode({
   return (
     <div className="flex h-full w-full min-w-0 flex-col">
       {tabs.length > 1 && (
-        <div className="border-border flex h-9 shrink-0 items-center gap-1 overflow-x-auto border-b px-2">
+        // 누를 수 없는 진행 표시다. 지금 쓰는 파일·끝난 파일은 색·체크로만 보여서 글자로도 붙인다.
+        <ol
+          aria-label="Test files"
+          className="border-border flex h-9 shrink-0 items-center gap-1 overflow-x-auto border-b px-2"
+        >
           {tabs.map((path, index) => (
-            <span
+            <li
               key={path}
+              aria-current={index === active ? "step" : undefined}
               className={cn(
                 "flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 font-mono text-xs",
                 index === active ? "bg-muted text-foreground" : "text-muted-foreground"
@@ -42,9 +47,16 @@ export function WritingCode({
             >
               {files && index < active && <Check className="text-brand-mint size-3" />}
               {path.split("/").pop() || path}
-            </span>
+              <span className="sr-only">
+                {files && index < active
+                  ? ", written"
+                  : index === active
+                    ? ", writing"
+                    : ", waiting"}
+              </span>
+            </li>
           ))}
-        </div>
+        </ol>
       )}
 
       {file ? (

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { Dialog } from "@base-ui/react/dialog";
 import { Loader2, Trash2 } from "lucide-react";
 import { unstable_rethrow, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { neighborFocusTarget } from "@/lib/focus-neighbor";
 import { cn } from "@/lib/utils";
 import { deleteRecommendSession } from "../actions";
 
@@ -25,6 +26,10 @@ export function SessionDeleteButton({
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  // 지운 뒤 다이얼로그가 닫히면 포커스는 트리거로 돌아가는데, 트리거는 줄과 함께 사라진다.
+  // 지우기에 성공하면 이웃 줄을 미리 골라 두고 거기로 돌려보낸다.
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const afterDelete = useRef<HTMLElement | null>(null);
 
   function confirmDelete() {
     setError(null);
@@ -35,6 +40,7 @@ export function SessionDeleteButton({
           setError("Couldn't delete this session. Try again.");
           return;
         }
+        afterDelete.current = neighborFocusTarget(triggerRef.current);
         setOpen(false);
         // 지운 세션 상세를 보고 있었으면 목록으로, 아니면 제자리 새로고침.
         if (window.location.pathname.endsWith(`/recommend/${versionId}`)) {
@@ -54,6 +60,7 @@ export function SessionDeleteButton({
       <Dialog.Trigger
         render={
           <button
+            ref={triggerRef}
             type="button"
             aria-label={`Delete ${title}`}
             title="Delete session"
@@ -70,7 +77,10 @@ export function SessionDeleteButton({
 
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/40 transition-opacity duration-150 data-ending-style:opacity-0 data-starting-style:opacity-0" />
-        <Dialog.Popup className="border-border bg-popover fixed top-1/2 left-1/2 z-50 flex w-[24rem] max-w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 rounded-xl border p-5 shadow-lg transition-[scale,opacity] duration-100 ease-out outline-none data-ending-style:scale-[0.98] data-ending-style:opacity-0 data-starting-style:scale-[0.98] data-starting-style:opacity-0">
+        <Dialog.Popup
+          finalFocus={() => afterDelete.current ?? true}
+          className="border-border bg-popover fixed top-1/2 left-1/2 z-50 flex w-[24rem] max-w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 rounded-xl border p-5 shadow-lg transition-[scale,opacity] duration-100 ease-out outline-none data-ending-style:scale-[0.98] data-ending-style:opacity-0 data-starting-style:scale-[0.98] data-starting-style:opacity-0"
+        >
           <div className="flex flex-col gap-1">
             <Dialog.Title className="text-base font-medium">Delete session?</Dialog.Title>
             <Dialog.Description className="text-muted-foreground text-xs">
@@ -87,7 +97,15 @@ export function SessionDeleteButton({
 
           <div className="flex justify-end gap-2">
             <Dialog.Close
-              render={<Button type="button" variant="ghost" size="sm" disabled={pending} />}
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={pending}
+                  focusableWhenDisabled
+                />
+              }
             >
               Cancel
             </Dialog.Close>
@@ -96,6 +114,7 @@ export function SessionDeleteButton({
               variant="destructive"
               size="sm"
               disabled={pending}
+              focusableWhenDisabled
               onClick={confirmDelete}
             >
               {pending ? (

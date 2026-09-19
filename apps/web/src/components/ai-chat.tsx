@@ -36,9 +36,12 @@ import {
 import { ChatMarkdown } from "@/components/chat-markdown";
 import { currentAfterCode } from "@/components/generation/test-apply-request";
 import { requestTestTyping } from "@/components/generation/test-typing-request";
+import { announce } from "@/components/live-announcer";
 import { requestTestRun } from "@/components/run-terminal";
 import { Button } from "@/components/ui/button";
+import { useElementSize, useResizeHandle } from "@/components/use-resize-handle";
 import { splitStream } from "@/lib/chat/stream-tail";
+import { neighborFocusTarget } from "@/lib/focus-neighbor";
 import { cn } from "@/lib/utils";
 
 /** 본문과 같은 높이(헤더 47px 만 빼면 화면 끝까지). file-view / folder-empty-state 와 같은 값. */
@@ -168,6 +171,14 @@ const MAX_RATIO = 0.6;
 
 export function AiChatDock({ projectRef, children }: { projectRef: string; children: ReactNode }) {
   const [open, setOpen] = useState(false);
+  // 여닫을 때 누른 버튼이 사라진다(열기 버튼은 열리면 없어지고, 닫기 버튼은 inert 안으로 들어간다).
+  // 열면 입력창으로, 닫으면 다시 나타난 열기 버튼으로 포커스를 옮긴다.
+  const openButtonRef = useRef<HTMLButtonElement>(null);
+  const toggled = useRef(false);
+  const toggle = (next: boolean) => {
+    toggled.current = true;
+    setOpen(next);
+  };
   const [currentTest, setCurrentTest] = useState<string | null>(null);
 
   // null = 아직 끌지 않음 → 기본 폭(22rem / xl 26rem) 클래스를 쓴다. 끈 뒤에는 px.
@@ -192,6 +203,35 @@ export function AiChatDock({ projectRef, children }: { projectRef: string; child
   };
   const onDividerUp = () => setDragging(false);
 
+  // 키보드로도 폭을 바꾼다. 아직 끌지 않았으면(width null) 지금 그려진 폭에서 시작한다.
+  const asideRef = useRef<HTMLElement>(null);
+  const dockSize = useElementSize(dockRef);
+  const asideSize = useElementSize(asideRef);
+  const dividerHandle = useResizeHandle({
+    label: "Resize AI chat",
+    orientation: "vertical",
+    value: width ?? asideSize.width,
+    min: MIN_WIDTH,
+    max: dockSize.width * MAX_RATIO,
+    step: 24,
+    onChange: setWidth,
+    grow: "backward",
+  });
+
+  useEffect(() => {
+    if (!toggled.current) return;
+    toggled.current = false;
+    if (!open) {
+      openButtonRef.current?.focus();
+      return;
+    }
+    const aside = asideRef.current;
+    (
+      aside?.querySelector<HTMLElement>("textarea:not(:disabled)") ??
+      aside?.querySelector<HTMLElement>("button:not(:disabled)")
+    )?.focus();
+  }, [open]);
+
   return (
     <div ref={dockRef} className="flex">
       <div className="min-w-0 flex-1">
@@ -202,6 +242,8 @@ export function AiChatDock({ projectRef, children }: { projectRef: string; child
           부드럽게 줄고(늘고), 닫았다 열어도 대화가 남는다. 본문과는 border-l 한 줄로만
           나눈다 — 여백을 두면 에디터가 화면 끝까지 못 간다. */}
       <aside
+        ref={asideRef}
+        aria-label="AI chat"
         // 닫혀 있을 때 폭 0 짜리 안쪽 버튼·입력창으로 탭 이동이 들어가지 않게.
         inert={!open}
         style={open && width !== null ? { width } : undefined}
@@ -215,18 +257,16 @@ export function AiChatDock({ projectRef, children }: { projectRef: string; child
             왼쪽 끝 8px 을 잡는 영역으로 쓴다. 선은 border-l 자리에 겹쳐 보인다. */}
         {open && (
           <div
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Resize AI chat"
+            {...dividerHandle}
             onPointerDown={onDividerDown}
             onPointerMove={onDividerMove}
             onPointerUp={onDividerUp}
             onPointerCancel={onDividerUp}
-            className="group absolute inset-y-0 left-0 z-10 w-2 cursor-col-resize touch-none"
+            className="group absolute inset-y-0 left-0 z-10 w-2 cursor-col-resize touch-none outline-none"
           >
             <span
               className={cn(
-                "group-hover:bg-brand-orange/70 block h-full w-0.5 bg-transparent transition-colors",
+                "group-hover:bg-brand-orange/70 group-focus-visible:bg-brand-orange block h-full w-0.5 bg-transparent transition-colors",
                 dragging && "bg-brand-orange/70"
               )}
             />
@@ -240,14 +280,15 @@ export function AiChatDock({ projectRef, children }: { projectRef: string; child
             open={open}
             width={width}
             currentTest={currentTest}
-            onClose={() => setOpen(false)}
+            onClose={() => toggle(false)}
           />
         </Suspense>
       </aside>
 
       {!open && (
         <Button
-          onClick={() => setOpen(true)}
+          ref={openButtonRef}
+          onClick={() => toggle(true)}
           title="Open AI chat"
           className="animate-in fade-in zoom-in-95 fixed right-8 bottom-14 z-30 h-11 gap-2 rounded-full px-4 shadow-lg duration-200"
         >
@@ -350,6 +391,16 @@ function ChatPanel({
     el.style.height = `${el.scrollHeight}px`;
   }, [input, width, showHistory]);
 
+  // 보내는 동안 Send 자리에 Stop 이 뜨고, 끝나면 다시 Send 로 바뀐다. 바뀌는 순간 누르고 있던
+  // 버튼이 사라지므로 포커스는 입력창으로 돌린다.
+  const stopRef = useRef<HTMLButtonElement>(null);
+  const refocusInput = useRef(false);
+  useEffect(() => {
+    if (pending || !refocusInput.current) return;
+    refocusInput.current = false;
+    inputRef.current?.focus();
+  }, [pending]);
+
   const listRef = useRef<HTMLDivElement>(null);
   // messages 는 렌더마다 새 배열이라 의존성으로 쓰면 입력할 때마다 맨 아래로 튄다.
   useEffect(() => {
@@ -404,6 +455,7 @@ function ChatPanel({
     setInput("");
     setError(null);
     setPending(true);
+    announce("Waiting for AI reply…");
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -449,6 +501,8 @@ function ChatPanel({
         );
       }
       const { answer, tail } = splitStream(raw);
+      // 스트리밍 중에는 조각마다 읽히면 시끄러워서 알리지 않고, 다 받은 뒤 한 번에 알린다.
+      announce(`AI: ${answer}`);
       // 토큰 수를 못 받았으면 이전 값을 그대로 둔다.
       const contextTokens = tail?.contextTokens ?? undefined;
 
@@ -497,19 +551,24 @@ function ChatPanel({
             .filter((m) => m.role === "user" || m.content !== "")
             .map((m) => (m.role === "assistant" ? { ...m, aborted: true } : m))
         );
+        announce("Stopped. Not saved.");
         return;
       }
 
       if (e instanceof ResponseError && e.code === "conversation_full") setFullFromServer(true);
+      const message =
+        e instanceof Error ? e.message : "Request failed.\nPlease try again in a moment.";
       setError({
         kind: e instanceof ResponseError && e.status === 402 ? "limit" : "error",
-        message: e instanceof Error ? e.message : "Request failed.\nPlease try again in a moment.",
+        message,
       });
+      announce(message);
       // 저장되지 않은 턴은 화면에서 걷고 질문은 입력창에 돌려준다 — 다시 보내기 쉽게.
       // 보낸 것처럼 남겨두면 서버 대화와 화면이 어긋난다.
       setTail([]);
       setInput((current) => current || content);
     } finally {
+      if (document.activeElement === stopRef.current) refocusInput.current = true;
       setPending(false);
       abortRef.current = null;
     }
@@ -581,10 +640,20 @@ function ChatPanel({
       ) : (
         // 메시지 영역만 한 단계 어둡게(Mauve 1). 헤더·입력 영역(Mauve 2)이 위아래 틀이 되고
         // 내용은 그 사이에 들어앉은 것으로 읽힌다 — 셋이 같은 색이면 한 덩어리로 보인다.
-        <div ref={listRef} className="bg-background flex-1 space-y-3 overflow-y-auto p-3">
+        // 스크롤 영역에 키보드로 닿게 tabIndex. 새 글은 조각마다 읽히지 않게 aria-live="off" 로 두고,
+        // 다 받은 답만 공용 알림으로 읽는다(send).
+        <div
+          ref={listRef}
+          role="log"
+          aria-live="off"
+          aria-label="Messages"
+          tabIndex={0}
+          className="bg-background focus-visible:outline-ring flex-1 space-y-3 overflow-y-auto p-3 focus-visible:outline-2 focus-visible:-outline-offset-2"
+        >
           {conversation.isPending && conversationId !== null ? (
-            <div className="flex h-full items-center justify-center">
+            <div role="status" className="flex h-full items-center justify-center">
               <Loader2 className="text-muted-foreground size-4 animate-spin" />
+              <span className="sr-only">Loading chat…</span>
             </div>
           ) : conversation.isError ? (
             <p className="text-destructive text-sm leading-relaxed wrap-break-word whitespace-pre-line">
@@ -603,6 +672,7 @@ function ChatPanel({
                       variant="outline"
                       size="sm"
                       disabled={pending || full}
+                      focusableWhenDisabled
                       onClick={() => void send(prompt)}
                       className="animate-in fade-in slide-in-from-bottom-1 justify-start rounded-full duration-200"
                     >
@@ -634,6 +704,8 @@ function ChatPanel({
                       : "text-foreground max-w-full leading-relaxed"
                   )}
                 >
+                  {/* 누가 한 말인지는 말풍선 위치·색으로만 보여서 스크린리더용 글자를 붙인다. */}
+                  <span className="sr-only">{m.role === "user" ? "You:" : "AI:"}</span>
                   {m.role === "user" ? (
                     <CollapsibleText text={m.content} />
                   ) : m.content ? (
@@ -652,7 +724,12 @@ function ChatPanel({
                       appliedCode={!editing && m.filePath === file ? currentTest : null}
                     />
                   ) : (
-                    pending && <Loader2 className="text-muted-foreground size-4 animate-spin" />
+                    pending && (
+                      <>
+                        <Loader2 className="text-muted-foreground size-4 animate-spin" />
+                        <span className="sr-only">AI is replying…</span>
+                      </>
+                    )
                   )}
                   {"aborted" in m && m.aborted && (
                     <p className="text-muted-foreground mt-1 text-xs">Stopped · Not saved</p>
@@ -696,6 +773,8 @@ function ChatPanel({
         <form
           onSubmit={(e) => {
             e.preventDefault();
+            // Send 버튼을 눌렀으면 그 버튼이 곧 Stop 으로 바뀐다. 입력창에 포커스를 둔다.
+            inputRef.current?.focus();
             void send(input);
           }}
           className="bg-background shrink-0 px-3 pb-3"
@@ -726,14 +805,19 @@ function ChatPanel({
                 }
               }}
               placeholder="Ask anything — Enter to send"
+              aria-label="Message AI chat"
               className="text-foreground placeholder:text-muted-foreground block max-h-42 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent px-0.5 text-sm leading-7 outline-none disabled:cursor-not-allowed disabled:opacity-50"
             />
             {pending ? (
               <Button
+                ref={stopRef}
                 type="button"
                 size="icon-sm"
                 variant="ghost"
-                onClick={() => abortRef.current?.abort()}
+                onClick={() => {
+                  abortRef.current?.abort();
+                  inputRef.current?.focus();
+                }}
                 title="Stop"
                 aria-label="Stop"
               >
@@ -842,8 +926,9 @@ function HistoryList({
 
   if (list.isPending) {
     return (
-      <div className="bg-background flex flex-1 justify-center pt-10">
+      <div role="status" className="bg-background flex flex-1 justify-center pt-10">
         <Loader2 className="text-muted-foreground size-4 animate-spin" />
+        <span className="sr-only">Loading saved chats…</span>
       </div>
     );
   }
@@ -865,9 +950,15 @@ function HistoryList({
   }
 
   return (
-    <ul className="bg-background flex-1 space-y-0.5 overflow-y-auto p-2">
+    // data-rows·tabIndex: 대화를 지운 뒤 포커스가 옮겨 갈 자리(lib/focus-neighbor.ts).
+    <ul
+      data-rows
+      tabIndex={-1}
+      aria-label="Saved chats"
+      className="bg-background flex-1 space-y-0.5 overflow-y-auto p-2 outline-none"
+    >
       {chats.map((chat) => (
-        <li key={chat.id}>
+        <li key={chat.id} data-row>
           <div
             className={cn(
               // pl-4: 목록 p-2 와 합쳐 24px — 대화 화면 본문(p-3 + 말풍선)과 같은 들여쓰기.
@@ -889,10 +980,15 @@ function HistoryList({
             <Button
               size="icon-sm"
               variant="ghost"
-              onClick={() => onRemove(chat.id)}
+              onClick={(event) => {
+                // 지워진 줄과 함께 버튼이 사라지기 전에 이웃 줄로 포커스를 옮긴다.
+                neighborFocusTarget(event.currentTarget)?.focus();
+                onRemove(chat.id);
+              }}
               title="Delete"
               aria-label={`Delete ${chat.title}`}
-              className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
+              // 키보드로 포커스했을 때도 보이게 한다 — 평소엔 hover 때만 나타난다.
+              className="text-muted-foreground hover:text-destructive opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100"
             >
               <Trash2 />
             </Button>

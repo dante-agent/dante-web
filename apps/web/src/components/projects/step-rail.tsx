@@ -75,7 +75,7 @@ export function StepRail() {
     <div className="w-full max-w-md px-10">
       <SegmentedRule />
 
-      <ol className="relative mt-10">
+      <ol aria-label="Setup steps" className="relative mt-10">
         {/* 막대 하나가 단계를 따라 움직인다. 위치를 잴 때까지는 숨긴다. */}
         <span
           ref={barRef}
@@ -120,6 +120,8 @@ export function StepRail() {
                 >
                   {step.label}
                 </span>
+                {/* 완료/예정이 글자색으로만 갈려서 스크린리더용으로 따로 적는다. 지금 단계는 aria-current. */}
+                {isDone && <span className="sr-only">, completed</span>}
               </p>
 
               {/* 설명은 현재 단계에서만 읽히게 하되, 자리는 항상 잡아둔다.

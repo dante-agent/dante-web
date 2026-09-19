@@ -1,5 +1,5 @@
 import { formatDistanceToNow } from "date-fns";
-import { retryDelivery } from "@/app/project/[projectRef]/settings/notifications/actions";
+import { RetryDeliveryForm } from "@/components/settings/notifications/action-buttons";
 import { DELIVERY_RETENTION_DAYS } from "@/lib/notifications/store";
 
 // 전달 로그 (§7).
@@ -78,16 +78,7 @@ export function DeliveryLog({
               {/* 재시도는 실패한 건에만. 성공한 걸 다시 보내면 같은 코멘트를
                   한 번 더 덮어쓸 뿐이라 얻는 게 없다. */}
               {delivery.status === "failed" && delivery.prNumber !== null && (
-                <form action={retryDelivery} className="shrink-0">
-                  <input type="hidden" name="projectRef" value={projectRef} />
-                  <input type="hidden" name="prNumber" value={delivery.prNumber} />
-                  <button
-                    type="submit"
-                    className="text-muted-foreground hover:text-foreground text-[12px] underline underline-offset-4"
-                  >
-                    Retry
-                  </button>
-                </form>
+                <RetryDeliveryForm projectRef={projectRef} prNumber={delivery.prNumber} />
               )}
             </div>
           ))}
