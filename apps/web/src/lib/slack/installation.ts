@@ -11,6 +11,8 @@ export type SlackConnection = {
   slackTeamId: string;
   slackTeamName: string;
   botToken: string;
+  /** 연결 행이 마지막으로 바뀐 때. 다시 연결하면 바뀐다 — 채널 목록 캐시의 키로 쓴다(channels.ts) */
+  updatedAt: Date;
 };
 
 /** 알림을 보낼 때 쓰는 연결. 없거나 끊겼으면 null. */
@@ -22,6 +24,7 @@ export async function loadSlackConnection(teamId: string): Promise<SlackConnecti
     slackTeamId: row.slackTeamId,
     slackTeamName: row.slackTeamName,
     botToken: decryptSecret(row.encryptedBotToken),
+    updatedAt: row.updatedAt,
   };
 }
 
