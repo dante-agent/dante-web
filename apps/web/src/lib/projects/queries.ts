@@ -79,7 +79,7 @@ export type OwnedProject = ProjectSummary &
 /**
  * ref 가 내가 멤버인 팀의 프로젝트면 그 행, 아니면 null. 프로젝트 행은 여기서만 읽는다.
  *
- * 아래 getOwnedProjectId·getProjectRepo·getOwnedChatProject·getDashboardProject 가 전부 이 결과를
+ * 아래 getOwnedProjectId·getProjectRepo·getDashboardProject 와 채팅 라우트가 전부 이 결과를
  * 쓴다. 따로 읽으면 한 화면이 같은 행을 서너 번 읽는다(대시보드는 셋을 다 부른다).
  * 단건 조회의 권한 조건(accessibleProjectWhere)도 여기 한 곳이다 — 보안 경계는 이 where 다.
  *
@@ -166,20 +166,6 @@ export async function getDashboardProject(
 export const getOwnedProjectId = cache(
   async (ref: string, userId: string): Promise<string | null> =>
     (await getOwnedProject(ref, userId))?.id ?? null
-);
-
-/**
- * 채팅이 쓰는 프로젝트 정보: 사용량을 붙일 id + 답변 기준이 될 테스트 러너.
- * 권한 확인을 겸한다 — 내가 멤버가 아닌 팀의 ref 면 null.
- */
-export const getOwnedChatProject = cache(
-  async (
-    ref: string,
-    userId: string
-  ): Promise<{ id: string; testFramework: string | null } | null> => {
-    const project = await getOwnedProject(ref, userId);
-    return project ? { id: project.id, testFramework: project.testFramework } : null;
-  }
 );
 
 /**
