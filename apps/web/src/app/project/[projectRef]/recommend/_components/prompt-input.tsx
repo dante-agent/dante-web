@@ -72,25 +72,23 @@ export function PromptInput({ projectRef }: { projectRef: string }) {
         </button>
       </div>
 
-      {/* 뭔가 적기 시작하면 사라진다 — 예시는 첫 화면에서만 필요하다. */}
-      {!trimmed && (
-        <div className="flex flex-wrap gap-1.5">
-          {EXAMPLES.map((example) => (
-            <Button
-              key={example}
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={navigating}
-              focusableWhenDisabled
-              onClick={() => go(example)}
-              className="animate-in fade-in slide-in-from-bottom-1 rounded-full duration-200"
-            >
-              {example}
-            </Button>
-          ))}
-        </div>
-      )}
+      {/* 입력 중에도 그대로 둔다 — 조건부로 감추면 폼이 줄어 아래가 튀는(레이아웃 시프트) 문제가 생긴다. */}
+      <div className="flex flex-wrap gap-1.5">
+        {EXAMPLES.map((example) => (
+          <Button
+            key={example}
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={navigating}
+            focusableWhenDisabled
+            onClick={() => go(example)}
+            className="rounded-full"
+          >
+            {example}
+          </Button>
+        ))}
+      </div>
     </form>
   );
 }
