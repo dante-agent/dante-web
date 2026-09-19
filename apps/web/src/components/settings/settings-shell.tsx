@@ -31,7 +31,7 @@ export function SettingsShell({
   return (
     <div className="flex gap-12">
       <div className="sticky top-20 w-44 shrink-0 self-start">
-        <p className="text-muted-foreground font-mono text-[10px] font-bold tracking-[0.12em] uppercase">
+        <p className="text-muted-foreground/70 font-mono text-[10px] font-bold tracking-[0.12em] uppercase">
           {title}
         </p>
         <p className="font-heading mt-1.5 truncate text-[15px] font-medium" title={scope}>

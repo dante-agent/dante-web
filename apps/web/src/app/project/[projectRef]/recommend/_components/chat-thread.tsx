@@ -123,7 +123,7 @@ export function ChatThread({
       </div>
 
       <div className="p-3">
-        <div className="border-border bg-muted/40 focus-within:border-ring flex items-center gap-2 rounded-lg border px-3 py-2.5 transition-colors">
+        <div className="border-border bg-muted/40 focus-within:border-brand-orange/60 flex items-center gap-2 rounded-lg border px-3 py-2.5 transition-colors">
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -149,7 +149,7 @@ export function ChatThread({
             <ArrowRight className="size-4" />
           </button>
         </div>
-        <p className="text-muted-foreground mt-2 text-center text-[11px]">
+        <p className="text-muted-foreground/70 mt-2 text-center text-[11px]">
           AI can make mistakes, so be sure to review the generated code.
         </p>
       </div>

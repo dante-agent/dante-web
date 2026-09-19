@@ -63,8 +63,9 @@ export default async function ProjectGithubPage({
   });
 
   // 끊긴 상태에서도 값은 계속 보여준다. 숨기면 "무엇이 끊겼는지"를 읽을 수 없다.
-  // 끊겼다는 표시는 위 ConnectionPanel 문구가 맡는다 — 카드를 흐리게(opacity-60) 하면
-  // 값 글자 대비가 AA 아래로 떨어진다.
+  // 대신 살아있지 않다는 표시로 밝기를 낮춘다. Recheck 버튼은 이 밖에 둔다 —
+  // 지금 눌러야 할 버튼까지 흐려지면 안 된다.
+  const dim = status === "ok" ? "" : "opacity-60";
 
   return (
     <>
@@ -78,7 +79,7 @@ export default async function ProjectGithubPage({
       <div className="mt-8 max-w-2xl">
         <SectionLabel>Installation</SectionLabel>
 
-        <Card>
+        <Card className={dim}>
           <dl className="divide-border divide-y">
             <Field label="Account">
               <span className="flex items-center gap-2">
@@ -113,7 +114,7 @@ export default async function ProjectGithubPage({
           <SectionLabel>Repository</SectionLabel>
         </div>
 
-        <Card>
+        <Card className={dim}>
           <dl className="divide-border divide-y">
             <Field label="Repository">
               <span className="flex items-center gap-2">
@@ -146,7 +147,7 @@ export default async function ProjectGithubPage({
 /** 카드 위의 작은 라벨. 설정 셸의 스코프 라벨과 같은 모양이다. */
 function SectionLabel({ children }: { children: ReactNode }) {
   return (
-    <h2 className="text-muted-foreground font-mono text-[10px] font-bold tracking-[0.12em] uppercase">
+    <h2 className="text-muted-foreground/70 font-mono text-[10px] font-bold tracking-[0.12em] uppercase">
       {children}
     </h2>
   );

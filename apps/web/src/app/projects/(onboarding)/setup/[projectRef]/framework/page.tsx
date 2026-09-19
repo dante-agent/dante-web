@@ -54,7 +54,7 @@ export default async function FrameworkPage({
             // 로 CSS 가 처리하므로 이 화면에는 클라이언트 JS 가 필요 없다.
             <label
               key={framework.id}
-              className="group border-border bg-card hover:border-input block cursor-pointer border p-6 transition-colors duration-[180ms] ease-out has-[:checked]:border-[#ff570a] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[#ff570a]"
+              className="group border-border bg-card hover:border-input block cursor-pointer border p-6 transition-colors duration-[180ms] ease-out has-[:checked]:border-[#ff570a] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[#ff570a]/40"
             >
               <input
                 type="radio"

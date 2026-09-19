@@ -33,7 +33,7 @@ export function GenerationSteps({
             aria-current={state === "active" ? "step" : undefined}
             className={cn(
               "flex items-center gap-2 text-sm transition-colors",
-              state === "idle" ? "text-muted-foreground" : "text-foreground/90"
+              state === "idle" ? "text-muted-foreground/60" : "text-foreground/90"
             )}
           >
             {state === "done" ? (

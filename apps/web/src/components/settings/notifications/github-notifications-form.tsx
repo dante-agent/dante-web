@@ -291,7 +291,7 @@ function RequiredCheckNote({
           >
             Add it as a required check on GitHub
           </a>{" "}
-          <span className="text-muted-foreground">
+          <span className="text-muted-foreground/70">
             We cannot read classic branch protection with the permissions this App has, so we do not
             claim it is missing — only that we could not confirm it.
           </span>
@@ -322,7 +322,7 @@ function CommentPreview({
     <div className="mt-8 w-full shrink-0 xl:sticky xl:top-20 xl:mt-16 xl:w-[26rem] xl:self-start">
       <div className="flex items-center justify-between">
         {/* h2: 미리보기 안의 h3 가 앞 섹션 밑으로 들어가지 않게 제목 단계를 맞춘다. 모양은 그대로. */}
-        <h2 className="text-muted-foreground font-mono text-[10px] font-bold tracking-[0.12em] uppercase">
+        <h2 className="text-muted-foreground/70 font-mono text-[10px] font-bold tracking-[0.12em] uppercase">
           Preview
         </h2>
         <div className="flex gap-1">

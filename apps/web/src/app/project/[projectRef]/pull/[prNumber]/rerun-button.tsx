@@ -18,7 +18,7 @@ export function RerunButton({ disabled }: { disabled: boolean }) {
       onClick={(event) => {
         if (pending) event.preventDefault();
       }}
-      className="bg-primary text-primary-foreground hover:bg-primary-hover flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-40 aria-disabled:cursor-not-allowed aria-disabled:opacity-40"
+      className="bg-brand-orange flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-40 aria-disabled:cursor-not-allowed aria-disabled:opacity-40"
     >
       {pending && <Loader2 className="size-3.5 animate-spin" />}
       Re-run

@@ -21,7 +21,7 @@ export function AiQualityForm({ initial }: { initial: AiQuality }) {
         {AI_QUALITIES.map((quality) => (
           <label
             key={quality}
-            className="group border-border bg-card hover:border-input block cursor-pointer border p-5 transition-colors duration-[180ms] ease-out has-[:checked]:border-[#ff570a] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[#ff570a]"
+            className="group border-border bg-card hover:border-input block cursor-pointer border p-5 transition-colors duration-[180ms] ease-out has-[:checked]:border-[#ff570a] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[#ff570a]/40"
           >
             <input
               type="radio"

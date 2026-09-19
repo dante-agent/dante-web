@@ -36,9 +36,9 @@ export function EngineCards() {
             >
               {engine.name}
             </span>
-            <span className="text-muted-foreground flex-1 text-[13px]">{engine.vendor}</span>
+            <span className="text-muted-foreground/70 flex-1 text-[13px]">{engine.vendor}</span>
             {!engine.available && (
-              <span className="text-muted-foreground font-mono text-[10px] font-bold tracking-[0.12em] uppercase">
+              <span className="text-muted-foreground/70 font-mono text-[10px] font-bold tracking-[0.12em] uppercase">
                 Coming soon
               </span>
             )}
@@ -46,7 +46,7 @@ export function EngineCards() {
 
           <p
             className={`mt-2 pl-5 text-[13px] leading-relaxed ${
-              engine.available ? "text-muted-foreground" : "text-muted-foreground"
+              engine.available ? "text-muted-foreground" : "text-muted-foreground/60"
             }`}
           >
             {engine.tagline}

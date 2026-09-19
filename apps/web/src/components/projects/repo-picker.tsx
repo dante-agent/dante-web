@@ -204,7 +204,7 @@ function RepoRow({
   const overlay = "absolute inset-0 cursor-pointer outline-none disabled:cursor-not-allowed";
 
   return (
-    <li className="group hover:bg-muted/30 has-[:focus-visible]:bg-muted/30 relative flex items-center gap-4 px-6 py-4 transition-colors duration-[180ms] ease-out has-[:focus-visible]:inset-ring-2 has-[:focus-visible]:inset-ring-[#ff570a]">
+    <li className="group hover:bg-muted/30 has-[:focus-visible]:bg-muted/30 relative flex items-center gap-4 px-6 py-4 transition-colors duration-[180ms] ease-out has-[:focus-visible]:inset-ring-2 has-[:focus-visible]:inset-ring-[#ff570a]/40">
       {/* 왼쪽 액센트 바. 세로로 펼쳐지며 들어온다 — CodeRabbit 활성 표시와 같은 장치.
           420ms expo-out 은 칸 확장용이고, 이런 작은 요소는 180ms 가 맞다. */}
       <span

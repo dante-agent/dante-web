@@ -866,7 +866,7 @@ function CollapsibleText({ text }: { text: string }) {
           type="button"
           onClick={() => setExpanded((v) => !v)}
           aria-expanded={expanded}
-          className="text-primary-foreground mt-1.5 text-xs font-semibold underline-offset-2 hover:underline"
+          className="text-primary-foreground/80 hover:text-primary-foreground mt-1.5 text-xs font-semibold underline-offset-2 hover:underline"
         >
           {expanded ? "Show less" : "Show more"}
         </button>

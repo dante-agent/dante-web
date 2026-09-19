@@ -117,7 +117,7 @@ function Block({ block }: { block: LegalBlock }) {
 
   if (block.kind === "list") {
     return (
-      <ol className="text-muted-foreground marker:text-muted-foreground list-decimal space-y-2 pl-5 text-sm leading-relaxed">
+      <ol className="text-muted-foreground marker:text-muted-foreground/60 list-decimal space-y-2 pl-5 text-sm leading-relaxed">
         {block.items.map((item, index) => (
           <li key={index} className="pl-1">
             {item}

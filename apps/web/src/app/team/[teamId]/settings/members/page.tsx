@@ -99,7 +99,7 @@ export default async function TeamMembersPage({
 
       {team.invites.length > 0 && (
         <section className="mt-8 max-w-2xl">
-          <h2 className="text-muted-foreground font-mono text-[10px] font-bold tracking-[0.12em] uppercase">
+          <h2 className="text-muted-foreground/70 font-mono text-[10px] font-bold tracking-[0.12em] uppercase">
             Open invites
           </h2>
           <ul className="border-border divide-border bg-card mt-3 divide-y border">
