@@ -25,7 +25,7 @@ import { iconForFile } from "@/components/file-icons";
 import { CodeSkeleton } from "@/components/generation/code-skeleton";
 import { GenerationSteps } from "@/components/generation/generation-steps";
 import { SendingFiles } from "@/components/generation/sending-files";
-import { onTestApplyRequest } from "@/components/generation/test-apply-request";
+import { onTestApplyRequest, provideAfterCode } from "@/components/generation/test-apply-request";
 import { onTestTypingRequest } from "@/components/generation/test-typing-request";
 import {
   useGenerationPerformance,
@@ -433,6 +433,17 @@ export function FileView({
       setSaveError(false);
     }
   }
+  // 수정 중인 내용을 채팅이 물어볼 수 있게 열어 둔다. ref 로 읽는 이유는 등록을 글자마다
+  // 다시 하지 않으려는 것이다 — 채팅은 보낼 때 한 번만 읽는다.
+  const editingRef = useRef(editing);
+  useEffect(() => {
+    editingRef.current = editing;
+  }, [editing]);
+  useEffect(() => {
+    if (mode !== "edit") return;
+    return provideAfterCode(() => editingRef.current);
+  }, [mode]);
+
   // 채팅 답의 Apply. 저장하지 않고 After 칸만 채운다 — 잘못 눌렀으면 ⌘Z 로 되돌아간다.
   useEffect(() => {
     if (mode !== "edit") return;
