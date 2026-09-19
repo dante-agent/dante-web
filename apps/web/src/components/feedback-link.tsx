@@ -18,6 +18,7 @@ export function FeedbackLink() {
       render={<a href={FORM_URL} target="_blank" rel="noreferrer noopener" />}
     >
       Feedback
+      <span className="sr-only"> (opens in new tab)</span>
     </Button>
   );
 }

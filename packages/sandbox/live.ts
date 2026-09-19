@@ -21,7 +21,7 @@ import { collectPathAliases, toolkitFiles, toolkitInstallCommand } from "./toolk
 // runTest 는 PR 자동 테스트가 쓰는 경로라 이 기능 때문에 바뀌면 안 된다.
 //
 // 테스트는 레포의 러너·설정이 아니라 Dante 전용 환경으로 돌린다(ADR-0003, toolkit.ts). 레포에는 소스와
-// 소스가 쓰는 패키지만 있으면 된다 — 레포 install 뒤에 도구를 레포 밖에 설치하고, Dante 설정으로 실행한다.
+// 소스가 쓰는 패키지만 있으면 된다 — 레포 install 과 함께 도구를 레포 밖에 설치하고, Dante 설정으로 실행한다.
 // 그래서 req.commands.test(레포·Runtime 탭의 테스트 커맨드)는 쓰지 않는다. install 커맨드는 쓴다.
 // ponytail: 흐름이 runTest 와 겹친다. 둘이 같이 바뀌기 시작하면 onEvent 를 받는 함수 하나로 합친다.
 
@@ -89,12 +89,20 @@ export async function runTestLive(
   if (signal?.aborted) return done("error", null, "Request was aborted, so the tests did not run");
 
   let sandbox: Sandbox | undefined;
+  // 도구 설치는 레포 install 과 동시에 돈다. 레포 install 이 실패하거나 도중에 던지면 이걸로 멈춘다.
+  const toolkitAbort = new AbortController();
+  const toolkitSignal = signal
+    ? AbortSignal.any([signal, toolkitAbort.signal])
+    : toolkitAbort.signal;
   try {
     begin("setup");
     sandbox = await Sandbox.create({
       source: gitSource(req.repo),
       timeout: timeoutMs + 60_000,
       resources: { vcpus: 2 },
+      // SDK 3 은 기본이 persistent 라 stop 때마다 파일시스템 스냅샷(약 0.8GB, 30일 보관, 저장 요금)을 만들고
+      // 그만큼 stop 이 늦다(측정: 약 4.4초 → 1.5~2.5초). 실행은 한 번 쓰고 버리므로 끈다.
+      persistent: false,
       signal,
       ...accessTokenCredentials(),
     });
@@ -104,6 +112,25 @@ export async function runTestLive(
       { signal }
     );
     end(true);
+
+    // 도구는 레포 밖(TOOLKIT_DIR)에 따로 설치해서 레포 install 과 디렉터리·lockfile 이 겹치지 않는다.
+    // 그래서 레포 install 을 기다리지 않고 같이 시작한다. 화면(단계 이벤트)과 저장 로그는 예전처럼
+    // install → toolkit 순서로 보인다 — 도구 출력은 install 이 끝날 때까지 모아 두었다가 그때 흘린다.
+    // toolkit 단계의 ms 는 install 뒤에 더 기다린 시간이다.
+    const toolkitText: string[] = [];
+    let toolkitShown = false;
+    const toolkitRun = runStreaming(sandbox, {
+      command: toolkitInstallCommand(req.framework),
+      cwd: repoDir,
+      timeoutMs: remainingMs(),
+      signal: toolkitSignal,
+      onText: (text) => {
+        if (toolkitShown) onEvent({ type: "log", step: "toolkit", text });
+        else toolkitText.push(text);
+      },
+    });
+    // install 이 실패해 기다리지 않게 되더라도 처리되지 않은 거부로 남지 않게 한다.
+    toolkitRun.catch(() => {});
 
     begin("install");
     const install = await runStreaming(sandbox, {
@@ -121,13 +148,9 @@ export async function runTestLive(
     }
 
     begin("toolkit");
-    const toolkit = await runStreaming(sandbox, {
-      command: toolkitInstallCommand(req.framework),
-      cwd: repoDir,
-      timeoutMs: remainingMs(),
-      signal,
-      onText: (text) => onEvent({ type: "log", step: "toolkit", text }),
-    });
+    toolkitShown = true;
+    for (const text of toolkitText.splice(0)) onEvent({ type: "log", step: "toolkit", text });
+    const toolkit = await toolkitRun;
     logs.push(toolkit.section);
     if (toolkit.exitCode !== 0) {
       end(false);
@@ -175,6 +198,7 @@ export async function runTestLive(
     if (!signal?.aborted && pastDeadline()) return timeoutResult(null);
     return done("error", null, err instanceof Error ? err.message : String(err));
   } finally {
+    toolkitAbort.abort();
     await sandbox?.stop().catch(() => {});
   }
 }

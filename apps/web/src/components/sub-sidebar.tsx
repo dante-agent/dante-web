@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
 import { PanelLeftClose } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -32,6 +32,16 @@ export function toggleSubSidebar() {
   for (const l of listeners) l();
 }
 
+/**
+ * 접으면 aside 가 inert 가 되어 안에 있던 포커스가 body 로 떨어진다. 그때는 다시 여는 자리인
+ * 레일의 섹션 버튼(data-sub-sidebar-toggle)으로 옮긴다.
+ */
+function collapseFrom(aside: HTMLElement | null) {
+  const hadFocus = aside?.contains(document.activeElement) ?? false;
+  toggleSubSidebar();
+  if (hadFocus) document.querySelector<HTMLElement>("[data-sub-sidebar-toggle]")?.focus();
+}
+
 /** 접혀 있나. 레일이 아이콘에 힌트를 붙일 때도 쓴다. */
 export function useSubSidebarCollapsed() {
   return useSyncExternalStore(
@@ -43,6 +53,7 @@ export function useSubSidebarCollapsed() {
 
 export function SubSidebar({ nav, children }: { nav?: ReactNode; children: ReactNode }) {
   const isCollapsed = useSubSidebarCollapsed();
+  const asideRef = useRef<HTMLElement>(null);
 
   // 서브 사이드바는 한 화면에 하나라 리스너도 하나. capture 단계로 받아
   // Monaco 같은 에디터가 먼저 키를 삼켜도 토글되게 한다.
@@ -51,7 +62,8 @@ export function SubSidebar({ nav, children }: { nav?: ReactNode; children: React
       if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey || e.repeat) return;
       if (e.key.toLowerCase() !== "b") return;
       e.preventDefault();
-      toggleSubSidebar();
+      if (collapsed) toggleSubSidebar();
+      else collapseFrom(asideRef.current);
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
@@ -60,6 +72,8 @@ export function SubSidebar({ nav, children }: { nav?: ReactNode; children: React
   return (
     <>
       <aside
+        ref={asideRef}
+        aria-label="Section sidebar"
         // 접히면 폭 0 — 안쪽 링크로 탭 이동이 들어가지 않게 inert.
         inert={isCollapsed}
         className={cn(
@@ -71,9 +85,10 @@ export function SubSidebar({ nav, children }: { nav?: ReactNode; children: React
         <div className="relative flex h-full w-60 flex-col p-3">
           <button
             type="button"
-            onClick={toggleSubSidebar}
+            onClick={() => collapseFrom(asideRef.current)}
             title="Collapse sub sidebar (⌘B)"
             aria-label="Collapse sub sidebar"
+            aria-keyshortcuts="Meta+B Control+B"
             aria-expanded
             className="text-sidebar-foreground/70 hover:text-sidebar-foreground absolute top-2 right-1 grid h-9 w-10 place-items-center transition-colors"
           >

@@ -27,7 +27,7 @@ export function SettingsNav({
   const pathname = usePathname();
 
   return (
-    <nav className="mt-5 flex flex-col gap-0.5">
+    <nav aria-label="Settings" className="mt-5 flex flex-col gap-0.5">
       {items.map(({ href, label }) => {
         // 정확히 일치로 본다. startsWith 면 목록의 첫 항목이 아래 모든 경로에 걸린다.
         const active = pathname === href;

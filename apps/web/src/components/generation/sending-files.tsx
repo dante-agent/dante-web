@@ -47,7 +47,8 @@ export function SendingFiles({ files, stage }: { files: string[]; stage: Stage }
               "flex size-7 shrink-0 items-center justify-center rounded-md border transition-colors",
               sent ? "border-brand-cobalt/50 bg-brand-cobalt/10" : "border-border"
             )}
-            aria-label="AI"
+            // 장식이다. 진행 상태는 옆 GenerationSteps 의 글자가 전한다.
+            aria-hidden="true"
           >
             {stage === "open" ? (
               <Check className="text-brand-mint size-3.5" />

@@ -52,7 +52,13 @@ export function AcceptInvite({
 
       <form action={action} className="mt-8">
         <input type="hidden" name="token" value={token} />
-        <Button type="submit" size="lg" disabled={pending} className="h-10 w-full">
+        <Button
+          type="submit"
+          size="lg"
+          disabled={pending}
+          focusableWhenDisabled
+          className="h-10 w-full"
+        >
           {pending ? "Joining…" : `Join ${teamName}`}
         </Button>
         <p role="status" aria-live="polite" className="text-destructive mt-3 min-h-5 text-[13px]">

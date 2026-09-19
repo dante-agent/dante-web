@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, type ReactNode } from "react";
+import { useResizeHandle } from "@/components/use-resize-handle";
 
 // 좌우 2-pane 을 드래그로 폭 조절. file-view.tsx 의 리사이저 패턴을 그대로 쓴다
 // (role="separator" 핸들 + pointer capture + leftPct 20~80% 클램프). 새 의존성 없음.
@@ -13,6 +14,15 @@ import { useRef, useState, type ReactNode } from "react";
 export function ResizableSplit({ left, right }: { left: ReactNode; right: ReactNode }) {
   const gridRef = useRef<HTMLDivElement>(null);
   const [leftPct, setLeftPct] = useState(50);
+  const handle = useResizeHandle({
+    label: "Resize panels",
+    orientation: "vertical",
+    value: leftPct,
+    min: 20,
+    max: 80,
+    step: 5,
+    onChange: setLeftPct,
+  });
 
   const onDown = (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -35,17 +45,13 @@ export function ResizableSplit({ left, right }: { left: ReactNode; right: ReactN
       <div className="flex h-full min-w-0 overflow-hidden">{right}</div>
 
       <div
-        role="separator"
-        aria-orientation="vertical"
-        aria-valuenow={Math.round(leftPct)}
-        aria-valuemin={20}
-        aria-valuemax={80}
+        {...handle}
         onPointerDown={onDown}
         onPointerMove={onMove}
         style={{ left: `${leftPct}%` }}
-        className="group absolute inset-y-0 z-10 flex w-2 -translate-x-1/2 cursor-col-resize touch-none justify-center"
+        className="group absolute inset-y-0 z-10 flex w-2 -translate-x-1/2 cursor-col-resize touch-none justify-center outline-none"
       >
-        <span className="group-hover:bg-brand-orange/70 h-full w-0.5 rounded-full bg-transparent transition-colors" />
+        <span className="group-hover:bg-brand-orange/70 group-focus-visible:bg-brand-orange h-full w-0.5 rounded-full bg-transparent transition-colors" />
       </div>
     </div>
   );

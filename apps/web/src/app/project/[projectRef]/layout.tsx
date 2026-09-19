@@ -3,6 +3,7 @@
 import type { Metadata } from "next";
 import { AppHeader } from "@/components/app-header";
 import { ProjectSidebar } from "@/components/project-sidebar";
+import { MAIN_CONTENT_ID } from "@/components/skip-link";
 import { avatarUrl, displayName } from "@/lib/auth/user";
 import { requireProjectContext } from "@/lib/projects/queries";
 
@@ -38,7 +39,9 @@ export default async function ProjectLayout({
     <div className="min-h-svh pt-[47px]">
       <AppHeader project={project} projects={projects} teams={teams} user={headerUser} />
       <ProjectSidebar />
-      <main className="ml-14">{children}</main>
+      <main id={MAIN_CONTENT_ID} className="ml-14">
+        {children}
+      </main>
     </div>
   );
 }

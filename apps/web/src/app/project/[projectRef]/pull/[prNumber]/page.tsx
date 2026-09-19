@@ -6,8 +6,13 @@ import { FileView } from "@/components/file-view";
 import { StoredRunLog } from "@/components/run-terminal";
 import { requireUser } from "@/lib/auth/user";
 import { cn } from "@/lib/utils";
-import { fetchFileText, installationClient } from "@/lib/github/pull-request";
-import { getPullRequestPreview, parsePrNumber } from "@/lib/notifications/pull-request-preview";
+import {
+  getPullRequestPreview,
+  getPullRequestRun,
+  getPullRequestSource,
+  getPullRequestTestCode,
+  parsePrNumber,
+} from "@/lib/notifications/pull-request-preview";
 import { readStoredRun, type StoredRun } from "@/lib/notifications/stored-run";
 import { rerunPullRequest } from "./actions";
 import { RerunButton } from "./rerun-button";
@@ -47,14 +52,17 @@ export default async function PullRequestPreviewPage({
 
   if (job && test) {
     // 소스는 저장하지 않았다. 테스트를 만든 그 커밋에서 다시 읽는다 — 기본 브랜치를 읽으면
-    // 머지 전 PR 의 코드와 테스트가 어긋난다.
-    const octokit = await installationClient(project.installationId);
-    const source = await fetchFileText(
-      octokit,
-      { owner: project.repoOwner, repo: project.repoName },
-      test.filePath,
-      job.headSha
-    );
+    // 머지 전 PR 의 코드와 테스트가 어긋난다. 테스트 코드는 고른 파일 것만 읽는다.
+    const [source, code] = await Promise.all([
+      getPullRequestSource({
+        installationId: project.installationId,
+        owner: project.repoOwner,
+        repo: project.repoName,
+        path: test.filePath,
+        sha: job.headSha,
+      }),
+      getPullRequestTestCode(test.id),
+    ]);
 
     // key={file} — 파일 바뀌면 분할 비율 초기화 (folder/page.tsx 와 같다)
     return (
@@ -64,13 +72,16 @@ export default async function PullRequestPreviewPage({
         file={test.filePath}
         testPath={test.testPath}
         mode={sp.mode === "edit" ? "edit" : "view"}
-        content={{ source: source ?? "", test: test.code, testDraft: null }}
+        content={{ source: source ?? "", test: code, testDraft: null }}
       />
     );
   }
 
   const prUrl = `https://github.com/${project.repoOwner}/${project.repoName}/pull/${prNumber}`;
-  const run = job ? readStoredRun(job.runResult) : null;
+  // 결과 요약과 러너 로그는 이 화면만 쓴다. 파일을 볼 때는 읽지 않는다.
+  const stored = job ? await getPullRequestRun(job.id) : null;
+  const run = stored ? readStoredRun(stored.runResult) : null;
+  const runLogs = stored?.runLogs ?? null;
 
   return (
     <div className="h-[calc(100svh-47px)] overflow-y-auto">
@@ -86,6 +97,7 @@ export default async function PullRequestPreviewPage({
               rel="noreferrer"
             >
               {project.repoOwner}/{project.repoName}
+              <span className="sr-only"> (opens in new tab)</span>
             </a>
             {job && (
               <>
@@ -147,13 +159,13 @@ export default async function PullRequestPreviewPage({
               </Panel>
             )}
 
-            {job.runLogs && (
+            {runLogs && (
               <details className="border-border overflow-hidden rounded-md border">
                 <summary className="text-muted-foreground border-border cursor-pointer px-3 py-1.5 text-[11px] font-medium">
                   Runner logs
                 </summary>
                 <div className="flex max-h-[480px] flex-col">
-                  <StoredRunLog logs={job.runLogs} />
+                  <StoredRunLog logs={runLogs} />
                 </div>
               </details>
             )}
@@ -208,9 +220,9 @@ function Panel({ title, children }: { title?: string; children: React.ReactNode 
   return (
     <section className="border-border overflow-hidden rounded-md border">
       {title && (
-        <div className="text-muted-foreground border-border border-b px-3 py-1.5 text-[11px] font-medium">
+        <h2 className="text-muted-foreground border-border border-b px-3 py-1.5 text-[11px] font-medium">
           {title}
-        </div>
+        </h2>
       )}
       <div className="px-3 py-2.5 text-xs">{children}</div>
     </section>

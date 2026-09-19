@@ -19,6 +19,7 @@ import type { Monaco } from "@monaco-editor/react";
 import { Check, Copy, FileCheck, Loader2 } from "lucide-react";
 import { applyTestCode } from "@/app/project/[projectRef]/folder/actions";
 import { requestTestApply } from "@/components/generation/test-apply-request";
+import { copyAndAnnounce } from "@/components/live-announcer";
 import { splitMarkdownBlocks } from "@/lib/chat/markdown-blocks";
 import { MONACO_THEME, setupMonaco } from "@/lib/monaco-theme";
 import { cn } from "@/lib/utils";
@@ -103,7 +104,8 @@ function ApplyButton({ code, target }: { code: string; target: ApplyTarget }) {
   const state = clicked === "idle" && target.appliedCode === code ? "applied" : clicked;
 
   const apply = () => {
-    if (firing.current) return;
+    // 버튼은 포커스를 지키려고 disabled 대신 aria-disabled 라, 막는 건 여기서 한다.
+    if (firing.current || state === "applied") return;
     firing.current = true;
     // 수정 모드에선 저장하지 않는다 — After 칸을 채울 뿐이라 실패할 일도, 기다릴 일도 없다.
     // 잘못 눌렀으면 에디터에서 ⌘Z 로 되돌아간다(값 교체가 undo 스택에 쌓인다).
@@ -130,7 +132,7 @@ function ApplyButton({ code, target }: { code: string; target: ApplyTarget }) {
       type="button"
       onClick={apply}
       // 적용 뒤엔 막는다 — 다시 누르면 같은 내용이 새 버전으로 또 쌓인다.
-      disabled={pending || state === "applied"}
+      aria-disabled={pending || state === "applied"}
       title={
         target.where === "after"
           ? `Put this code in the After editor for ${target.filePath}`
@@ -143,7 +145,7 @@ function ApplyButton({ code, target }: { code: string; target: ApplyTarget }) {
           ? "bg-muted text-muted-foreground shadow-none"
           : state === "failed"
             ? "border-destructive text-destructive hover:bg-destructive/10 border"
-            : "bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-70"
+            : "bg-primary text-primary-foreground hover:bg-primary/90 aria-disabled:opacity-70"
       )}
     >
       {pending ? (
@@ -218,10 +220,9 @@ function CodeBlock({
           <button
             type="button"
             onClick={() => {
-              void navigator.clipboard.writeText(code).then(() => setCopied(true));
+              void copyAndAnnounce(code).then((ok) => ok && setCopied(true));
             }}
             className="hover:text-foreground hover:bg-muted flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors"
-            aria-label="Copy code"
           >
             {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
             {copied ? "Copied" : "Copy"}
@@ -290,6 +291,7 @@ function buildComponents(streaming: boolean, applyTo: ApplyTarget | null): Compo
           className="text-brand-cobalt underline underline-offset-2"
         >
           {children}
+          <span className="sr-only"> (opens in new tab)</span>
         </a>
       ) : (
         <span>{children}</span>

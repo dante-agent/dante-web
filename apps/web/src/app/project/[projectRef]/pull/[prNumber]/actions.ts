@@ -3,11 +3,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@dante/db";
 import { requesterLabel, requireUser } from "@/lib/auth/user";
-import {
-  fetchHeadCommitMessage,
-  fetchPullRequest,
-  installationClient,
-} from "@/lib/github/pull-request";
+import { fetchPullRequest, installationClient } from "@/lib/github/pull-request";
 import { enqueuePullRequestJob } from "@/lib/notifications/pull-request-job";
 import { parsePrNumber } from "@/lib/notifications/pull-request-preview";
 import { accessibleProjectWhere } from "@/lib/teams/access";
@@ -49,11 +45,12 @@ export async function rerunPullRequest(formData: FormData) {
   const octokit = await installationClient(project.installationId);
   const pr = await fetchPullRequest(octokit, ref, prNumber);
 
-  await enqueuePullRequestJob(
-    project,
-    { ...pr, headCommitMessage: await fetchHeadCommitMessage(octokit, ref, pr.headSha) },
-    { kind: "dante-requester", userId: user.id, login: requesterLabel(user) }
-  );
+  // head 커밋 메시지는 작업이 응답 뒤에 읽는다(pull-request-job.ts).
+  await enqueuePullRequestJob(project, pr, {
+    kind: "dante-requester",
+    userId: user.id,
+    login: requesterLabel(user),
+  });
 
   // ?rerun=1 을 떼고 돌아간다. 새로고침으로 같은 요청이 다시 가지 않게.
   redirect(`/project/${project.ref}/pull/${prNumber}`);

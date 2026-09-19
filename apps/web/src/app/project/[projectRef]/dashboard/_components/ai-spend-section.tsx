@@ -156,6 +156,8 @@ export function AiSpendSection({
               )}
             >
               {formatUsd(budget.usedUsd)}
+              {/* 초과는 빨간색으로만 보여서 색을 못 보는 사용자에게는 전해지지 않는다. */}
+              {budget.exceeded && <span className="sr-only"> (over limit)</span>}
             </span>{" "}
             / <span className="font-mono tabular-nums">{formatUsd(budget.limitUsd)}</span>
             <span aria-hidden>·</span> Resets {usage.resetsDayLabel}

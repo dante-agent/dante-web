@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { formatDistanceToNow } from "date-fns";
 import { notFound } from "next/navigation";
 import { isSandboxConfigured } from "@dante/sandbox";
-import { getGeneratedChat } from "@/lib/projects/generated-chat";
+import { getVerifiedGeneratedChat } from "@/lib/projects/generated-chat";
 import {
   getGeneratedSessionDetail,
   type GeneratedSessionDetail,
@@ -42,17 +42,17 @@ export default async function SessionDetailPage({
   const query = await searchParams;
   const { user, project } = await requireProjectContext(projectRef);
 
-  const detail = await getGeneratedSessionDetail(projectRef, user.id, versionId);
-  if (!detail) notFound();
-
-  // 이 세션에 저장된 대화(프롬프트·추천 사유·후속). 없으면 빈 채팅으로 시작한다.
-  const chat = await getGeneratedChat(projectRef, user.id, versionId);
-
+  // 세 조회를 함께 돌린다. 대화는 상세 조회가 소유를 확인한 뒤에만 읽는다(getVerifiedGeneratedChat).
+  const detailPromise = getGeneratedSessionDetail(projectRef, user.id, versionId);
   // 같은 배치로 만든 다른 파일들. 라우트 버전을 항상 첫 탭으로 두고, 나머지를 뒤에 붙인다.
   const extraIds = parseTestIds(query.tests, versionId).slice(0, MAX_TABS - 1);
-  const extraDetails = await Promise.all(
-    extraIds.map((id) => getGeneratedSessionDetail(projectRef, user.id, id))
-  );
+  const [detail, chat, extraDetails] = await Promise.all([
+    detailPromise,
+    // 이 세션에 저장된 대화(프롬프트·추천 사유·후속). 없으면 빈 채팅으로 시작한다.
+    detailPromise.then((found) => (found ? getVerifiedGeneratedChat(found.versionId) : [])),
+    Promise.all(extraIds.map((id) => getGeneratedSessionDetail(projectRef, user.id, id))),
+  ]);
+  if (!detail) notFound();
   const files: GeneratedFile[] = [detail, ...extraDetails.filter(isDetail)].map(toFileView);
 
   // 좌측 채팅 헤더용 요약. 코드/요약 자체는 우측 탭 패널이 파일별로 그린다.

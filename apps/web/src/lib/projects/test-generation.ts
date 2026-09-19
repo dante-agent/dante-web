@@ -123,6 +123,8 @@ export async function generateTestCode(args: {
   /** 소스가 import 한 레포 파일들. 넘기면 실제 시그니처를 보고 쓴다 */
   imports?: ReadonlyMap<string, string> | null;
   skippedImports?: readonly string[] | null;
+  /** 끊으면 AI 호출을 멈추고 던진다. PR 경로가 호출 상한·작업 마감을 건다 */
+  abortSignal?: AbortSignal;
 }): Promise<{ testPath: string; code: string } | null> {
   const testPath = args.testPath ?? testPathFor(args.filePath);
   const prompt = buildTestPrompt({
@@ -156,6 +158,7 @@ export async function generateTestCode(args: {
       schema: generatedTestSchema,
       prompt,
       maxOutputTokens: MAX_OUTPUT_TOKENS,
+      abortSignal: args.abortSignal,
     });
     await settleAiUsage(reservation, usage);
     return { testPath, code: object.code };

@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { requestArrivalFocus } from "@/components/generation/arrival-focus";
 import { useGenerationPerformance } from "@/components/generation/use-generation-performance";
 
 // 세션 상세에서 채팅으로 테스트를 고칠 때의 연출 상태. 요청은 좌측 채팅(FollowUp)이 보내고,
@@ -27,6 +28,7 @@ export function RegenerationProvider({
     async (files: RegeneratedFile[]) => {
       await new Promise((resolve) => setTimeout(resolve, OPEN_DELAY_MS));
       // 고친 새 버전(대화 이어받음)으로 이동한다. 실행은 사용자가 Run 을 눌러 한다.
+      requestArrivalFocus();
       router.push(`/project/${projectRef}/recommend/${files[0].versionId}`);
       // 좌측 사이드바는 레이아웃이라 이동만으로는 다시 그리지 않는다. 새 세션이 목록에 뜨게 새로고침한다.
       router.refresh();

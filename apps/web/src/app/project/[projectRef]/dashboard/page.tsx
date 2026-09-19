@@ -28,19 +28,19 @@ export default async function DashboardPage({
 }: PageProps<"/project/[projectRef]/dashboard">) {
   const { projectRef } = await params;
   const user = await requireUser();
-  // 지표는 내부 id 로 집계한다. DashboardProject 에는 id 가 없어서
-  // (ref 만 화면으로 내보내는 게 그 타입의 뜻이다) 한 번 더 읽는다 —
-  // getOwnedProjectId 는 cache 라 같은 요청 안에서는 왕복이 한 번이다.
-  const [project, projectId] = await Promise.all([
+  // 세 함수 모두 getOwnedProject(cache) 한 번의 조회를 나눠 쓴다. 대시보드만 설치 행을 더 읽는다.
+  // 지표는 내부 id 로 집계한다 — DashboardProject 는 ref 만 화면으로 내보내는 타입이라 id 가 없다.
+  const [project, projectId, projectRepo] = await Promise.all([
     getDashboardProject(projectRef, user.id),
     getOwnedProjectId(projectRef, user.id),
+    getProjectRepo(projectRef, user.id),
   ]);
   // 레이아웃이 이미 소유를 확인했으므로 여기서 없을 일은 사실상 없다.
   // 그래도 타입을 좁혀야 하고, 사이에 레포가 지워졌다면 404 가 맞는 답이다.
-  if (!project || !projectId) notFound();
+  if (!project || !projectId || !projectRepo) notFound();
 
   // GitHub 트리는 연결이 정상일 때만 읽는다 — 앱이 지워졌거나 정지되면 설치 토큰 호출이 실패한다.
-  const repo = project.connection === "ok" ? await getProjectRepo(projectRef, user.id) : null;
+  const repo = project.connection === "ok" ? projectRepo : null;
 
   const [runs, pulls, usage, bySurface, budget] = await Promise.all([
     getRecentRuns(projectId),

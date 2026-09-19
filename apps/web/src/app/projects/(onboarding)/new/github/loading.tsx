@@ -23,6 +23,7 @@ export default function Loading() {
       </div>
 
       <StepHeader
+        step={2}
         title="Which repository?"
         description="One is enough to start. You can add more projects later"
       />

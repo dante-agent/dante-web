@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Check, Copy, Loader2 } from "lucide-react";
 import type { MonacoDiffEditor } from "@monaco-editor/react";
 import dynamic from "next/dynamic";
+import { copyAndAnnounce } from "@/components/live-announcer";
 import { MONACO_THEME as THEME, setupMonaco } from "@/lib/monaco-theme";
 import type { SessionDetail } from "../session-detail";
 
@@ -61,20 +62,21 @@ export function CodePanel({
   }, [follow, content]);
 
   const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(content);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // 클립보드 권한이 없으면 조용히 무시.
-    }
+    // 결과는 스크린리더에도 알린다(실패 포함). 화면 표시는 성공일 때만 바뀐다.
+    if (!(await copyAndAnnounce(content))) return;
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   };
 
   return (
     <section className="bg-background flex min-w-0 flex-1 flex-col">
       {/* 파일 행 */}
       <div className="border-border flex h-10 shrink-0 items-center gap-2 border-b px-4">
-        <span className="text-brand-cobalt font-mono text-xs font-semibold">{code.changeType}</span>
+        {/* 변경 유형은 한 글자(A/M)라 스크린리더용 단어를 따로 둔다. */}
+        <span aria-hidden="true" className="text-brand-cobalt font-mono text-xs font-semibold">
+          {code.changeType}
+        </span>
+        <span className="sr-only">{code.changeType === "A" ? "Added" : "Modified"}</span>
         <span className="min-w-0 flex-1 truncate font-mono text-xs" title={code.path}>
           {code.path}
         </span>

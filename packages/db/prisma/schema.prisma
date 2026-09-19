@@ -793,6 +793,9 @@ model AiUsage {
 
   /// "이 사용자가 이번 달 얼마 썼나" 가 가장 잦은 질문이다.
   @@index([userId, createdAt])
+  /// 프로젝트 대시보드의 AI 지출(usage-queries.ts)이 프로젝트 + 이번 달로 거른다.
+  /// 프로젝트를 지울 때 SetNull 로 이 프로젝트 행을 찾는 것도 이 인덱스를 탄다.
+  @@index([projectId, createdAt])
   @@map("ai_usage")
 }
 

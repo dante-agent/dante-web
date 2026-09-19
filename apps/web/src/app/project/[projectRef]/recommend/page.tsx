@@ -16,6 +16,8 @@ export default async function RecommendPage({
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-4 sm:p-6 lg:p-8">
+      {/* 화면에 제목 글자가 없어(카드가 곧 본문) 스크린리더용 제목만 둔다. */}
+      <h1 className="sr-only">AI Recommendations</h1>
       <div className="bg-card/40 border-border flex flex-col gap-4 rounded-2xl border p-4">
         <PromptInput projectRef={projectRef} />
 
