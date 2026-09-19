@@ -70,12 +70,16 @@ export async function saveRuntimeSettings(
   const testCommand = String(formData.get("testCommand") ?? "").trim();
   const timeoutMs = Number(formData.get("timeoutMs"));
 
-  // 빈 값은 "아직 안 고름" 이다. 고른 적 없는 프로젝트만 빈 값으로 올 수 있고, 그대로 둔다.
+  // 러너는 고르지 않은 프로젝트만 여기서 한 번 고른다(runtime-form.tsx). 이미 있으면
+  // 폼이 값을 보내지 않고, 조작해서 보내도 바꾸지 않는다. 빈 값은 "아직 안 고름" 이다.
   const submittedFramework = String(formData.get("testFramework") ?? "");
   if (submittedFramework !== "" && !isTestFramework(submittedFramework)) {
     return { error: "Unknown test runner." };
   }
-  const testFramework = submittedFramework || project.testFramework;
+  if (project.testFramework && submittedFramework && submittedFramework !== project.testFramework) {
+    return { error: "The test runner is already set and cannot be changed." };
+  }
+  const testFramework = project.testFramework ?? (submittedFramework || null);
 
   // 빈 칸은 "기본값으로 되돌린다" 는 뜻이다. 화면의 placeholder 가 그 기본값을
   // 이미 보여주고 있으므로, 지우고 저장하면 본 대로 돌아간다.
@@ -83,8 +87,8 @@ export async function saveRuntimeSettings(
   // 화면이 쓴 것과 같은 기본값이어야 한다 — 그래서 여기서도 레포를 다시 본다.
   // (같은 요청 안이라면 react cache 가 GitHub 왕복을 한 번으로 줄인다.)
   //
-  // 기본 테스트 명령은 러너를 따른다. 러너만 바꾸고 Test 칸은 안 건드렸다면 칸에는
-  // 이전 러너의 기본값이 실려 온다 — 그건 "기본값 그대로" 라는 뜻이라 새 기본값으로 바꾼다.
+  // 기본 테스트 명령은 러너를 따른다. 러너만 고르고 Test 칸은 안 건드렸다면 칸에는
+  // 고르기 전의 기본값이 실려 온다 — 그건 "기본값 그대로" 라는 뜻이라 새 기본값으로 바꾼다.
   const defaults = await detectRuntimeCommands(project.ref, project, testFramework);
   const previousDefaults = await detectRuntimeCommands(project.ref, project, project.testFramework);
   const resolved = {

@@ -48,14 +48,14 @@ export function RuntimeForm({
   initial: { installCommand: string; testCommand: string; timeoutMs: number };
   /** 비워두면 무엇이 돌게 되는지 보여준다. 레포에서 알아낸 값일 수도, 아닐 수도 있다. */
   placeholders: RuntimeCommands;
-  /** 온보딩에서 고른 러너. 고르지 않고 넘어온 프로젝트면 null. */
+  /** 온보딩에서 고른 러너. 고르지 않고 넘어온 프로젝트면 null — 그때만 여기서 고를 수 있다. */
   testFramework: TestFrameworkId | null;
-  /** 러너별 기본 테스트 명령. 러너를 바꾸면 Test 칸이 이 값을 따라간다. */
+  /** 러너별 기본 테스트 명령. 러너를 고르면 Test 칸이 이 값을 따라간다. */
   testDefaults: Record<TestFrameworkId, string>;
 }) {
   const [runner, setRunner] = useState<string>(testFramework ?? "");
   const [testCommand, setTestCommand] = useState(initial.testCommand);
-  // 러너를 바꿀 때 Test 칸이 이전 러너의 기본값 그대로면 새 기본값으로 바꿔 준다.
+  // 러너를 고를 때 Test 칸이 이전 기본값 그대로면 새 러너의 기본값으로 바꿔 준다.
   // 사용자가 직접 적은 명령은 러너와 상관없이 그대로 둔다.
   const changeRunner = (next: string) => {
     const previousDefault = runner ? testDefaults[runner as TestFrameworkId] : placeholders.test;
@@ -87,37 +87,54 @@ export function RuntimeForm({
         title="Test runner"
         description="Decides the imports in the tests Dante writes and the default test command below."
       >
-        <div className="p-4">
-          <Select
-            name="testFramework"
-            value={runner}
-            onValueChange={(value) => changeRunner(String(value ?? ""))}
-            items={RUNNER_OPTIONS}
-          >
-            <SelectFieldLabel className="block text-[13px] leading-tight">Runner</SelectFieldLabel>
-            <span
-              id="runner-hint"
-              className="text-muted-foreground mt-1 block text-[12px] leading-relaxed"
+        {/* 러너는 한 번만 고른다. 이미 만든 테스트의 import 가 러너를 따르므로, 나중에
+            바꾸면 그 테스트가 새 러너에서 전부 깨진다. 그래서 온보딩에서 고르지 않고
+            넘어온 프로젝트만 여기서 고르고, 고른 뒤에는 보여주기만 한다. */}
+        {testFramework ? (
+          <div className="p-4">
+            <p className="text-[13px] leading-tight">Runner</p>
+            <p className="text-muted-foreground mt-1 text-[12px] leading-relaxed">
+              Picked once. Tests Dante already wrote import from this runner, so it stays fixed.
+            </p>
+            <p className="mt-3 font-mono text-[13px]">
+              {RUNNER_OPTIONS.find((option) => option.value === testFramework)?.label}
+            </p>
+          </div>
+        ) : (
+          <div className="p-4">
+            <Select
+              name="testFramework"
+              value={runner}
+              onValueChange={(value) => changeRunner(String(value ?? ""))}
+              items={RUNNER_OPTIONS}
             >
-              Tests already written for the old runner keep its imports. Regenerate them after
-              switching, or they will fail under the new one.
-            </span>
-            <SelectTrigger
-              aria-describedby="runner-hint"
-              size="sm"
-              className="mt-3 w-28 pr-2.5 text-[13px] data-[size=sm]:rounded-[4px]"
-            >
-              <SelectValue placeholder="Pick one" />
-            </SelectTrigger>
-            <SelectContent alignItemWithTrigger={false} align="start" sideOffset={6}>
-              {RUNNER_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+              <SelectFieldLabel className="block text-[13px] leading-tight">
+                Runner
+              </SelectFieldLabel>
+              <span
+                id="runner-hint"
+                className="text-muted-foreground mt-1 block text-[12px] leading-relaxed"
+              >
+                Tests cannot run until one is picked. You pick it once — it cannot be changed after
+                saving.
+              </span>
+              <SelectTrigger
+                aria-describedby="runner-hint"
+                size="sm"
+                className="mt-3 w-28 pr-2.5 text-[13px] data-[size=sm]:rounded-[4px]"
+              >
+                <SelectValue placeholder="Pick one" />
+              </SelectTrigger>
+              <SelectContent alignItemWithTrigger={false} align="start" sideOffset={6}>
+                {RUNNER_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </Section>
 
       <Section
