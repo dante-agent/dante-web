@@ -11,7 +11,6 @@ import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
-  SelectFieldLabel,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -89,11 +88,19 @@ export function RepoPicker({
             화살표를 직접 그리면서 좌우 여백이 어긋나고, 열었을 때 팝업 위치도
             OS 가 정해서 CSS 로 못 맞춘다. 옆의 검색 입력과 글꼴·배경도 달랐다. */}
         <Select value={activeOwner} onValueChange={(value) => setOwner(String(value))}>
-          <SelectFieldLabel className="sr-only">GitHub account</SelectFieldLabel>
           {/* SelectTrigger 의 기본 클래스에 data-[size=default]:h-8 이 들어 있어
               h-9 만으로는 안 먹는다(선택자가 달라 tailwind-merge 가 못 합친다).
               옆 검색 입력과 높이를 맞추려면 같은 선택자로 덮어야 한다. */}
-          <SelectTrigger className="shrink-0 rounded-[4px] data-[size=default]:h-9">
+          {/* 이름은 Select.Label 로 잇는 게 Base UI 방식인데, 이 화면에서는 트리거에 aria-labelledby 가
+              붙지 않았다(런타임 설정 화면은 붙는다 — 원인 미상). 트리거에 직접 건다. Base UI 는
+              넘긴 prop 을 내부 값보다 나중에 합치므로 이 값이 남는다. */}
+          <span id="github-account-label" className="sr-only">
+            GitHub account
+          </span>
+          <SelectTrigger
+            aria-labelledby="github-account-label"
+            className="shrink-0 rounded-[4px] data-[size=default]:h-9"
+          >
             <SelectValue />
           </SelectTrigger>
           {/* alignItemWithTrigger 기본값(true)은 선택 항목을 트리거 위에 겹쳐
