@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2, Play, RotateCcw, Sparkles } from "lucide-react";
 import { unstable_rethrow, useRouter } from "next/navigation";
 import { useAnnounce } from "@/components/live-announcer";
@@ -8,6 +8,7 @@ import { StoredRunLog, TerminalBody, useLiveRun, type RunView } from "@/componen
 import type { TestRunView } from "@/lib/projects/run-version";
 import { cn } from "@/lib/utils";
 import { regenerateFromFailure, type RegenerateResult } from "../../actions";
+import { isRegenerating, useRegeneration } from "./regeneration";
 
 // 우측 코드 패널 아래의 실행 결과 영역. 폴더 보기와 같은 실시간 실행(/runs/live, NDJSON)을 쓴다 —
 // 버튼을 누르면 단계(샌드박스 준비 → 설치 → 도구 → 테스트)와 러너 출력이 실시간으로 흐르고, 끝나면
@@ -41,17 +42,22 @@ function displayStatus(view: RunView | null, initialRun: TestRunView | null): Di
 export function TestRunPanel({
   projectRef,
   versionId,
+  sourcePath,
   initialRun,
   runnerConfigured,
 }: {
   projectRef: string;
   versionId: string;
+  /** 이 버전의 테스트 대상 소스 파일 — 재생성 연출에 쓴다. */
+  sourcePath: string;
   initialRun: TestRunView | null;
   runnerConfigured: boolean;
 }) {
   const router = useRouter();
   const { view, start } = useLiveRun(projectRef);
-  const [regenerating, startRegen] = useTransition();
+  // 재생성은 채팅 수정과 같은 연출(좌측 전송·단계, 우측 코드 타이핑)로 보여준다(regeneration.tsx).
+  const regeneration = useRegeneration();
+  const regenerating = isRegenerating(regeneration);
   const [regenError, setRegenError] = useState<string | null>(null);
 
   const running = view?.running ?? false;
@@ -72,21 +78,21 @@ export function TestRunPanel({
   function regenerate() {
     if (busy) return;
     setRegenError(null);
-    startRegen(async () => {
+    const fail = (reason: keyof typeof REGEN_ERROR) => {
+      setRegenError(REGEN_ERROR[reason]);
+      return { ok: false as const, message: REGEN_ERROR[reason] };
+    };
+    regeneration.start({ versionId, sourcePath }, async () => {
       try {
         const result = await regenerateFromFailure(projectRef, versionId);
-        if (result.ok) {
-          // 고친 새 버전으로 이동한다. 실행은 사용자가 Run 을 눌러 한다.
-          router.push(`/project/${projectRef}/recommend/${result.versionId}`);
-          // 좌측 사이드바는 레이아웃이라 이동만으로는 다시 그리지 않는다. 새 세션이 목록에 뜨게 새로고침한다.
-          router.refresh();
-          return;
-        }
-        setRegenError(REGEN_ERROR[result.reason]);
+        if (!result.ok) return fail(result.reason);
+        // 받은 코드를 우측에 타이핑한 뒤 고친 새 버전으로 이동한다. 실행은 사용자가 Run 을 눌러 한다.
+        const { versionId: newVersionId, testPath, code } = result;
+        return { ok: true, files: [{ versionId: newVersionId, testPath, code }] };
       } catch (error) {
         // redirect()/notFound() 같은 프레임워크 신호는 삼키지 않고 되던진다.
         unstable_rethrow(error);
-        setRegenError(REGEN_ERROR.error);
+        return fail("error");
       }
     });
   }

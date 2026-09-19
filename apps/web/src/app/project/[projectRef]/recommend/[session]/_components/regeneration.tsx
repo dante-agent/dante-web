@@ -1,15 +1,29 @@
 "use client";
 
-import { createContext, useCallback, useContext, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { requestArrivalFocus } from "@/components/generation/arrival-focus";
-import { useGenerationPerformance } from "@/components/generation/use-generation-performance";
+import {
+  useGenerationPerformance,
+  type GenerationOutcome,
+} from "@/components/generation/use-generation-performance";
 
-// 세션 상세에서 채팅으로 테스트를 고칠 때의 연출 상태. 요청은 좌측 채팅(FollowUp)이 보내고,
-// 코드가 써지는 모습은 우측 코드 패널(GeneratedTestsPanel)이 그린다 — 서로 다른 칸이라 context 로 나눠 쓴다.
+// 세션 상세에서 테스트를 고칠 때의 연출 상태. 요청은 좌측 채팅(FollowUp)이나 실행 패널의
+// "Regenerate & retry"(TestRunPanel)가 보내고, 코드가 써지는 모습은 우측 코드 패널(GeneratedTestsPanel)이,
+// 파일 전송·단계는 좌측 채팅이 그린다 — 서로 다른 칸이라 context 로 나눠 쓴다.
 export type RegeneratedFile = { versionId: string; testPath: string; code: string };
 
-type Regeneration = ReturnType<typeof useGenerationPerformance<RegeneratedFile>>;
+/** 고치는 대상 — 어느 탭(버전)을 고치는지, 그 원본 소스 파일은 무엇인지. */
+export type RegenerationTarget = { versionId: string; sourcePath: string };
+
+type Performance = ReturnType<typeof useGenerationPerformance<RegeneratedFile>>;
+type Regeneration = Omit<Performance, "start"> & {
+  target: RegenerationTarget | null;
+  start: (
+    target: RegenerationTarget,
+    generate: () => Promise<GenerationOutcome<RegeneratedFile>>
+  ) => void;
+};
 
 const RegenerationContext = createContext<Regeneration | null>(null);
 
@@ -35,7 +49,20 @@ export function RegenerationProvider({
     },
     [projectRef, router]
   );
-  const regeneration = useGenerationPerformance<RegeneratedFile>({ finish });
+  const performance = useGenerationPerformance<RegeneratedFile>({ finish });
+  const [target, setTarget] = useState<RegenerationTarget | null>(null);
+  const { start: startPerformance } = performance;
+  const start = useCallback<Regeneration["start"]>(
+    (next, generate) => {
+      setTarget(next);
+      startPerformance(generate);
+    },
+    [startPerformance]
+  );
+  const regeneration = useMemo(
+    () => ({ ...performance, target, start }),
+    [performance, target, start]
+  );
   return (
     <RegenerationContext.Provider value={regeneration}>{children}</RegenerationContext.Provider>
   );

@@ -1,12 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { unstable_rethrow, useRouter } from "next/navigation";
 import { requestArrivalFocus } from "@/components/generation/arrival-focus";
+import { GenerationSteps } from "@/components/generation/generation-steps";
+import { SendingFiles } from "@/components/generation/sending-files";
+import { useGenerationPerformance } from "@/components/generation/use-generation-performance";
+import { ResizableSplit } from "../../[session]/_components/resizable-split";
+import { WritingCode } from "../../generate/_components/writing-code";
 import {
   generatePlannedTests,
   planTestGeneration,
   saveRecommendChat,
+  type GeneratedTestFile,
   type PlanTarget,
   type PromptGenerateResult,
   type TestPlanResult,
@@ -27,17 +33,24 @@ const ERROR_MESSAGE: Record<FailReason, string> = {
 
 const uid = () => crypto.randomUUID();
 
+/** 타이핑이 끝나고 세션으로 넘어가기 전 잠깐 멈춤 — 완성된 코드를 한 번 보여준다. */
+const OPEN_DELAY_MS = 600;
+
 /**
  * 프롬프트→계획→추천 사유+생성 확인→생성 의 전체 흐름을 채팅 메시지로 이어 붙인다.
- * 확정되면 generatePlannedTests 로 저장하고, 방금까지의 대화를 만든 세션들(DB)에 심어
- * 실제 세션(/recommend/[session])의 FollowUp 이 이어서 보여줄 수 있게 한 뒤 그리로 이동한다.
+ * 확정되면 생성 화면과 같은 연출(좌측 파일 전송·단계, 우측 코드 타이핑)을 보여주며 generatePlannedTests 로
+ * 저장하고, 방금까지의 대화를 만든 세션들(DB)에 심어 실제 세션(/recommend/[session])의 FollowUp 이 이어서
+ * 보여줄 수 있게 한 뒤 그리로 이동한다. 좌우 칸이 같은 연출 상태를 보도록 분할 화면 전체를 여기서 그린다.
  */
 export function ChatSession({
   projectRef,
   initialPrompt,
+  header,
 }: {
   projectRef: string;
   initialPrompt: string;
+  /** 좌측 칸 위쪽 줄(레포·제목). 서버 페이지가 넘긴다. */
+  header: ReactNode;
 }) {
   const router = useRouter();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -46,6 +59,23 @@ export function ChatSession({
   // 확인 메시지 id → 그 시점에 세운 계획(확정 시 어떤 파일을 생성할지). 액션 버튼 클릭 때 꺼내 쓴다.
   const plansRef = useRef(new Map<string, { matched: PlanTarget[]; top: PlanTarget[] }>());
   const startedRef = useRef(false);
+  // 생성 연출. 확정한 대상 파일과, 연출이 끝난 뒤 이동할 주소·대화 저장 완료를 들고 있다.
+  const [chosenTargets, setChosenTargets] = useState<PlanTarget[]>([]);
+  const afterRef = useRef({ url: "", saved: Promise.resolve() as Promise<unknown> });
+  const finish = useCallback(async () => {
+    const { saved, url } = afterRef.current;
+    await Promise.all([
+      saved.catch(() => undefined),
+      new Promise((r) => setTimeout(r, OPEN_DELAY_MS)),
+    ]);
+    requestArrivalFocus();
+    router.push(url);
+    // 좌측 사이드바는 레이아웃이라 이동만으로는 다시 그리지 않는다. 새 세션이 목록에 뜨게 새로고침한다.
+    router.refresh();
+  }, [router]);
+  const performance = useGenerationPerformance<GeneratedTestFile>({ finish });
+  const { stage } = performance;
+  const generating = stage !== null && stage !== "error";
 
   useEffect(() => {
     if (startedRef.current) return;
@@ -117,17 +147,17 @@ export function ChatSession({
     generate(targets);
   }
 
-  function generate(targets: PlanTarget[]) {
-    setPendingLabel("Generating test code…");
-    startBusy(async () => {
+  function generate(chosen: PlanTarget[]) {
+    setChosenTargets(chosen);
+    performance.start(async () => {
       try {
         const result = await generatePlannedTests(
           projectRef,
-          targets.map((t) => t.filePath)
+          chosen.map((t) => t.filePath)
         );
         if (!result.ok) {
           pushAssistant(ERROR_MESSAGE[result.reason]);
-          return;
+          return { ok: false, message: ERROR_MESSAGE[result.reason] };
         }
         const failedNote =
           result.failed.length > 0
@@ -138,36 +168,70 @@ export function ChatSession({
           ...messages,
           { id: uid(), role: "assistant", text: introText },
         ];
-        // 대화를 배치의 모든 세션에 영구 저장한 뒤 이동한다 — 사이드바에서 어느 세션을 열어도
-        // 세션 상세가 DB 에서 읽어 같은 대화를 이어 보여준다.
+        // 대화를 배치의 모든 세션에 영구 저장한다(연출과 겹쳐서) — 사이드바에서 어느 세션을 열어도
+        // 세션 상세가 DB 에서 읽어 같은 대화를 이어 보여준다. 이동 전에 끝났는지만 기다린다.
         const stored = transcript.map(({ id, role, text }) => ({ id, role, text }));
-        await Promise.all(
-          result.versionIds.map((versionId) => saveRecommendChat(projectRef, versionId, stored))
-        );
         // 배치로 만든 버전을 전부 tests 쿼리로 넘겨 탭으로 보여준다. 생성 직후에는 실행하지 않는다.
         const tests = result.versionIds.join(",");
-        requestArrivalFocus();
-        router.push(`/project/${projectRef}/recommend/${result.versionId}?tests=${tests}`);
-        // 좌측 사이드바는 레이아웃이라 이동만으로는 다시 그리지 않는다. 새 세션이 목록에 뜨게 새로고침한다.
-        router.refresh();
+        afterRef.current = {
+          url: `/project/${projectRef}/recommend/${result.versionId}?tests=${tests}`,
+          saved: Promise.all(
+            result.versionIds.map((versionId) => saveRecommendChat(projectRef, versionId, stored))
+          ),
+        };
+        return { ok: true, files: result.files };
       } catch (error) {
         unstable_rethrow(error);
         pushAssistant(ERROR_MESSAGE.failed);
+        return { ok: false, message: ERROR_MESSAGE.failed };
       }
     });
   }
 
+  const paths = chosenTargets.map((t) => t.filePath);
+
   return (
-    <ChatThread
-      messages={messages}
-      pending={busy}
-      pendingLabel={pendingLabel}
-      onSend={submit}
-      onAction={handleAction}
-      disabled={busy}
-      placeholder="Describe which component you need tests for…"
-      listClassName="flex-1 min-h-0 overflow-y-auto"
-      containerClassName="flex min-h-0 flex-1 flex-col"
+    <ResizableSplit
+      left={
+        <section className="border-border bg-background flex min-w-0 flex-1 flex-col border-r">
+          {header}
+          <ChatThread
+            messages={messages}
+            pending={busy || generating}
+            pendingLabel={pendingLabel}
+            pendingContent={
+              generating &&
+              stage && (
+                <div className="flex flex-col gap-3">
+                  <SendingFiles files={paths} stage={stage} />
+                  <GenerationSteps stage={stage} finalLabel="Opening session" />
+                </div>
+              )
+            }
+            onSend={submit}
+            onAction={handleAction}
+            disabled={busy || generating}
+            placeholder="Describe which component you need tests for…"
+            listClassName="flex-1 min-h-0 overflow-y-auto"
+            containerClassName="flex min-h-0 flex-1 flex-col"
+          />
+        </section>
+      }
+      right={
+        generating ? (
+          <WritingCode
+            sources={paths}
+            files={performance.files}
+            typing={performance.typing}
+            waiting={stage === "write" && !performance.files}
+            failed={false}
+          />
+        ) : (
+          <div className="text-muted-foreground flex flex-1 items-center justify-center p-8 text-center text-sm">
+            Generated test code will appear here once you confirm.
+          </div>
+        )
+      }
     />
   );
 }
