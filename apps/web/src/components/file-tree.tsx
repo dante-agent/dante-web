@@ -7,7 +7,15 @@
 // - 상단: 상태 필터(전체/없음/있음)
 // entries 는 folder/layout 이 getRepoTree 로 넘겨준다.
 
-import { useMemo, useState } from "react";
+import {
+  createContext,
+  memo,
+  useContext,
+  useLayoutEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronRight } from "lucide-react";
 import { buildTree, type FileEntry, type TreeNode } from "@/lib/file-tree";
@@ -54,6 +62,59 @@ function collectDirPaths(nodes: TreeNode[], acc: string[] = []): string[] {
   return acc;
 }
 
+/**
+ * 트리의 선택·펼침 상태. React state 대신 작은 store 에 두고 노드가 자기 불리언만 구독한다
+ * (useSyncExternalStore). 파일을 고르면 이전·새 선택 잎 둘만, 폴더를 열고 닫으면 그 폴더만
+ * 다시 그린다 — state 를 위에서 props 로 내리면 파일 하나 고를 때마다 트리 전체가 다시 그려진다.
+ */
+type TreeStore = {
+  subscribe: (listener: () => void) => () => void;
+  isSelected: (path: string) => boolean;
+  isOpen: (path: string) => boolean;
+  setSelected: (path: string | null) => void;
+  toggle: (path: string) => void;
+  openFile: (path: string) => void;
+  /** 클릭 때 쓸 이동 함수. URL 이 바뀔 때마다 FileTree 가 새로 넣는다(노드는 다시 안 그린다). */
+  setOpenFile: (openFile: (path: string) => void) => void;
+};
+
+function createTreeStore(selected: string | null, expanded: Set<string>): TreeStore {
+  let openFile: (path: string) => void = () => {};
+  const listeners = new Set<() => void>();
+  const notify = () => listeners.forEach((listener) => listener());
+  return {
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    isSelected: (path) => selected === path,
+    isOpen: (path) => expanded.has(path),
+    setSelected: (path) => {
+      if (path === selected) return;
+      selected = path;
+      notify();
+    },
+    toggle: (path) => {
+      expanded = new Set(expanded);
+      if (expanded.has(path)) expanded.delete(path);
+      else expanded.add(path);
+      notify();
+    },
+    openFile: (path) => openFile(path),
+    setOpenFile: (next) => {
+      openFile = next;
+    },
+  };
+}
+
+const TreeStoreContext = createContext<TreeStore | null>(null);
+
+function useTreeStore(): TreeStore {
+  const store = useContext(TreeStoreContext);
+  if (!store) throw new Error("FileTree 노드는 FileTree 안에서만 그린다.");
+  return store;
+}
+
 export function FileTree({ entries }: { entries: FileEntry[] }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -63,27 +124,25 @@ export function FileTree({ entries }: { entries: FileEntry[] }) {
   const [filter, setFilter] = useState<StatusFilter>("all");
 
   const fullTree = useMemo(() => buildTree(entries), [entries]);
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(collectDirPaths(fullTree)));
+
+  const [store] = useState(() => createTreeStore(selected, new Set(collectDirPaths(fullTree))));
+  // 선택은 URL 이 들고 있다. 바뀌면 store 에 알려 해당 잎만 다시 그리게 한다(칠하기 전에).
+  useLayoutEffect(() => store.setSelected(selected), [store, selected]);
+  // 클릭하면 지금 URL 의 다른 파라미터(mode 등)는 두고 file 만 바꾼다.
+  useLayoutEffect(
+    () =>
+      store.setOpenFile((filePath) => {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("file", filePath);
+        router.push(`${pathname}?${params.toString()}`, { scroll: false });
+      }),
+    [store, pathname, router, searchParams]
+  );
 
   const tree = useMemo(() => {
     if (filter === "all") return fullTree;
     return filterTree(fullTree, (leaf) => matchesStatus(leaf.status, filter));
   }, [fullTree, filter]);
-
-  const isOpen = (path: string) => expanded.has(path);
-  const toggle = (path: string) =>
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(path)) next.delete(path);
-      else next.add(path);
-      return next;
-    });
-
-  const open = (filePath: string) => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("file", filePath);
-    router.push(`${pathname}?${params.toString()}`, { scroll: false });
-  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
@@ -111,81 +170,72 @@ export function FileTree({ entries }: { entries: FileEntry[] }) {
         {tree.length === 0 ? (
           <li className="text-muted-foreground px-2 py-6 text-center text-xs">No matching files</li>
         ) : (
-          tree.map((node) => (
-            <Node
-              key={node.path}
-              node={node}
-              depth={0}
-              selected={selected}
-              isOpen={isOpen}
-              toggle={toggle}
-              onOpenFile={open}
-            />
-          ))
+          <TreeStoreContext value={store}>
+            {tree.map((node) => (
+              <Node key={node.path} node={node} depth={0} />
+            ))}
+          </TreeStoreContext>
         )}
       </ul>
     </div>
   );
 }
 
-function Node({
-  node,
-  depth,
-  selected,
-  isOpen,
-  toggle,
-  onOpenFile,
-}: {
-  node: TreeNode;
-  depth: number;
-  selected: string | null;
-  isOpen: (path: string) => boolean;
-  toggle: (path: string) => void;
-  onOpenFile: (path: string) => void;
-}) {
-  const pad = { paddingLeft: `${depth * 12 + 8}px` };
+/** props 는 노드와 깊이뿐이라 memo 가 걸린다. 선택·펼침은 store 에서 자기 것만 읽는다. */
+const Node = memo(function Node({ node, depth }: { node: TreeNode; depth: number }) {
+  return node.type === "dir" ? (
+    <DirRow node={node} depth={depth} />
+  ) : (
+    <FileRow node={node} depth={depth} />
+  );
+});
 
-  if (node.type === "dir") {
-    const opened = isOpen(node.path);
-    return (
-      <li>
-        <button
-          type="button"
-          onClick={() => toggle(node.path)}
-          style={pad}
-          className="text-sidebar-foreground/80 hover:bg-sidebar-accent/60 flex h-7 w-full items-center gap-1 rounded-md pr-2 text-sm"
-        >
-          <ChevronRight
-            className={cn("size-3.5 shrink-0 transition-transform", opened && "rotate-90")}
-          />
-          <span className="min-w-0 truncate">{node.name}</span>
-        </button>
-        {opened && (
-          <ul>
-            {node.children.map((child) => (
-              <Node
-                key={child.path}
-                node={child}
-                depth={depth + 1}
-                selected={selected}
-                isOpen={isOpen}
-                toggle={toggle}
-                onOpenFile={onOpenFile}
-              />
-            ))}
-          </ul>
-        )}
-      </li>
-    );
-  }
+const rowPadding = (depth: number) => ({ paddingLeft: `${depth * 12 + 8}px` });
 
-  const active = selected === node.path;
+function DirRow({ node, depth }: { node: Extract<TreeNode, { type: "dir" }>; depth: number }) {
+  const store = useTreeStore();
+  const opened = useSyncExternalStore(
+    store.subscribe,
+    () => store.isOpen(node.path),
+    () => store.isOpen(node.path)
+  );
   return (
     <li>
       <button
         type="button"
-        onClick={() => onOpenFile(node.path)}
-        style={pad}
+        onClick={() => store.toggle(node.path)}
+        style={rowPadding(depth)}
+        className="text-sidebar-foreground/80 hover:bg-sidebar-accent/60 flex h-7 w-full items-center gap-1 rounded-md pr-2 text-sm"
+      >
+        <ChevronRight
+          className={cn("size-3.5 shrink-0 transition-transform", opened && "rotate-90")}
+        />
+        <span className="min-w-0 truncate">{node.name}</span>
+      </button>
+      {opened && (
+        <ul>
+          {node.children.map((child) => (
+            <Node key={child.path} node={child} depth={depth + 1} />
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+}
+
+function FileRow({ node, depth }: { node: Extract<TreeNode, { type: "file" }>; depth: number }) {
+  const store = useTreeStore();
+  const active = useSyncExternalStore(
+    store.subscribe,
+    () => store.isSelected(node.path),
+    () => store.isSelected(node.path)
+  );
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={() => store.openFile(node.path)}
+        style={rowPadding(depth)}
         className={cn(
           "flex h-7 w-full items-center gap-1.5 rounded-md pr-2 text-sm",
           active
