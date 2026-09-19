@@ -39,12 +39,15 @@ export default async function FolderLayout({
 
 async function RepoTree({ projectRef }: { projectRef: string }) {
   const user = await requireUser();
-  const repo = await getProjectRepo(projectRef, user.id);
-  if (!repo) notFound();
-  const projectId = await getOwnedProjectId(projectRef, user.id);
+  // 둘 다 getOwnedProject(cache) 한 번의 조회를 나눠 쓴다.
+  const [repo, projectId] = await Promise.all([
+    getProjectRepo(projectRef, user.id),
+    getOwnedProjectId(projectRef, user.id),
+  ]);
+  if (!repo || !projectId) notFound();
   const [entries, generated] = await Promise.all([
     getRepoTree(repo),
-    projectId ? getGeneratedSourcePaths(projectId) : new Set<string>(),
+    getGeneratedSourcePaths(projectId),
   ]);
   // 초록 = 레포에 테스트가 있거나 Dante 에서 생성한 버전이 있음. testPath 는 레포 파일일 때만 둔다.
   const marked = entries.map((entry) =>

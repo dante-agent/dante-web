@@ -20,7 +20,7 @@ import {
   setSessionFeedback,
 } from "@/lib/projects/generated-sessions";
 import { saveGeneratedVersion } from "@/lib/projects/generated-versions";
-import { getOwnedProjectId, getProjectRepo, type ProjectRepo } from "@/lib/projects/queries";
+import { getOwnedProject, projectRepoOf, type ProjectRepo } from "@/lib/projects/queries";
 import { getTestRecommendations, type TestRecommendation } from "@/lib/projects/recommendations";
 import { FIXED_NOTE, UPDATED_NOTE } from "@/lib/projects/session-label";
 import { generateTestForFile } from "@/lib/projects/test-generation";
@@ -43,10 +43,11 @@ export type GenerateTestActionResult =
  */
 export async function rerankRecommendations(projectRef: string): Promise<AiRecommendationResult> {
   const user = await requireUser();
-  const repo = await getProjectRepo(projectRef, user.id);
-  if (!repo) notFound();
-
-  const projectId = await getOwnedProjectId(projectRef, user.id);
+  // id 와 repo 를 한 번의 조회로 얻는다(getOwnedProject). 서버 액션에선 cache 에 기대지 않는다.
+  const project = await getOwnedProject(projectRef, user.id);
+  if (!project) notFound();
+  const repo = projectRepoOf(project);
+  const projectId = project.id;
   return getAiTestRecommendations({ repo, userId: user.id, projectId });
 }
 
@@ -133,9 +134,10 @@ export async function planTestGeneration(
   if (!prompt) return { ok: false, reason: "error" };
 
   const user = await requireUser();
-  const repo = await getProjectRepo(projectRef, user.id);
-  if (!repo) notFound();
-  const projectId = await getOwnedProjectId(projectRef, user.id);
+  const project = await getOwnedProject(projectRef, user.id);
+  if (!project) notFound();
+  const repo = projectRepoOf(project);
+  const projectId = project.id;
 
   const candidates = await getTestRecommendations(repo);
   // 후보는 우선순위(높음→낮음)로 정렬돼 있어 앞에서 자르면 상위 N개다.
@@ -197,9 +199,10 @@ export async function generatePlannedTests(
   filePaths: string[]
 ): Promise<PromptGenerateResult> {
   const user = await requireUser();
-  const repo = await getProjectRepo(projectRef, user.id);
-  if (!repo) notFound();
-  const projectId = await getOwnedProjectId(projectRef, user.id);
+  const project = await getOwnedProject(projectRef, user.id);
+  if (!project) notFound();
+  const repo = projectRepoOf(project);
+  const projectId = project.id;
 
   const candidates = await getTestRecommendations(repo);
   const byPath = new Map(candidates.map((c) => [c.filePath, c]));
@@ -286,10 +289,10 @@ export async function regenerateFromFailure(
     return { ok: false, reason: "not-failed" };
   }
 
-  const repo = await getProjectRepo(projectRef, user.id);
-  if (!repo) notFound();
-  const projectId = await getOwnedProjectId(projectRef, user.id);
-  if (!projectId) return { ok: false, reason: "not-found" };
+  const project = await getOwnedProject(projectRef, user.id);
+  if (!project) notFound();
+  const repo = projectRepoOf(project);
+  const projectId = project.id;
 
   // 실패 원인은 로그 끝에 있어 뒤에서 자른다. 로그가 없으면 errorMessage 라도 준다.
   // 저장 로그에는 색 코드가 남아 있다. AI 에게는 글자만 준다.
@@ -344,10 +347,10 @@ export async function regenerateFromInstruction(
   const detail = await getGeneratedSessionDetail(projectRef, user.id, versionId);
   if (!detail) return { ok: false, reason: "not-found" };
 
-  const repo = await getProjectRepo(projectRef, user.id);
-  if (!repo) notFound();
-  const projectId = await getOwnedProjectId(projectRef, user.id);
-  if (!projectId) return { ok: false, reason: "not-found" };
+  const project = await getOwnedProject(projectRef, user.id);
+  if (!project) notFound();
+  const repo = projectRepoOf(project);
+  const projectId = project.id;
 
   const result = await generateTestForFile({
     repo,

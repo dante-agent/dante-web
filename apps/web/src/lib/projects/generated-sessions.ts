@@ -2,7 +2,11 @@ import { cache } from "react";
 import { prisma } from "@dante/db";
 import { isUuid } from "@/lib/chat/cursor";
 import { getOwnedProjectId } from "@/lib/projects/queries";
-import { sessionLabel } from "@/lib/projects/session-label";
+import {
+  sessionLabel,
+  VERSION_NOTE_PREFIX_LENGTH,
+  VERSION_NOTE_PREFIXES,
+} from "@/lib/projects/session-label";
 
 // 저장된 테스트 버전을 "세션"으로 조회한다 (서버 전용).
 //
@@ -53,14 +57,59 @@ function statusFromRun(runStatus: string | undefined): SessionStatus {
   return "not_run";
 }
 
-/** DB JSON(대화 메시지 배열)에서 제목 계산에 필요한 역할·글자만 추린다. 모양이 다르면 건너뛴다. */
-function chatMessages(value: unknown): { role: "user" | "assistant"; text: string }[] {
-  if (!Array.isArray(value)) return [];
-  return value.flatMap((item) => {
-    const { role, text } = (item ?? {}) as Record<string, unknown>;
-    if ((role !== "user" && role !== "assistant") || typeof text !== "string") return [];
-    return [{ role, text }];
-  });
+/**
+ * 세션 제목(sessionLabel)을 계산하는 데 필요한 메시지만 DB 에서 골라 온다.
+ *
+ * 대화 JSON 은 세션마다 최대 100개 × 5000자다. 사이드바는 제목 한 줄만 쓰므로 통째로 읽지 않고
+ * Postgres 에서 "마지막 버전 알림"과 "그 바로 앞 사용자 메시지"만 뽑는다. 제목을 만드는 규칙
+ * (공백 정리·80자 자르기·실패 재생성 제목)은 그대로 sessionLabel 에 맡긴다 — 두 메시지만 넘겨도
+ * 전체를 넘긴 것과 결과가 같다(sessionLabel 이 보는 게 이 둘뿐이다).
+ *
+ * DB JSON 은 믿지 않는다: 객체이고 role 이 user/assistant, text 가 문자열인 메시지만 본다.
+ * 대화가 배열이 아니면 빈 대화로 친다.
+ */
+async function sessionLabels(versionIds: string[]): Promise<Map<string, string | null>> {
+  if (versionIds.length === 0) return new Map();
+  const rows = await prisma.$queryRaw<
+    { versionId: string; noteText: string; requestText: string | null }[]
+  >`
+    WITH msgs AS (
+      SELECT t.test_file_version_id AS version_id, e.ord, e.item->>'role' AS role, e.item->>'text' AS text
+      FROM test_chat_threads t
+      CROSS JOIN LATERAL jsonb_array_elements(
+        CASE WHEN jsonb_typeof(t.messages) = 'array' THEN t.messages ELSE '[]'::jsonb END
+      ) WITH ORDINALITY AS e(item, ord)
+      WHERE t.test_file_version_id = ANY(${versionIds}::uuid[])
+        AND jsonb_typeof(e.item) = 'object'
+        AND e.item->>'role' IN ('user', 'assistant')
+        AND jsonb_typeof(e.item->'text') = 'string'
+    ),
+    notes AS (
+      SELECT DISTINCT ON (version_id) version_id, ord, left(text, ${VERSION_NOTE_PREFIX_LENGTH}::int) AS text
+      FROM msgs
+      WHERE role = 'assistant'
+        AND EXISTS (
+          SELECT 1 FROM unnest(${[...VERSION_NOTE_PREFIXES]}::text[]) AS p(prefix)
+          WHERE starts_with(msgs.text, p.prefix)
+        )
+      ORDER BY version_id, ord DESC
+    )
+    SELECT n.version_id::text AS "versionId", n.text AS "noteText", (
+      SELECT m.text FROM msgs m
+      WHERE m.version_id = n.version_id AND m.role = 'user' AND m.ord < n.ord
+      ORDER BY m.ord DESC
+      LIMIT 1
+    ) AS "requestText"
+    FROM notes n
+  `;
+  return new Map(
+    rows.map((row) => {
+      const messages: Parameters<typeof sessionLabel>[0] = [];
+      if (row.requestText !== null) messages.push({ role: "user", text: row.requestText });
+      messages.push({ role: "assistant", text: row.noteText });
+      return [row.versionId, sessionLabel(messages)];
+    })
+  );
 }
 
 /** 이 프로젝트의 저장된 버전을 최신순으로. 사이드바·세션 탭이 쓴다. */
@@ -86,15 +135,14 @@ export async function getGeneratedSessions(
       batchId: true,
       testFile: { select: { component: { select: { name: true } } } },
       runs: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true } },
-      chatThread: { select: { messages: true } },
     },
   });
+  // 위에서 소유 프로젝트의 버전만 골랐으니 그 id 로만 대화를 읽는다.
+  const labels = await sessionLabels(versions.map((version) => version.id));
 
   return versions.map((version) => ({
     id: version.id,
-    title:
-      sessionLabel(chatMessages(version.chatThread?.messages)) ??
-      `${version.testFile.component.name} test`,
+    title: labels.get(version.id) ?? `${version.testFile.component.name} test`,
     meta: `${version.testFile.component.name} · v${version.version}`,
     status: statusFromRun(version.runs[0]?.status),
     updatedAt: version.createdAt.toISOString(),

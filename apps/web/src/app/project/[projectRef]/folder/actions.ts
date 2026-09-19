@@ -4,7 +4,7 @@ import { refresh } from "next/cache";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/user";
 import { saveGeneratedVersion, saveTestCode } from "@/lib/projects/generated-versions";
-import { getOwnedProjectId, getProjectRepo } from "@/lib/projects/queries";
+import { getOwnedProject, projectRepoOf } from "@/lib/projects/queries";
 import { componentName } from "@/lib/projects/recommendations";
 import { generateTestForFile } from "@/lib/projects/test-generation";
 
@@ -25,11 +25,10 @@ export async function generateFolderTest(
   filePath: string
 ): Promise<GenerateFolderTestResult> {
   const user = await requireUser();
-  const [repo, projectId] = await Promise.all([
-    getProjectRepo(projectRef, user.id),
-    getOwnedProjectId(projectRef, user.id),
-  ]);
-  if (!repo || !projectId) notFound();
+  const project = await getOwnedProject(projectRef, user.id);
+  if (!project) notFound();
+  const repo = projectRepoOf(project);
+  const projectId = project.id;
 
   const result = await generateTestForFile({ repo, userId: user.id, projectId, filePath });
   if (!result.ok) return result;
@@ -54,11 +53,10 @@ async function save(
   source: "ai" | "user"
 ): Promise<SaveResult> {
   const user = await requireUser();
-  const [repo, projectId] = await Promise.all([
-    getProjectRepo(projectRef, user.id),
-    getOwnedProjectId(projectRef, user.id),
-  ]);
-  if (!repo || !projectId) notFound();
+  const project = await getOwnedProject(projectRef, user.id);
+  if (!project) notFound();
+  const repo = projectRepoOf(project);
+  const projectId = project.id;
 
   const result = await saveTestCode({ repo, projectId, filePath, code, source });
   if (!result.ok) return result;

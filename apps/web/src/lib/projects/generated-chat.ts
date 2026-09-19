@@ -43,6 +43,15 @@ export async function getGeneratedChat(
   versionId: string
 ): Promise<StoredChatMessage[]> {
   if (!(await ownedVersion(projectRef, userId, versionId))) return [];
+  return getVerifiedGeneratedChat(versionId);
+}
+
+/**
+ * 소유 확인을 이미 마친 세션의 대화. 세션 상세 페이지가 getGeneratedSessionDetail 로 같은 버전의
+ * 소유를 확인한 뒤 부른다 — 같은 확인(프로젝트 → 버전)을 한 번 더 돌지 않게.
+ * versionId 는 부르는 쪽이 소유 확인을 마친 값이어야 한다.
+ */
+export async function getVerifiedGeneratedChat(versionId: string): Promise<StoredChatMessage[]> {
   const thread = await prisma.testChatThread.findUnique({
     where: { testFileVersionId: versionId },
     select: { messages: true },
