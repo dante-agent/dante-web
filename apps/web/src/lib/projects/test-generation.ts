@@ -14,6 +14,7 @@ import { maxCostUsd } from "@/lib/ai/pricing";
 import { settleAiUsage, usageFromError } from "@/lib/ai/usage";
 import { getFileText } from "@/lib/github/blob";
 import type { ProjectRepo } from "@/lib/projects/queries";
+import { loadImportedFiles } from "@/lib/chat/imported-files";
 import { buildTestPrompt, testPathFor } from "@/lib/projects/test-generation-prompt";
 
 /**
@@ -61,6 +62,10 @@ export async function generateTestForFile(args: {
     ]);
     if (source === null) return { ok: false, reason: "not-found" };
 
+    // 소스가 import 한 레포 파일들. 열어 둔 파일만으로는 헬퍼 시그니처·props 타입을 알 수 없어
+    // 모델이 지어내던 걸 막는다. PR 경로(generateTestCode 직접 호출)는 지나지 않는다.
+    const imported = await loadImportedFiles(args.repo, args.filePath, source);
+
     const generated = await generateTestCode({
       userId: args.userId,
       projectId: args.projectId,
@@ -72,6 +77,8 @@ export async function generateTestForFile(args: {
       previousCode: args.previousCode,
       failureLogs: args.failureLogs,
       instruction: args.instruction,
+      imports: imported.files,
+      skippedImports: imported.skipped,
     });
     if (!generated) return { ok: false, reason: "budget" };
 
@@ -113,6 +120,9 @@ export async function generateTestCode(args: {
   failureLogs?: string;
   /** 넘기면 previousCode 를 이 후속 요청대로 고친다(채팅 후속 수정) */
   instruction?: string;
+  /** 소스가 import 한 레포 파일들. 넘기면 실제 시그니처를 보고 쓴다 */
+  imports?: ReadonlyMap<string, string> | null;
+  skippedImports?: readonly string[] | null;
 }): Promise<{ testPath: string; code: string } | null> {
   const testPath = args.testPath ?? testPathFor(args.filePath);
   const prompt = buildTestPrompt({
@@ -125,6 +135,8 @@ export async function generateTestCode(args: {
     previousCode: args.previousCode,
     failureLogs: args.failureLogs,
     instruction: args.instruction,
+    imports: args.imports,
+    skippedImports: args.skippedImports,
   });
   // 키가 없어 던지면 예약이 남으므로 예약 전에 불러 둔다.
   const model = chatModel();
