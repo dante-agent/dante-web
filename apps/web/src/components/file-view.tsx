@@ -28,10 +28,11 @@ import { SendingFiles } from "@/components/generation/sending-files";
 import { onTestApplyRequest } from "@/components/generation/test-apply-request";
 import { onTestTypingRequest } from "@/components/generation/test-typing-request";
 import {
+  prefersReducedMotion,
+  typeDuration,
   useGenerationPerformance,
   type GenerationOutcome,
 } from "@/components/generation/use-generation-performance";
-import { useTypewriter } from "@/components/generation/use-typewriter";
 import {
   onTestRunRequest,
   RunPanel,
@@ -86,21 +87,101 @@ function guessTestName(path: string): string {
   return dot === -1 ? `${base}.test` : `${base.slice(0, dot)}.test${base.slice(dot)}`;
 }
 
+type CodeEditor = Parameters<OnMount>[0];
+
+/** 타이핑 연출 하나. 객체가 곧 연출의 정체다 — 시작 시각을 이 객체에 묶어, 칸이 다시 마운트돼도 이어서 쓴다. */
+type Typing = { text: string };
+const typingStarts = new WeakMap<Typing, number>();
+
 function CodePane({
   lang,
   value,
   follow = false,
+  typing = null,
+  onTyped,
 }: {
   lang: string;
   value: string;
   /** 내용이 늘어날 때마다 마지막 줄로 스크롤한다 — 생성 연출에서 코드가 써지는 걸 따라간다. */
   follow?: boolean;
+  /** 있으면 value 대신 이 코드를 빈 칸에서부터 한 글자씩 써 보인다. 다 쓰면 onTyped. */
+  typing?: Typing | null;
+  onTyped?: () => void;
 }) {
-  const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
+  // 에디터 내용은 value prop 으로 넘기지 않고 여기서 직접 맞춘다. 라이브러리는 value 가 바뀔 때마다
+  // 모델 전체를 setValue 로 갈아 끼우는데, 코드가 한 글자씩 늘어나는 연출에선 끝에 덧붙이기만 하면 된다.
+  const [editor, setEditor] = useState<CodeEditor | null>(null);
+  /** 모델에 지금 들어 있는 텍스트(우리가 넣은 그대로). */
+  const shownRef = useRef<string | null>(null);
+  const onTypedRef = useRef(onTyped);
   useEffect(() => {
-    const lines = editorRef.current?.getModel()?.getLineCount();
-    if (follow && lines) editorRef.current?.revealLine(lines);
-  }, [follow, value]);
+    onTypedRef.current = onTyped;
+  });
+
+  const onMount = useCallback((mounted: CodeEditor) => {
+    shownRef.current = mounted.getValue();
+    setEditor(mounted);
+  }, []);
+
+  const write = useCallback(
+    (text: string, reveal: boolean) => {
+      const model = editor?.getModel();
+      if (!editor || !model) return;
+      const shown = shownRef.current;
+      if (text !== shown) {
+        // \r 로 끝났으면 다음 \n 과 떨어져 줄바꿈이 두 번 들어간다. 그때만 통째로 넣는다.
+        if (shown !== null && text.startsWith(shown) && !shown.endsWith("\r")) {
+          const end = model.getFullModelRange();
+          model.applyEdits([
+            {
+              range: {
+                startLineNumber: end.endLineNumber,
+                startColumn: end.endColumn,
+                endLineNumber: end.endLineNumber,
+                endColumn: end.endColumn,
+              },
+              text: text.slice(shown.length),
+            },
+          ]);
+        } else {
+          editor.setValue(text);
+        }
+        shownRef.current = text;
+      }
+      if (reveal) editor.revealLine(model.getLineCount());
+    },
+    [editor]
+  );
+
+  useEffect(() => {
+    if (typing === null) write(value, follow);
+  }, [typing, value, follow, write]);
+
+  // 타이핑은 React 상태 없이 프레임마다 모델에 덧붙인다 — 이 칸도, 위의 FileView 도 다시 그리지 않는다.
+  useEffect(() => {
+    if (!editor || typing === null) return;
+    const { text } = typing;
+    const duration = typeDuration(text.length, prefersReducedMotion());
+    const begin = typingStarts.get(typing) ?? performance.now();
+    typingStarts.set(typing, begin);
+    const progressAt = (now: number) =>
+      duration === 0 ? 1 : Math.min(1, Math.max(0, (now - begin) / duration));
+    // 칸이 없던 사이에 이미 다 썼으면 연출 없이 끝낸다.
+    if (progressAt(performance.now()) >= 1 && shownRef.current !== text) {
+      onTypedRef.current?.();
+      return;
+    }
+    let frame = 0;
+    const tick = (now: number) => {
+      const progress = progressAt(now);
+      write(text.slice(0, Math.round(text.length * progress)), true);
+      if (progress < 1) frame = requestAnimationFrame(tick);
+      else onTypedRef.current?.();
+    };
+    write(text.slice(0, Math.round(text.length * progressAt(performance.now()))), true);
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [editor, typing, write]);
 
   return (
     <Editor
@@ -108,11 +189,9 @@ function CodePane({
       theme={THEME}
       beforeMount={setupMonaco}
       loading={<Fallback />}
-      value={value}
+      defaultValue={typing === null ? value : ""}
       options={OPTIONS}
-      onMount={(editor) => {
-        editorRef.current = editor;
-      }}
+      onMount={onMount}
     />
   );
 }
@@ -375,7 +454,8 @@ export function FileView({
   // AI 채팅이 테스트를 고치면 새로 읽어 온 코드를 Test Code 칸에 타이핑 연출로 보여준다.
   // 요청(이벤트)을 받으면 대기 상태로 두고, 곧이어 테스트 내용이 바뀌면 그 내용을 재생한다.
   // 저장·생성처럼 요청 없이 바뀐 경우엔 재생하지 않는다(생성은 자체 연출이 이미 끝났다).
-  const typer = useTypewriter();
+  const [typing, setTyping] = useState<Typing | null>(null);
+  const stopTyping = useCallback(() => setTyping(null), []);
   const [typingArmed, setTypingArmed] = useState(false);
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -396,7 +476,7 @@ export function FileView({
     setLastTest(content.test);
     if (typingArmed) {
       setTypingArmed(false);
-      if (content.test) typer.play(content.test);
+      if (content.test) setTyping({ text: content.test });
     }
   }
 
@@ -683,11 +763,7 @@ export function FileView({
         </Cell>
         <Cell show={showRight} className="bg-black">
           {content.test ? (
-            <CodePane
-              lang={lang}
-              value={typer.shown ?? content.test}
-              follow={typer.shown !== null}
-            />
+            <CodePane lang={lang} value={content.test} typing={typing} onTyped={stopTyping} />
           ) : (
             <GenerateTest projectRef={projectRef} file={file} />
           )}
