@@ -9,16 +9,7 @@
 // react-query 캐시에서 읽는다. 전송할 때도 과거 메시지는 보내지 않는다 — 서버가 DB 에서
 // 읽는다. 클라이언트가 보낸 대화를 믿으면 "AI 가 하지 않은 말"을 끼워 넣을 수 있다.
 
-import {
-  createContext,
-  Suspense,
-  useContext,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { Suspense, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
@@ -34,6 +25,7 @@ import {
   X,
 } from "lucide-react";
 import { ChatMarkdown } from "@/components/chat-markdown";
+import { CurrentTestContext } from "@/components/current-test-context";
 import { currentAfterCode } from "@/components/generation/test-apply-request";
 import { requestTestTyping } from "@/components/generation/test-typing-request";
 import { announce } from "@/components/live-announcer";
@@ -80,19 +72,6 @@ const suggestedPrompts = (hasTest: boolean, editing: boolean) =>
         ...(editing ? [] : ["Run the tests for this file"]),
       ]
     : ["Write tests for this file"];
-
-/**
- * 본문이 지금 연 파일의 테스트 코드를 알리는 통로(없으면 null). dock 밖(PR 화면)에서는 아무 일도 안 한다.
- * 유무뿐 아니라 내용까지 싣는 이유: 답의 코드가 이미 저장된 내용과 같으면 Apply 를 막아야 하는데,
- * 버튼의 "누름" 표시는 컴포넌트 state 라 새로고침·모드 전환에 초기화된다.
- */
-const CurrentTestContext = createContext<(test: string | null) => void>(() => {});
-
-/** 본문(FileView)이 부른다. 채팅은 본문과 형제라 테스트를 따로 받아오지 않고 이렇게 전해 받는다. */
-export function useReportCurrentTest(test: string | null) {
-  const report = useContext(CurrentTestContext);
-  useEffect(() => report(test), [report, test]);
-}
 
 // ── 서버 계약 (/api/chat, /api/chat/conversations) ─────────────────────────────
 type Role = "user" | "assistant";
@@ -465,6 +444,15 @@ function ChatPanel({
     // 받은 스트림을 따로 모아둔다 — 캐시에 붙일 때 state 가 반영되길 기다리지 않으려고.
     // 끝에 꼬리(토큰 수·저장 여부·채팅이 한 일)가 붙어 오므로 화면에는 그 앞까지만 쓴다(stream-tail.ts).
     let raw = "";
+    // 조각은 초당 수십 개 온다. 조각마다 나누고 렌더하지 않고 프레임마다 한 번만 반영한다
+    // (run-terminal.tsx 와 같은 방식). 끝나거나 끊기면 flush 로 남은 조각까지 바로 반영한다.
+    let frame = 0;
+    const flush = () => {
+      if (frame) cancelAnimationFrame(frame);
+      frame = 0;
+      const shown = splitStream(raw).answer;
+      setTail((prev) => prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: shown } : m)));
+    };
 
     try {
       const response = await fetch("/api/chat", {
@@ -495,11 +483,9 @@ function ChatPanel({
         const { done, value } = await reader.read();
         if (done) break;
         raw += value;
-        const shown = splitStream(raw).answer;
-        setTail((prev) =>
-          prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: shown } : m))
-        );
+        if (!frame) frame = requestAnimationFrame(flush);
       }
+      flush();
       const { answer, tail } = splitStream(raw);
       // 스트리밍 중에는 조각마다 읽히면 시끄러워서 알리지 않고, 다 받은 뒤 한 번에 알린다.
       announce(`AI: ${answer}`);
@@ -546,6 +532,7 @@ function ChatPanel({
       if (controller.signal.aborted) {
         // 서버는 중단된 턴을 저장하지 않는다. 받은 만큼은 보여주되 저장 안 됐다고 표시한다.
         // 새 대화였다면 conversationId 는 애초에 채우지 않았으니 null 그대로다.
+        flush();
         setTail((prev) =>
           prev
             .filter((m) => m.role === "user" || m.content !== "")
@@ -568,6 +555,8 @@ function ChatPanel({
       setTail([]);
       setInput((current) => current || content);
     } finally {
+      // 오류로 빠졌으면 걸어 둔 프레임이 다음 전송의 말풍선을 덮지 않게 걷는다.
+      if (frame) cancelAnimationFrame(frame);
       if (document.activeElement === stopRef.current) refocusInput.current = true;
       setPending(false);
       abortRef.current = null;

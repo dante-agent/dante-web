@@ -6,24 +6,33 @@
 // 색: 러너 출력의 ANSI 코드를 anser 로 "글자 + 색" 조각으로 바꿔 React span 으로 그린다.
 // HTML 문자열로 넣지 않는다 — 로그에는 사용자 코드·레포 내용이 섞인다.
 
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import Anser from "anser";
 import { CheckCircle2, ChevronRight, ChevronUp, Loader2, TimerOff, XCircle } from "lucide-react";
 import type { LiveRunMessage } from "@/app/api/projects/[projectRef]/runs/live/route";
 import { useAnnounce } from "@/components/live-announcer";
 import type { useResizeHandle } from "@/components/use-resize-handle";
+import { appendLog, EMPTY_LOG, logFromText, type StepLog } from "@/lib/projects/log-chunks";
 import { parseStoredRunLog } from "@/lib/projects/stored-run-log";
 import { cn } from "@/lib/utils";
 
 type Step = "setup" | "install" | "toolkit" | "test";
 type ResultMessage = Extract<LiveRunMessage, { type: "result" }>;
 
-/** ms 가 null 이면 걸린 시간을 모른다(저장된 로그에는 단계 시간이 없다). */
+/** ms 가 null 이면 걸린 시간을 모른다(저장된 로그에는 단계 시간이 없다). log 는 러너 출력을 조각으로 쌓은 것. */
 type StepView = {
   state: "pending" | "running" | "done";
   ok: boolean;
   ms: number | null;
-  text: string;
+  log: StepLog;
 };
 
 export type RunView = {
@@ -42,7 +51,7 @@ const STEP_LABEL: Record<Step, string> = {
   test: "Running tests",
 };
 
-const emptyStep = (): StepView => ({ state: "pending", ok: false, ms: 0, text: "" });
+const emptyStep = (): StepView => ({ state: "pending", ok: false, ms: 0, log: EMPTY_LOG });
 const initialView = (): RunView => ({
   running: true,
   steps: { setup: emptyStep(), install: emptyStep(), toolkit: emptyStep(), test: emptyStep() },
@@ -54,8 +63,7 @@ function applyMessage(view: RunView, message: LiveRunMessage): RunView {
   const current = view.steps[message.step];
   let next: StepView;
   if (message.type === "log") {
-    const text = current.text + message.text;
-    next = { ...current, text: text.length > MAX_STEP_TEXT ? text.slice(-MAX_STEP_TEXT) : text };
+    next = { ...current, log: appendLog(current.log, message.text, MAX_STEP_TEXT) };
   } else if (message.state === "start") {
     next = { ...current, state: "running" };
   } else {
@@ -74,80 +82,135 @@ const errorResult = (errorMessage: string): ResultMessage => ({
   durationMs: 0,
 });
 
+/** 실행 하나. 상태는 React 밖에 두고 필요한 곳만 구독한다(useRunView·useRunRunning). */
+export type LiveRun = {
+  subscribe: (listener: () => void) => () => void;
+  getView: () => RunView | null;
+  start: (versionId: string) => Promise<void>;
+};
+
+function createRunStore() {
+  let view: RunView | null = null;
+  const listeners = new Set<() => void>();
+  let controller: AbortController | null = null;
+  // 지금 실행의 번호. 새로 시작한 뒤 이전 실행의 늦은 프레임 반영은 버린다.
+  let current = 0;
+
+  const set = (next: RunView) => {
+    view = next;
+    listeners.forEach((listener) => listener());
+  };
+  const abort = () => {
+    controller?.abort();
+    controller = null;
+  };
+
+  async function start(projectRef: string, versionId: string) {
+    abort();
+    const own = new AbortController();
+    controller = own;
+    const run = ++current;
+    set(initialView());
+
+    // 로그 조각이 초당 수십 개 올 수 있다. 조각마다 반영하지 않고 프레임마다 모아서 반영한다.
+    let queue: LiveRunMessage[] = [];
+    let frame = 0;
+    const flush = () => {
+      frame = 0;
+      const batch = queue;
+      queue = [];
+      if (run === current) set(batch.reduce(applyMessage, view ?? initialView()));
+    };
+    const push = (message: LiveRunMessage) => {
+      queue.push(message);
+      if (!frame) frame = requestAnimationFrame(flush);
+    };
+
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectRef)}/runs/live`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ versionId }),
+        signal: own.signal,
+      });
+      if (!response.ok || !response.body) {
+        const body = (await response.json().catch(() => null)) as { error?: string } | null;
+        push(errorResult(body?.error ?? `Couldn't start the run (HTTP ${response.status}).`));
+        return;
+      }
+
+      const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+      let buffer = "";
+      let gotResult = false;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += value;
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const message = JSON.parse(line) as LiveRunMessage;
+          if (message.type === "result") gotResult = true;
+          push(message);
+        }
+      }
+      // 결과 없이 끝났으면 연결이 중간에 끊긴 것(서버 함수 종료 등). 멈춘 채로 두지 않는다.
+      if (!gotResult)
+        push(errorResult("The connection to the runner was lost before it finished."));
+    } catch {
+      if (own.signal.aborted) return;
+      push(errorResult("The connection to the runner was lost before it finished."));
+    } finally {
+      if (controller === own) controller = null;
+    }
+  }
+
+  return {
+    subscribe: (listener: () => void) => {
+      listeners.add(listener);
+      return () => void listeners.delete(listener);
+    },
+    getView: () => view,
+    start,
+    abort,
+  };
+}
+
 /**
  * 실행 하나를 시작하고 상태를 들고 있는다. 언마운트(파일 이동·탭 닫기)되면 요청을 끊는다 —
- * 서버가 끊김을 보고 샌드박스를 내린다.
+ * 서버가 끊김을 보고 샌드박스를 내린다. 상태를 읽지 않으므로 로그가 붙어도 이 훅을 부른 컴포넌트는 다시 그려지지 않는다.
  */
-export function useLiveRun(projectRef: string) {
-  const [view, setView] = useState<RunView | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
-
-  useEffect(() => () => abortRef.current?.abort(), []);
-
-  const start = useCallback(
-    async (versionId: string) => {
-      abortRef.current?.abort();
-      const controller = new AbortController();
-      abortRef.current = controller;
-      setView(initialView());
-
-      // 로그 조각이 초당 수십 개 올 수 있다. 조각마다 렌더하지 않고 프레임마다 모아서 반영한다.
-      let queue: LiveRunMessage[] = [];
-      let frame = 0;
-      const flush = () => {
-        frame = 0;
-        const batch = queue;
-        queue = [];
-        setView((prev) => batch.reduce(applyMessage, prev ?? initialView()));
-      };
-      const push = (message: LiveRunMessage) => {
-        queue.push(message);
-        if (!frame) frame = requestAnimationFrame(flush);
-      };
-
-      try {
-        const response = await fetch(`/api/projects/${encodeURIComponent(projectRef)}/runs/live`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ versionId }),
-          signal: controller.signal,
-        });
-        if (!response.ok || !response.body) {
-          const body = (await response.json().catch(() => null)) as { error?: string } | null;
-          push(errorResult(body?.error ?? `Couldn't start the run (HTTP ${response.status}).`));
-          return;
-        }
-
-        const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
-        let buffer = "";
-        let gotResult = false;
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += value;
-          const lines = buffer.split("\n");
-          buffer = lines.pop() ?? "";
-          for (const line of lines) {
-            if (!line.trim()) continue;
-            const message = JSON.parse(line) as LiveRunMessage;
-            if (message.type === "result") gotResult = true;
-            push(message);
-          }
-        }
-        // 결과 없이 끝났으면 연결이 중간에 끊긴 것(서버 함수 종료 등). 멈춘 채로 두지 않는다.
-        if (!gotResult)
-          push(errorResult("The connection to the runner was lost before it finished."));
-      } catch {
-        if (controller.signal.aborted) return;
-        push(errorResult("The connection to the runner was lost before it finished."));
-      } finally {
-        if (abortRef.current === controller) abortRef.current = null;
-      }
-    },
-    [projectRef]
+export function useLiveRunStore(projectRef: string): LiveRun {
+  const [store] = useState(createRunStore);
+  useEffect(() => () => store.abort(), [store]);
+  return useMemo(
+    () => ({
+      subscribe: store.subscribe,
+      getView: store.getView,
+      start: (versionId: string) => store.start(projectRef, versionId),
+    }),
+    [store, projectRef]
   );
+}
 
-  return { view, start };
+const noView = () => null;
+const notRunning = () => false;
+
+/** 실행 상태 전체. 프레임마다 바뀐다 — 터미널 본문처럼 로그를 그리는 곳에서만 쓴다. */
+export function useRunView(run: LiveRun): RunView | null {
+  return useSyncExternalStore(run.subscribe, run.getView, noView);
+}
+
+/** 실행 중인지만. 실행이 시작·끝날 때만 바뀐다(버튼용). */
+export function useRunRunning(run: LiveRun): boolean {
+  return useSyncExternalStore(run.subscribe, () => run.getView()?.running ?? false, notRunning);
+}
+
+/** 상태와 시작 함수를 함께. 실행 버튼과 터미널이 한 컴포넌트에 있는 곳(추천 화면의 실행 패널)용. */
+export function useLiveRun(projectRef: string) {
+  const run = useLiveRunStore(projectRef);
+  return { view: useRunView(run), start: run.start };
 }
 
 /**
@@ -171,7 +234,7 @@ export function onTestRunRequest(file: string, run: (versionId: string) => void)
   return () => window.removeEventListener(RUN_REQUEST, listener);
 }
 
-/** ANSI 색이 섞인 텍스트를 색 조각 span 으로 그린다. */
+/** ANSI 색이 섞인 텍스트를 색 조각 span 으로 그린다. 텍스트가 같으면 다시 풀지도, 다시 그리지도 않는다. */
 const AnsiText = memo(function AnsiText({ text }: { text: string }) {
   const parts = useMemo(() => Anser.ansiToJson(text, { remove_empty: true }), [text]);
   return (
@@ -195,6 +258,11 @@ const AnsiText = memo(function AnsiText({ text }: { text: string }) {
       ))}
     </>
   );
+});
+
+/** 로그 조각마다 따로 그린다. 닫힌 조각은 그대로라 새 출력이 붙어도 마지막 조각만 다시 푼다. */
+const LogText = memo(function LogText({ log }: { log: StepLog }) {
+  return log.chunks.map((chunk) => <AnsiText key={chunk.id} text={chunk.text} />);
 });
 
 function formatMs(ms: number) {
@@ -334,7 +402,7 @@ function barStatus(view: RunView | null): {
  * 펼치면 onResizeDown/onResizeMove 로 윗선을 끌어 높이를 바꾼다. 높이·접힘 상태는 부모가 들고 있다.
  */
 export function RunPanel({
-  view,
+  run,
   open,
   height,
   onToggle,
@@ -342,7 +410,7 @@ export function RunPanel({
   onResizeDown,
   onResizeMove,
 }: {
-  view: RunView | null;
+  run: LiveRun;
   open: boolean;
   height: number;
   onToggle: () => void;
@@ -351,6 +419,7 @@ export function RunPanel({
   onResizeDown: (e: React.PointerEvent<HTMLDivElement>) => void;
   onResizeMove: (e: React.PointerEvent<HTMLDivElement>) => void;
 }) {
+  const view = useRunView(run);
   const status = barStatus(view);
   // 끄는 동안에는 높이 transition 을 끈다. 켜 두면 윗선이 커서를 늦게 따라온다.
   const [resizing, setResizing] = useState(false);
@@ -442,14 +511,16 @@ function storedRunView(logs: string): RunView {
   const view = initialView();
   view.running = false;
   const sections = parseStoredRunLog(logs);
-  if (sections.length > 0) view.steps.setup = { state: "done", ok: true, ms: null, text: "" };
+  if (sections.length > 0) view.steps.setup = { state: "done", ok: true, ms: null, log: EMPTY_LOG };
+  const texts: Partial<Record<Step, string>> = {};
   for (const section of sections) {
-    const prev = view.steps[section.step];
+    const prev = texts[section.step];
+    texts[section.step] = prev ? `${prev}\n${section.text}` : section.text;
     view.steps[section.step] = {
       state: "done",
       ok: section.exitCode === 0,
       ms: null,
-      text: prev.text ? `${prev.text}\n${section.text}` : section.text,
+      log: logFromText(texts[section.step] ?? ""),
     };
   }
   return view;
@@ -484,11 +555,17 @@ export function TerminalBody({ view }: { view: RunView }) {
   );
 
   // 맨 아래를 보고 있을 때만 새 출력을 따라 내려간다. 위로 올려 읽는 중이면 붙잡지 않는다.
+  // 내리기는 다음 프레임 그리기 직전에 한 번만 한다 — 커밋마다 바로 scrollHeight 를 읽으면 그때마다 레이아웃을 강제한다.
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickRef = useRef(true);
   useLayoutEffect(() => {
-    const el = scrollRef.current;
-    if (el && stickRef.current) el.scrollTop = el.scrollHeight;
+    if (!stickRef.current) return;
+    // 같은 프레임 안에 또 커밋되면 앞 예약을 지우고 다시 건다 — 그래도 프레임당 한 번이다.
+    const frame = requestAnimationFrame(() => {
+      const el = scrollRef.current;
+      if (el && stickRef.current) el.scrollTop = el.scrollHeight;
+    });
+    return () => cancelAnimationFrame(frame);
   }, [view]);
 
   return (
@@ -519,9 +596,9 @@ export function TerminalBody({ view }: { view: RunView }) {
         open={showInstall}
         onToggle={() => setInstallOpen((open) => !open)}
       />
-      {showInstall && view.steps.install.text && (
+      {showInstall && view.steps.install.log.length > 0 && (
         <pre className="text-muted-foreground my-1 pl-5.5 whitespace-pre-wrap">
-          <AnsiText text={view.steps.install.text} />
+          <LogText log={view.steps.install.log} />
         </pre>
       )}
       <StepRow
@@ -530,15 +607,15 @@ export function TerminalBody({ view }: { view: RunView }) {
         open={showToolkit}
         onToggle={() => setToolkitOpen((open) => !open)}
       />
-      {showToolkit && view.steps.toolkit.text && (
+      {showToolkit && view.steps.toolkit.log.length > 0 && (
         <pre className="text-muted-foreground my-1 pl-5.5 whitespace-pre-wrap">
-          <AnsiText text={view.steps.toolkit.text} />
+          <LogText log={view.steps.toolkit.log} />
         </pre>
       )}
       <StepRow step="test" view={view.steps.test} />
-      {view.steps.test.text && (
+      {view.steps.test.log.length > 0 && (
         <pre className="my-1 pl-5.5 whitespace-pre-wrap">
-          <AnsiText text={view.steps.test.text} />
+          <LogText log={view.steps.test.log} />
         </pre>
       )}
       {view.result && <Summary result={view.result} />}
