@@ -20,11 +20,12 @@ import {
   Sparkles,
 } from "lucide-react";
 import { generateFolderTest, saveTestEdit } from "@/app/project/[projectRef]/folder/actions";
-import { useReportHasTest } from "@/components/ai-chat";
+import { useReportCurrentTest } from "@/components/ai-chat";
 import { iconForFile } from "@/components/file-icons";
 import { CodeSkeleton } from "@/components/generation/code-skeleton";
 import { GenerationSteps } from "@/components/generation/generation-steps";
 import { SendingFiles } from "@/components/generation/sending-files";
+import { onTestApplyRequest } from "@/components/generation/test-apply-request";
 import { onTestTypingRequest } from "@/components/generation/test-typing-request";
 import {
   useGenerationPerformance,
@@ -333,7 +334,7 @@ export function FileView({
   useEffect(() => {
     pushRecent(projectRef, file);
   }, [projectRef, file]);
-  useReportHasTest(content.test !== null);
+  useReportCurrentTest(content.test);
 
   const gridRef = useRef<HTMLDivElement>(null);
   const [leftPct, setLeftPct] = useState(50);
@@ -432,6 +433,12 @@ export function FileView({
       setSaveError(false);
     }
   }
+  // 채팅 답의 Apply. 저장하지 않고 After 칸만 채운다 — 잘못 눌렀으면 ⌘Z 로 되돌아간다.
+  useEffect(() => {
+    if (mode !== "edit") return;
+    return onTestApplyRequest(file, setEditing);
+  }, [mode, file]);
+
   const dirty = editing !== original;
   const [saving, startSaving] = useTransition();
 
