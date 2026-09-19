@@ -15,6 +15,8 @@ export interface GeneratedFile {
   versionId: string;
   /** 테스트 파일 경로 — 탭 라벨/식별용. */
   path: string;
+  /** 테스트 대상 소스 파일 경로 — 재생성 연출의 전송 모습에 쓴다. */
+  sourcePath: string;
   /** 생성된 테스트 코드 전체 — Monaco 에디터에 그대로 싣는다. */
   content: string;
   code: SessionDetail["code"];
@@ -36,10 +38,11 @@ export function GeneratedTestsPanel({
   runnerConfigured: boolean;
 }) {
   const [active, setActive] = useState(0);
-  // 채팅으로 고치는 중이면 고치는 파일(첫 탭 = 라우트 버전)에 코드가 써지는 연출을 보여준다.
+  // 채팅·"Regenerate & retry" 로 고치는 중이면 고치는 파일의 탭에 코드가 써지는 연출을 보여준다.
   const regeneration = useRegeneration();
   const regenerating = isRegenerating(regeneration);
-  const shownIndex = regenerating ? 0 : active;
+  const targetIndex = files.findIndex((f) => f.versionId === regeneration.target?.versionId);
+  const shownIndex = regenerating ? Math.max(0, targetIndex) : active;
   const file = files[shownIndex] ?? files[0];
 
   return (
@@ -86,6 +89,7 @@ export function GeneratedTestsPanel({
               key={file.versionId}
               projectRef={projectRef}
               versionId={file.versionId}
+              sourcePath={file.sourcePath}
               initialRun={file.initialRun}
               runnerConfigured={runnerConfigured}
             />

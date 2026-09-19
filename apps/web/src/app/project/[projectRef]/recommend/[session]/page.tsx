@@ -137,6 +137,7 @@ function toFileView(detail: GeneratedSessionDetail): GeneratedFile {
   return {
     versionId: detail.versionId,
     path: detail.testPath,
+    sourcePath: detail.targetFile,
     content: detail.content,
     initialRun,
     code: {

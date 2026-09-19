@@ -38,7 +38,7 @@ export function FollowUp({
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const regeneration = useRegeneration();
-  const { stage, start } = regeneration;
+  const { stage, start, target } = regeneration;
   const pending = isRegenerating(regeneration);
   // 서버가 준 초기값을 그대로 다시 저장하지 않으려고, 첫 렌더의 저장은 건너뛴다.
   const hydrated = useRef(false);
@@ -60,7 +60,7 @@ export function FollowUp({
   const send = (text: string) => {
     const next: ChatMessage[] = [...messages, { id: crypto.randomUUID(), role: "user", text }];
     setMessages(next);
-    start(async () => {
+    start({ versionId: sessionId, sourcePath: targetFile }, async () => {
       try {
         const result = await regenerateFromInstruction(
           projectRef,
@@ -86,7 +86,8 @@ export function FollowUp({
       pendingContent={
         stage && (
           <div className="flex flex-col gap-3">
-            <SendingFiles files={[targetFile]} stage={stage} />
+            {/* "Regenerate & retry" 로 다른 탭을 고칠 수도 있어 대상 파일은 연출 상태에서 읽는다. */}
+            <SendingFiles files={[target?.sourcePath ?? targetFile]} stage={stage} />
             <GenerationSteps stage={stage} finalLabel="Opening the new version" />
           </div>
         )
