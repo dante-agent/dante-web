@@ -51,47 +51,54 @@ export async function loadRunTarget(
   const project = await getOwnedProject(projectRef, userId);
   if (!project) return fail("Project not found.");
   const projectId = project.id;
+  const repo = projectRepoOf(project);
 
-  const version = await prisma.testFileVersion.findFirst({
-    where: { id: versionId, testFile: { component: { projectId } } },
-    select: {
-      id: true,
-      content: true,
-      testFile: {
-        select: {
-          path: true,
-          component: {
-            select: {
-              project: {
-                select: {
-                  testFramework: true,
-                  installCommand: true,
-                  testCommand: true,
-                  testTimeoutMs: true,
+  // 러너는 방금 읽은 프로젝트 행 값으로 고른다(버전 조회가 따라 읽던 것과 같은 행이다).
+  const framework = runnerFramework(project.testFramework);
+
+  // 소유 확인이 끝났으니 버전 조회와 레포 기본값 감지(GitHub)를 함께 시작한다. 감지는 러너가 정해져
+  // 있고 실행 환경이 있을 때만 한다 — 아래에서 어차피 막힐 요청에 GitHub 을 부르지 않는다.
+  // 감지는 던지지 않는다(실패하면 일반 기본값).
+  const sandboxReady = isSandboxConfigured();
+  const willRun = framework !== null && sandboxReady;
+  const [version, defaults] = await Promise.all([
+    prisma.testFileVersion.findFirst({
+      where: { id: versionId, testFile: { component: { projectId } } },
+      select: {
+        id: true,
+        content: true,
+        testFile: {
+          select: {
+            path: true,
+            component: {
+              select: {
+                project: {
+                  select: {
+                    installCommand: true,
+                    testCommand: true,
+                    testTimeoutMs: true,
+                  },
                 },
               },
             },
           },
         },
       },
-    },
-  });
+    }),
+    willRun ? detectRuntimeCommands(projectRef, repo, project.testFramework) : null,
+  ]);
   if (!version) return fail("Session not found.");
 
-  const settingsRow = version.testFile.component.project;
-  const framework = runnerFramework(settingsRow.testFramework);
   if (!framework) {
     return fail("This project has no test framework set. Choose one in Settings → Runtime.");
   }
-  if (!isSandboxConfigured()) {
+  // defaults 는 러너나 실행 환경이 없을 때만 비어 있다. 러너는 바로 위에서 걸렀다.
+  if (!sandboxReady || !defaults) {
     return fail("The test runner is not configured in this environment.");
   }
 
-  const repo = projectRepoOf(project);
-
   // Runtime 탭 값이 우선이고, 비어 있으면 레포에서 감지한 기본값으로 채운다(화면과 같은 규칙).
-  const defaults = await detectRuntimeCommands(projectRef, repo, settingsRow.testFramework);
-  const settings = resolveRuntimeSettings(settingsRow, defaults);
+  const settings = resolveRuntimeSettings(version.testFile.component.project, defaults);
 
   return {
     ok: true,

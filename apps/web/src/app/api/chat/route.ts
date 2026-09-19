@@ -19,7 +19,7 @@ import {
   MAX_MESSAGES,
   saveExchange,
 } from "@/lib/chat/conversations";
-import { loadImportedFiles } from "@/lib/chat/imported-files";
+import { loadImportContext, loadImportedFiles } from "@/lib/chat/imported-files";
 import { runLogBlock } from "@/lib/chat/run-log";
 import { encodeTail } from "@/lib/chat/stream-tail";
 import { getFileText } from "@/lib/github/blob";
@@ -29,7 +29,7 @@ import {
   getLatestGeneratedTest,
   saveTestCode,
 } from "@/lib/projects/generated-versions";
-import { getOwnedChatProject, getProjectRepo } from "@/lib/projects/queries";
+import { getOwnedProject, projectRepoOf } from "@/lib/projects/queries";
 import { createClient } from "@/lib/supabase/server";
 
 // 폴더 보기 화면의 AI 채팅.
@@ -53,6 +53,9 @@ const MAX_CONTEXT = 20_000;
  */
 const SENSITIVE_FILE =
   /(^|\/)(\.env(\.[^/]*)?|\.npmrc|\.pypirc|\.netrc|\.git-credentials|id_(rsa|dsa|ecdsa|ed25519)(\.pub)?|credentials(\.json)?|secrets?\.(json|ya?ml|toml))$|\.(pem|key|p12|pfx|jks|keystore)$/i;
+
+/** import 를 가질 수 있는 파일. 이 파일만 import 해석용 트리를 본문과 함께 미리 받는다. */
+const IMPORTING_FILE = /\.(tsx?|jsx?|mjs|cjs)$/i;
 
 /**
  * 범위 밖 질문에 쓰는 고정 문구. 모델이 매번 다르게 거절하면 우회 시도의 단서가 된다.
@@ -148,6 +151,15 @@ const MAX_OUTPUT_TOKENS = 16_000;
  */
 const MAX_STEPS = 3;
 
+/**
+ * 함수 수명 상한(초). 모델 응답이 가장 길 때를 기준으로 잡는다: 도구를 쓰면 모델을 MAX_STEPS(3)번
+ * 부르고 매번 MAX_OUTPUT_TOKENS(16,000)까지 낼 수 있어 최악 48,000 토큰이다. 초당 60~100 토큰이면
+ * 8~13분이다. 응답을 보낸 뒤에도 after 가 스트림을 끝까지 읽고 정산하므로 그 시간도 이 안에 든다.
+ * 선언이 없으면 플랫폼 기본값(Vercel 300초)이라 한 번의 긴 답으로도 끊길 수 있다 — 끊기면 onFinish 가
+ * 오지 않아 예약이 정산되지 않고 대화도 저장되지 않는다. 다른 긴 라우트와 같은 800(플랜 상한)으로 둔다.
+ */
+export const maxDuration = 800;
+
 /** 저장 결과를 기다리는 상한. onFinish 가 끝내 오지 않아도 스트림이 영영 안 닫히는 일은 없게. */
 const SAVE_WAIT_MS = 15_000;
 
@@ -219,26 +231,54 @@ export async function POST(request: Request) {
   // 두면 되고, 두 상황이 상태코드로 구분되는 게 클라이언트 입장에서도 낫다.
   //
   // 여기는 락 없는 사전 검사다. 동시 요청을 실제로 막는 건 모델 호출 직전의 reserveAiBudget.
-  const budget = await getMonthlyBudgetStatus(user.id);
-  if (budget.exceeded) return budgetExceeded(budget.limitUsd);
-
+  //
+  // 프로젝트 조회(권한 확인)와 함께 시작한다. 둘 다 DB 읽기고 서로 기다릴 이유가 없다 — 판정 순서
+  // (한도 먼저, 그다음 프로젝트)는 결과를 보는 순서로 지킨다.
   // 대화는 프로젝트에 붙어 저장되므로 프로젝트 없이는 받지 않는다. 권한 확인을 겸한다
   // (projectRef 는 클라이언트가 보낸 값이다). 없음과 권한 없음을 구분하지 않는다.
-  const project = await getOwnedChatProject(projectRef, user.id);
+  // 행은 한 번만 읽는다 — 러너·id 와 GitHub 호출용 필드가 같은 행에 있다.
+  const [budget, project] = await Promise.all([
+    getMonthlyBudgetStatus(user.id),
+    getOwnedProject(projectRef, user.id),
+  ]);
+  if (budget.exceeded) return budgetExceeded(budget.limitUsd);
   if (!project) return fail(404, "Project not found.");
   // 대화는 파일마다 따로 저장한다. 파일 없이 만든 대화는 어느 목록에도 안 나오므로 받지 않는다.
   if (!file) return fail(400, "Open a file on the left to chat about it.");
   // DB 값이라도 목록에 있는 러너만 프롬프트에 넣는다(표시 이름으로).
   const runner = TEST_FRAMEWORKS.find((f) => f.id === project.testFramework)?.name ?? null;
 
-  // 이어 쓰는 대화면 이전 메시지를 DB 에서 읽는다. 다른 프로젝트의 대화 id 를 섞어 보내면
-  // 그 대화의 내용이 이 프로젝트의 파일과 섞이므로 없음으로 본다.
   const askedAt = new Date();
   const isNew = conversationId === null;
   const id = conversationId ?? crypto.randomUUID();
+
+  // 열어둔 파일을 컨텍스트로 붙인다. 비밀일 수 있는 파일이면 레포도 읽지 않는다 — 도구도 붙이지 않는다.
+  const sensitive = SENSITIVE_FILE.test(file);
+  const repo = sensitive ? null : projectRepoOf(project);
+
+  // 여기부터의 조회는 서로 기다리지 않는다. 프로젝트 권한 확인이 끝난 뒤라 GitHub 호출은 이 사용자가
+  // 볼 수 있는 레포에만 간다. 대화 확인(아래 404·409)보다 먼저 시작하지만, 그 결과는 대화 확인을
+  // 통과한 뒤에만 쓴다.
+  // - 파일 본문: 실패해도 던지지 않는다(null).
+  // - import 해석에 필요한 트리·tsconfig: 본문과 상관없이 받을 수 있어 본문과 함께 시작한다.
+  //   import 가 있을 수 없는 파일(JS/TS 가 아닌 것)은 받지 않는다.
+  const textPromise = repo ? getFileText(repo, file) : Promise.resolve(null);
+  const importContext =
+    repo && IMPORTING_FILE.test(file) ? loadImportContext(repo, file) : undefined;
+  // 본문을 못 읽거나 import 가 없으면 이 값을 기다리지 않고 끝난다. 그때 난 에러가 처리 안 된 거부로
+  // 남지 않게 한다 — 쓰는 쪽(loadImportedFiles)은 원래 promise 를 기다리므로 에러를 그대로 받는다.
+  importContext?.catch(() => {});
+
+  // 이어 쓰는 대화면 이전 메시지를 DB 에서 읽는다. 다른 프로젝트의 대화 id 를 섞어 보내면
+  // 그 대화의 내용이 이 프로젝트의 파일과 섞이므로 없음으로 본다.
+  // 테스트는 폴더 보기가 보여주는 것과 같은 값(저장된 최신 버전)을 붙인다. 레포 테스트도
+  // 파일을 열 때 버전으로 들어오므로 여기서 GitHub 을 한 번 더 읽지 않는다.
+  const [conversation, test] = await Promise.all([
+    isNew ? null : getConversation(user.id, id),
+    sensitive ? null : getLatestGeneratedTest(project.id, file),
+  ]);
   let history: ModelMessage[] = [];
   if (!isNew) {
-    const conversation = await getConversation(user.id, id);
     // 다른 파일의 대화에 이어 쓰지 않는다 — 대화 목록·Apply 대상이 파일 단위라 섞이면 어긋난다.
     if (!conversation || conversation.projectId !== project.id || conversation.filePath !== file) {
       return fail(
@@ -257,36 +297,31 @@ export async function POST(request: Request) {
     history = conversation.messages.map(({ role, content }) => ({ role, content }));
   }
 
-  // 열어둔 파일을 컨텍스트로 붙인다. 비밀일 수 있는 파일이면 레포도 읽지 않는다 — 도구도 붙이지 않는다.
-  const sensitive = SENSITIVE_FILE.test(file);
-  const repo = sensitive ? null : await getProjectRepo(projectRef, user.id);
   let context = "";
-  if (file) {
-    if (sensitive) {
-      // 본문은 읽지도 않는다. 모델에는 "볼 수 없는 파일"이라는 사실만 준다.
-      context = `\n\nThe file the user is viewing may contain secrets, so its contents are hidden: ${JSON.stringify(file)}. Tell the user you can't answer about this file's contents.`;
-    } else {
-      // 테스트는 폴더 보기가 보여주는 것과 같은 값(저장된 최신 버전)을 붙인다. 레포 테스트도
-      // 파일을 열 때 버전으로 들어오므로 여기서 GitHub 을 한 번 더 읽지 않는다.
-      const [text, test] = await Promise.all([
-        repo ? getFileText(repo, file) : null,
-        getLatestGeneratedTest(project.id, file),
+  if (sensitive) {
+    // 본문은 읽지도 않는다. 모델에는 "볼 수 없는 파일"이라는 사실만 준다.
+    context = `\n\nThe file the user is viewing may contain secrets, so its contents are hidden: ${JSON.stringify(file)}. Tell the user you can't answer about this file's contents.`;
+  } else {
+    const text = await textPromise;
+    if (text) {
+      // 이 파일이 import 한 레포 파일들(시그니처를 지어내지 않게 미리 붙인다)과, 이 버전의 마지막 실행
+      // (수정 후 아직 안 돌렸으면 없다 — 옛 버전 로그는 지금 코드와 안 맞는다)을 함께 읽는다.
+      // 외부 패키지는 레포에 그런 파일이 없어서 저절로 빠진다(imported-files.ts).
+      const [imported, run] = await Promise.all([
+        repo ? loadImportedFiles(repo, file, text, importContext) : null,
+        // 저장 전 편집을 보여주는 중이면 로그는 그 코드의 것이 아니라 읽지 않는다.
+        test && !(editedTest && editedTest !== test.code) ? getLastFinishedRun(test.id) : null,
       ]);
-      if (text) {
-        context = `\n\nThe file the user is viewing:\n${fileBlock(file, text)}`;
-        // 이 파일이 import 한 레포 파일들. 시그니처를 지어내지 않게 미리 붙인다.
-        // 외부 패키지는 레포에 그런 파일이 없어서 저절로 빠진다(imported-files.ts).
-        const imported = repo ? await loadImportedFiles(repo, file, text) : null;
-        if (imported?.files.size) {
-          const blocks = [...imported.files].map(([path, body]) => fileBlock(path, body));
-          context += `\n\nFiles it imports, from the same repository:\n${blocks.join("\n")}`;
-        }
-        if (imported?.skipped.length) {
-          // 못 본 파일을 알려야 모델이 "모른다"고 말한다. 안 알리면 모르는 줄도 모르고 지어낸다.
-          context += `\n\nIt also imports these, but they were too large to include: ${imported.skipped.join(", ")}. Say you couldn't check them instead of guessing what they contain.`;
-        }
+      context = `\n\nThe file the user is viewing:\n${fileBlock(file, text)}`;
+      if (imported?.files.size) {
+        const blocks = [...imported.files].map(([path, body]) => fileBlock(path, body));
+        context += `\n\nFiles it imports, from the same repository:\n${blocks.join("\n")}`;
       }
-      if (text && test) {
+      if (imported?.skipped.length) {
+        // 못 본 파일을 알려야 모델이 "모른다"고 말한다. 안 알리면 모르는 줄도 모르고 지어낸다.
+        context += `\n\nIt also imports these, but they were too large to include: ${imported.skipped.join(", ")}. Say you couldn't check them instead of guessing what they contain.`;
+      }
+      if (test) {
         // 수정 중이면 화면에 보이는 것(After 칸)이 기준이다. 저장된 버전을 보여주면 AI 가
         // 사용자가 이미 고쳐 둔 걸 못 보고 원본에서 다시 고쳐 그 편집을 되돌린다.
         const shown = editedTest ?? test.code;
@@ -296,12 +331,8 @@ export async function POST(request: Request) {
             ? "from the repository"
             : `Dante draft v${test.version}`;
         context += `\n\nIts current test file (${origin}):\n${fileBlock(test.testPath, shown)}`;
-        // 이 버전의 마지막 실행. 수정 후 아직 안 돌렸으면 없다 — 옛 버전 로그는 지금 코드와 안 맞는다.
-        // 저장 전 편집을 보여주는 중이면 로그는 그 코드의 것이 아니라 붙이지 않는다.
-        const run =
-          editedTest && editedTest !== test.code ? null : await getLastFinishedRun(test.id);
         if (run) context += `\n\n${runLogBlock(run)}`;
-      } else if (text) {
+      } else {
         context += "\n\nThis file has no test yet.";
       }
     }
@@ -376,6 +407,10 @@ export async function POST(request: Request) {
   // 모델 호출과 떼어서 알아야 한다.
   let clientGone = false;
 
+  // 사용량 정산. onFinish 가 시작만 하고 기다리지 않는다 — 스트림 꼬리에 싣는 값(저장 여부·토큰 수)과
+  // 상관없어서 꼬리가 정산을 기다릴 이유가 없다. 함수가 정산을 마칠 때까지는 아래 after 가 붙든다.
+  let settling: Promise<void> = Promise.resolve();
+
   // 이번 턴이 대화에 저장됐는지. 스트림 꼬리가 이 결과를 싣는다(아래 pull).
   let resolveSaved: (ok: boolean) => void = () => {};
   const saved = new Promise<boolean>((resolve) => (resolveSaved = resolve));
@@ -422,25 +457,34 @@ export async function POST(request: Request) {
     // 생성이 끝나면 (클라이언트가 끊었어도) 온다. 사용량은 항상, 대화는 끝까지 받았을 때만 남긴다.
     // projectId 는 위 권한 확인을 통과한 프로젝트다 — 클라이언트가 보낸 projectRef 를
     // 그대로 믿으면 남의 프로젝트에 사용량을 붙일 수 있다.
+    //
+    // 정산과 저장은 서로의 결과가 필요 없어 함께 돈다. 한쪽이 실패해도 다른 쪽은 그대로 간다 —
+    // 정산은 던지지 않고 실패를 스스로 로그로 남기고(usage.ts), 저장 실패는 아래 catch 가 남긴다.
+    // 저장을 먼저 건다: DB 연결이 하나(connection_limit=1)라 먼저 건 쿼리가 먼저 돈다. 꼬리가
+    // 기다리는 건 저장뿐이라 정산 뒤에 줄 서지 않게 한다.
     onFinish: async ({ usage, steps, finalStep }) => {
-      await settleAiUsage(reservation, usage);
       contextTokens = contextTokensOf(finalStep.usage);
       // 화면에 흘려보낸 것과 같은 모양으로 저장한다 — 호출마다의 답을 빈 줄로 잇고 도구 기록을 붙인다.
       const text = [...steps.map((step) => step.text), actionNote()].filter(Boolean).join("\n\n");
       // 빈 답이나 중단된 요청은 저장하지 않는다(중단 시 질문도 남기지 않는다).
-      if (!text || clientGone) return resolveSaved(false);
+      const saving =
+        text && !clientGone
+          ? saveExchange({
+              conversationId: id,
+              isNew,
+              userId: user.id,
+              projectId: project.id,
+              question: message,
+              answer: text,
+              filePath: file,
+              askedAt,
+              contextTokens: contextTokensOf(usage),
+            })
+          : null;
+      settling = settleAiUsage(reservation, usage);
+      if (!saving) return resolveSaved(false);
       try {
-        await saveExchange({
-          conversationId: id,
-          isNew,
-          userId: user.id,
-          projectId: project.id,
-          question: message,
-          answer: text,
-          filePath: file,
-          askedAt,
-          contextTokens: contextTokensOf(usage),
-        });
+        await saving;
         resolveSaved(true);
       } catch (error) {
         // 답은 이미 화면에 나갔다. 스트림은 깨지 않고, 꼬리의 저장 표시로 화면에 알린다.
@@ -453,7 +497,11 @@ export async function POST(request: Request) {
   // 응답이 끊겨도 서버가 모델 스트림을 끝까지 읽는다. 이게 없으면 클라이언트가 cancel 한 순간
   // 생성이 멈추고 onFinish 도 onAbort 도 오지 않는다(로컬에서 확인). after 로 감싸서 서버리스
   // 함수가 응답을 보낸 뒤에도 이 읽기가 끝날 때까지 살아 있게 한다(maxDuration 안에서).
-  after(Promise.resolve(result.consumeStream()));
+  // 읽기가 끝났으면 onFinish 가 이미 돌았다(스트림은 onFinish 가 끝나야 닫힌다) — 이어서 정산을 기다린다.
+  after(async () => {
+    await result.consumeStream();
+    await settling;
+  });
 
   // 글자만 흘려보낸다. 모델을 여러 번 부르면(도구) 호출마다의 답 사이에 빈 줄을 넣는다 — onFinish 의 저장과 같은 규칙.
   const reader = result.stream.getReader();
@@ -472,6 +520,7 @@ export async function POST(request: Request) {
         return controller.enqueue(gap + value.text);
       }
       // 저장이 끝나야 화면이 대화에 붙일지 안다. 상한을 넘기면 저장 안 됨으로 본다.
+      // 정산은 기다리지 않는다(settling) — 꼬리에 싣는 값이 아니다.
       // 토큰 수를 못 받았으면(에러) 숫자 자리를 비운다 — 이미 보낸 답을 에러로 깨지 않게.
       const ok = await Promise.race([
         saved,

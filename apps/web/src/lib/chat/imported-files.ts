@@ -45,21 +45,19 @@ export type ImportedFiles = {
   skipped: string[];
 };
 
-/**
- * 열어 둔 소스가 import 한 레포 파일들을 읽는다. 외부 패키지(react 등)는 레포에 그런 파일이
- * 없으니 저절로 빠진다 — 별도 목록을 두지 않는다.
- *
- * 예산을 넘는 파일은 건너뛰고 다음 파일을 계속 본다. 거기서 멈추면 큰 파일 하나 때문에
- * 뒤의 작은 파일들까지 날아간다.
- */
-export async function loadImportedFiles(
-  repo: ProjectRepo,
-  file: string,
-  source: string
-): Promise<ImportedFiles> {
-  const specs = parseImports(source);
-  if (specs.length === 0) return { files: new Map(), skipped: [] };
+/** import 경로를 레포 파일로 풀 때 쓰는 값. 소스 본문 없이 받을 수 있다. */
+export type ImportContext = {
+  /** 레포의 소스 파일 경로. */
+  paths: Set<string>;
+  /** 이 파일에 영향을 주는 tsconfig 경로 → 본문. */
+  tsconfigs: Map<string, string>;
+};
 
+/**
+ * 레포 트리와 이 파일의 tsconfig 를 읽는다. 소스 본문과 상관없어서, 부르는 쪽이 본문 읽기와 함께
+ * 시작해 loadImportedFiles 에 넘길 수 있다(채팅 라우트). 트리를 못 받으면 던진다.
+ */
+export async function loadImportContext(repo: ProjectRepo, file: string): Promise<ImportContext> {
   const [entries, meta] = await Promise.all([getRepoTree(repo), getRepoTreeMeta(repo)]);
   const paths = new Set(entries.map((e) => e.path));
 
@@ -70,6 +68,28 @@ export async function loadImportedFiles(
       if (text !== null) tsconfigs.set(path, text);
     })
   );
+  return { paths, tsconfigs };
+}
+
+/**
+ * 열어 둔 소스가 import 한 레포 파일들을 읽는다. 외부 패키지(react 등)는 레포에 그런 파일이
+ * 없으니 저절로 빠진다 — 별도 목록을 두지 않는다.
+ *
+ * 예산을 넘는 파일은 건너뛰고 다음 파일을 계속 본다. 거기서 멈추면 큰 파일 하나 때문에
+ * 뒤의 작은 파일들까지 날아간다.
+ *
+ * context 는 미리 시작해 둔 loadImportContext 결과다. 없으면 import 가 있을 때만 여기서 읽는다.
+ */
+export async function loadImportedFiles(
+  repo: ProjectRepo,
+  file: string,
+  source: string,
+  context?: Promise<ImportContext>
+): Promise<ImportedFiles> {
+  const specs = parseImports(source);
+  if (specs.length === 0) return { files: new Map(), skipped: [] };
+
+  const { paths, tsconfigs } = await (context ?? loadImportContext(repo, file));
 
   const resolve = createResolver(paths, tsconfigs);
   const wanted: string[] = [];

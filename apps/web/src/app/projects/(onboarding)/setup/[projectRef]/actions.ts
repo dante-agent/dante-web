@@ -10,8 +10,7 @@ import { isTestFramework } from "@/lib/projects/frameworks";
  * 온보딩 3단계 — 테스트 러너를 고른다.
  *
  * 고른 값은 Project.testFramework 에 저장한다. 나중에 테스트 코드를 만들 때
- * 이 값으로 파일 이름 규칙(*.test.ts vs __tests__/), import 구문, 설정 파일을
- * 결정하므로 세션이 아니라 DB 에 남아야 한다.
+ * 이 값으로 import 구문과 기본 테스트 명령을 결정하므로 세션이 아니라 DB 에 남아야 한다.
  */
 export async function selectFramework(formData: FormData) {
   const user = await requireUser();
