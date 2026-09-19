@@ -3,7 +3,6 @@ import { ArrowLeft, GitBranch, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireProjectContext } from "@/lib/projects/queries";
-import { ResizableSplit } from "../[session]/_components/resizable-split";
 import { ChatSession } from "./_components/chat-session";
 
 export const metadata: Metadata = { title: "New session" };
@@ -28,10 +27,13 @@ export default async function NewRecommendSessionPage({
 
   const { project } = await requireProjectContext(projectRef);
 
+  // 좌우 칸은 ChatSession 이 그린다 — 생성을 확정하면 좌측 채팅과 우측 코드 칸이 같은 연출 상태를 본다.
   return (
-    <ResizableSplit
-      left={
-        <section className="border-border bg-background flex min-w-0 flex-1 flex-col border-r">
+    <ChatSession
+      projectRef={projectRef}
+      initialPrompt={trimmed}
+      header={
+        <>
           <div className="border-border flex h-12 shrink-0 items-center gap-2 border-b px-4">
             <Link
               href={`/project/${projectRef}/recommend`}
@@ -48,14 +50,7 @@ export default async function NewRecommendSessionPage({
             <span className="truncate text-sm font-semibold">New test session</span>
             <Sparkles className="text-brand-cobalt ml-auto size-4" />
           </div>
-
-          <ChatSession projectRef={projectRef} initialPrompt={trimmed} />
-        </section>
-      }
-      right={
-        <div className="text-muted-foreground flex flex-1 items-center justify-center p-8 text-center text-sm">
-          Generated test code will appear here once you confirm.
-        </div>
+        </>
       }
     />
   );
