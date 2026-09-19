@@ -26,10 +26,16 @@ export function CreateTeamForm({ maxLength }: { maxLength: number }) {
           maxLength={maxLength}
           placeholder="Acme frontend"
           autoComplete="off"
-          disabled={pending}
+          readOnly={pending}
           className="rounded-[4px]"
         />
-        <Button type="submit" size="sm" disabled={pending} className="shrink-0 rounded-[4px]">
+        <Button
+          type="submit"
+          size="sm"
+          disabled={pending}
+          focusableWhenDisabled
+          className="shrink-0 rounded-[4px]"
+        >
           {pending ? "Creating…" : "Create team"}
         </Button>
       </div>

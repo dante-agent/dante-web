@@ -11,6 +11,7 @@ import {
   type TeamFormState,
 } from "@/app/team/[teamId]/settings/actions";
 import { Button } from "@/components/ui/button";
+import { useInlineConfirm } from "@/components/use-inline-confirm";
 import { Input } from "@/components/ui/input";
 
 // 팀 설정의 폼들. 규칙은 서버(lib/teams/manage.ts)가 정하고, 여기서는 누를 수 없는
@@ -48,11 +49,18 @@ export function RenameTeamForm({
           name="name"
           defaultValue={name}
           maxLength={maxLength}
-          disabled={!canEdit || pending}
+          disabled={!canEdit}
+          readOnly={pending}
           className="rounded-[4px]"
         />
         {canEdit && (
-          <Button type="submit" size="sm" disabled={pending} className="shrink-0 rounded-[4px]">
+          <Button
+            type="submit"
+            size="sm"
+            disabled={pending}
+            focusableWhenDisabled
+            className="shrink-0 rounded-[4px]"
+          >
             {pending ? "Saving…" : "Save"}
           </Button>
         )}
@@ -104,7 +112,7 @@ export function MemberControls({
     isSelf ? leaveTeam : removeMember,
     null
   );
-  const [confirming, setConfirming] = useState(false);
+  const { confirming, start, cancel, triggerRef, confirmRef } = useInlineConfirm();
 
   const pending = rolePending || removePending;
   const failure = [removeState, roleState].find((state): state is NonNullable<TeamFormState> =>
@@ -130,6 +138,7 @@ export function MemberControls({
               variant="ghost"
               size="sm"
               disabled={pending}
+              focusableWhenDisabled
               className="rounded-[4px]"
             >
               {nextRole === "owner" ? "Make owner" : "Make member"}
@@ -148,16 +157,19 @@ export function MemberControls({
                   variant="ghost"
                   size="sm"
                   disabled={pending}
-                  onClick={() => setConfirming(false)}
+                  focusableWhenDisabled
+                  onClick={cancel}
                   className="rounded-[4px]"
                 >
                   Cancel
                 </Button>
                 <Button
+                  ref={confirmRef}
                   type="submit"
                   variant="destructive"
                   size="sm"
                   disabled={pending}
+                  focusableWhenDisabled
                   className="rounded-[4px]"
                 >
                   {isSelf ? "Leave team" : "Remove"}
@@ -165,10 +177,11 @@ export function MemberControls({
               </>
             ) : (
               <Button
+                ref={triggerRef}
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => setConfirming(true)}
+                onClick={start}
                 className="text-destructive rounded-[4px]"
               >
                 {isSelf ? "Leave" : "Remove"}
@@ -241,6 +254,7 @@ function DeleteTeamDialogForm({ teamId, teamName }: { teamId: string; teamName: 
             variant="destructive"
             size="sm"
             disabled={!matches || pending}
+            focusableWhenDisabled
             className="rounded-[4px]"
           >
             {pending ? "Deleting…" : "Delete this team"}

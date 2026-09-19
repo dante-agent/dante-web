@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@dante/db";
 import { selectFramework } from "@/app/projects/(onboarding)/setup/[projectRef]/actions";
 import { StepHeader } from "@/components/projects/step-header";
-import { Button } from "@/components/ui/button";
+import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { requireUser } from "@/lib/auth/user";
 import { accessibleProjectWhere } from "@/lib/teams/access";
 import { TEST_FRAMEWORKS } from "@/lib/projects/frameworks";
@@ -83,9 +83,9 @@ export default async function FrameworkPage({
           ))}
         </fieldset>
 
-        <Button type="submit" size="lg" className="mt-6 w-full rounded-[4px]">
+        <PendingSubmitButton pendingLabel="Saving…" size="lg" className="mt-6 w-full rounded-[4px]">
           Continue
-        </Button>
+        </PendingSubmitButton>
       </form>
     </>
   );

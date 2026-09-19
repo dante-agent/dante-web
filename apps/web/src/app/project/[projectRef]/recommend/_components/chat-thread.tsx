@@ -77,6 +77,7 @@ export function ChatThread({
                         size="sm"
                         variant={action.variant ?? "default"}
                         disabled={disabled}
+                        focusableWhenDisabled
                         onClick={() => onAction?.(m.id, action.key)}
                       >
                         {action.label}
@@ -111,16 +112,20 @@ export function ChatThread({
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.nativeEvent.isComposing) send();
             }}
-            disabled={disabled}
+            // 보낸 직후 막혀도 포커스가 입력창에 남도록 disabled 대신 readOnly·aria-disabled.
+            readOnly={disabled}
+            aria-disabled={disabled}
             placeholder={placeholder}
             aria-label="Follow-up request"
-            className="text-foreground placeholder:text-muted-foreground flex-1 bg-transparent text-sm outline-none disabled:opacity-50"
+            className="text-foreground placeholder:text-muted-foreground flex-1 bg-transparent text-sm outline-none aria-disabled:opacity-50"
           />
           <button
             type="button"
             onClick={send}
-            disabled={!draft.trim() || pending || disabled}
-            className="bg-primary text-primary-foreground disabled:bg-muted disabled:text-muted-foreground grid size-7 place-items-center rounded-md transition-colors"
+            // 누르면 입력이 비워져 바로 막힌다. disabled 면 누른 버튼이 포커스를 잃으므로
+            // aria-disabled 로 표시만 하고, 막는 건 send() 가 한다.
+            aria-disabled={!draft.trim() || pending || disabled}
+            className="bg-primary text-primary-foreground aria-disabled:bg-muted aria-disabled:text-muted-foreground grid size-7 place-items-center rounded-md transition-colors"
             aria-label="Send"
           >
             <ArrowRight className="size-4" />

@@ -68,6 +68,8 @@ export function SidebarRail({ items }: { items: RailItem[] }) {
           <button
             key={href}
             type="button"
+            // 서브 사이드바를 접으면 포커스가 여기로 온다(sub-sidebar.tsx collapseFrom).
+            data-sub-sidebar-toggle
             onClick={toggleSubSidebar}
             aria-label={collapsed ? `Expand ${label} sidebar` : `Collapse ${label} sidebar`}
             aria-expanded={!collapsed}

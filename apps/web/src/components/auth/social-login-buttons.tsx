@@ -48,6 +48,7 @@ export function SocialLoginButtons({ next }: { next: string }) {
         className="h-10 w-full gap-2.5"
         onClick={() => signIn("github")}
         disabled={pending !== null}
+        focusableWhenDisabled
       >
         <GitHubIcon className="size-4" />
         Continue with GitHub

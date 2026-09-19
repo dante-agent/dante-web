@@ -40,6 +40,7 @@ import { requestTestRun } from "@/components/run-terminal";
 import { Button } from "@/components/ui/button";
 import { useElementSize, useResizeHandle } from "@/components/use-resize-handle";
 import { splitStream } from "@/lib/chat/stream-tail";
+import { neighborFocusTarget } from "@/lib/focus-neighbor";
 import { cn } from "@/lib/utils";
 
 /** 본문과 같은 높이(헤더 47px 만 빼면 화면 끝까지). file-view / folder-empty-state 와 같은 값. */
@@ -169,6 +170,14 @@ const MAX_RATIO = 0.6;
 
 export function AiChatDock({ projectRef, children }: { projectRef: string; children: ReactNode }) {
   const [open, setOpen] = useState(false);
+  // 여닫을 때 누른 버튼이 사라진다(열기 버튼은 열리면 없어지고, 닫기 버튼은 inert 안으로 들어간다).
+  // 열면 입력창으로, 닫으면 다시 나타난 열기 버튼으로 포커스를 옮긴다.
+  const openButtonRef = useRef<HTMLButtonElement>(null);
+  const toggled = useRef(false);
+  const toggle = (next: boolean) => {
+    toggled.current = true;
+    setOpen(next);
+  };
   const [currentTest, setCurrentTest] = useState<string | null>(null);
 
   // null = 아직 끌지 않음 → 기본 폭(22rem / xl 26rem) 클래스를 쓴다. 끈 뒤에는 px.
@@ -207,6 +216,20 @@ export function AiChatDock({ projectRef, children }: { projectRef: string; child
     onChange: setWidth,
     grow: "backward",
   });
+
+  useEffect(() => {
+    if (!toggled.current) return;
+    toggled.current = false;
+    if (!open) {
+      openButtonRef.current?.focus();
+      return;
+    }
+    const aside = asideRef.current;
+    (
+      aside?.querySelector<HTMLElement>("textarea:not(:disabled)") ??
+      aside?.querySelector<HTMLElement>("button:not(:disabled)")
+    )?.focus();
+  }, [open]);
 
   return (
     <div ref={dockRef} className="flex">
@@ -256,14 +279,15 @@ export function AiChatDock({ projectRef, children }: { projectRef: string; child
             open={open}
             width={width}
             currentTest={currentTest}
-            onClose={() => setOpen(false)}
+            onClose={() => toggle(false)}
           />
         </Suspense>
       </aside>
 
       {!open && (
         <Button
-          onClick={() => setOpen(true)}
+          ref={openButtonRef}
+          onClick={() => toggle(true)}
           title="Open AI chat"
           className="animate-in fade-in zoom-in-95 fixed right-8 bottom-14 z-30 h-11 gap-2 rounded-full px-4 shadow-lg duration-200"
         >
@@ -365,6 +389,16 @@ function ChatPanel({
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
   }, [input, width, showHistory]);
+
+  // 보내는 동안 Send 자리에 Stop 이 뜨고, 끝나면 다시 Send 로 바뀐다. 바뀌는 순간 누르고 있던
+  // 버튼이 사라지므로 포커스는 입력창으로 돌린다.
+  const stopRef = useRef<HTMLButtonElement>(null);
+  const refocusInput = useRef(false);
+  useEffect(() => {
+    if (pending || !refocusInput.current) return;
+    refocusInput.current = false;
+    inputRef.current?.focus();
+  }, [pending]);
 
   const listRef = useRef<HTMLDivElement>(null);
   // messages 는 렌더마다 새 배열이라 의존성으로 쓰면 입력할 때마다 맨 아래로 튄다.
@@ -530,6 +564,7 @@ function ChatPanel({
       setTail([]);
       setInput((current) => current || content);
     } finally {
+      if (document.activeElement === stopRef.current) refocusInput.current = true;
       setPending(false);
       abortRef.current = null;
     }
@@ -623,6 +658,7 @@ function ChatPanel({
                       variant="outline"
                       size="sm"
                       disabled={pending || full}
+                      focusableWhenDisabled
                       onClick={() => void send(prompt)}
                       className="animate-in fade-in slide-in-from-bottom-1 justify-start rounded-full duration-200"
                     >
@@ -715,6 +751,8 @@ function ChatPanel({
         <form
           onSubmit={(e) => {
             e.preventDefault();
+            // Send 버튼을 눌렀으면 그 버튼이 곧 Stop 으로 바뀐다. 입력창에 포커스를 둔다.
+            inputRef.current?.focus();
             void send(input);
           }}
           className="bg-background shrink-0 px-3 pb-3"
@@ -750,10 +788,14 @@ function ChatPanel({
             />
             {pending ? (
               <Button
+                ref={stopRef}
                 type="button"
                 size="icon-sm"
                 variant="ghost"
-                onClick={() => abortRef.current?.abort()}
+                onClick={() => {
+                  abortRef.current?.abort();
+                  inputRef.current?.focus();
+                }}
                 title="Stop"
                 aria-label="Stop"
               >
@@ -885,9 +927,15 @@ function HistoryList({
   }
 
   return (
-    <ul className="bg-background flex-1 space-y-0.5 overflow-y-auto p-2">
+    // data-rows·tabIndex: 대화를 지운 뒤 포커스가 옮겨 갈 자리(lib/focus-neighbor.ts).
+    <ul
+      data-rows
+      tabIndex={-1}
+      aria-label="Saved chats"
+      className="bg-background flex-1 space-y-0.5 overflow-y-auto p-2 outline-none"
+    >
       {chats.map((chat) => (
-        <li key={chat.id}>
+        <li key={chat.id} data-row>
           <div
             className={cn(
               // pl-4: 목록 p-2 와 합쳐 24px — 대화 화면 본문(p-3 + 말풍선)과 같은 들여쓰기.
@@ -909,10 +957,15 @@ function HistoryList({
             <Button
               size="icon-sm"
               variant="ghost"
-              onClick={() => onRemove(chat.id)}
+              onClick={(event) => {
+                // 지워진 줄과 함께 버튼이 사라지기 전에 이웃 줄로 포커스를 옮긴다.
+                neighborFocusTarget(event.currentTarget)?.focus();
+                onRemove(chat.id);
+              }}
               title="Delete"
               aria-label={`Delete ${chat.title}`}
-              className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
+              // 키보드로 포커스했을 때도 보이게 한다 — 평소엔 hover 때만 나타난다.
+              className="text-muted-foreground hover:text-destructive opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100"
             >
               <Trash2 />
             </Button>

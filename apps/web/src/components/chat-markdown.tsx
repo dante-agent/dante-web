@@ -103,7 +103,8 @@ function ApplyButton({ code, target }: { code: string; target: ApplyTarget }) {
   const state = clicked === "idle" && target.appliedCode === code ? "applied" : clicked;
 
   const apply = () => {
-    if (firing.current) return;
+    // 버튼은 포커스를 지키려고 disabled 대신 aria-disabled 라, 막는 건 여기서 한다.
+    if (firing.current || state === "applied") return;
     firing.current = true;
     // 수정 모드에선 저장하지 않는다 — After 칸을 채울 뿐이라 실패할 일도, 기다릴 일도 없다.
     // 잘못 눌렀으면 에디터에서 ⌘Z 로 되돌아간다(값 교체가 undo 스택에 쌓인다).
@@ -130,7 +131,7 @@ function ApplyButton({ code, target }: { code: string; target: ApplyTarget }) {
       type="button"
       onClick={apply}
       // 적용 뒤엔 막는다 — 다시 누르면 같은 내용이 새 버전으로 또 쌓인다.
-      disabled={pending || state === "applied"}
+      aria-disabled={pending || state === "applied"}
       title={
         target.where === "after"
           ? `Put this code in the After editor for ${target.filePath}`
@@ -143,7 +144,7 @@ function ApplyButton({ code, target }: { code: string; target: ApplyTarget }) {
           ? "bg-muted text-muted-foreground shadow-none"
           : state === "failed"
             ? "border-destructive text-destructive hover:bg-destructive/10 border"
-            : "bg-primary text-primary-foreground hover:bg-primary-hover disabled:opacity-70"
+            : "bg-primary text-primary-foreground hover:bg-primary-hover aria-disabled:opacity-70"
       )}
     >
       {pending ? (

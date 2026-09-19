@@ -4,7 +4,7 @@ import { prisma } from "@dante/db";
 import { EngineCards } from "@/components/ai/engine-cards";
 import { BackLink } from "@/components/projects/back-link";
 import { StepHeader } from "@/components/projects/step-header";
-import { Button } from "@/components/ui/button";
+import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { requireUser } from "@/lib/auth/user";
 import { accessibleProjectWhere } from "@/lib/teams/access";
 import { ACTIVE_ENGINE } from "@/lib/ai/engine";
@@ -60,9 +60,13 @@ export default async function AiPage({ params }: PageProps<"/projects/setup/[pro
           실어 보낼 값도 없다 — 어느 엔진을 부를지는 서버가 안다. */}
       <form action={finishSetup} className="mt-6">
         <input type="hidden" name="projectRef" value={projectRef} />
-        <Button type="submit" size="lg" className="w-full rounded-[4px]">
+        <PendingSubmitButton
+          pendingLabel="Finishing setup…"
+          size="lg"
+          className="w-full rounded-[4px]"
+        >
           Finish
-        </Button>
+        </PendingSubmitButton>
       </form>
     </>
   );

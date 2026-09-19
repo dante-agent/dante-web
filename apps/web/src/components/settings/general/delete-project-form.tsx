@@ -75,6 +75,7 @@ function DeleteProjectDialogForm({
             variant="destructive"
             size="sm"
             disabled={!matches || pending}
+            focusableWhenDisabled
             className="rounded-[4px]"
           >
             {pending ? "Deleting…" : "Delete this project"}

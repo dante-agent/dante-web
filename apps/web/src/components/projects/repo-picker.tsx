@@ -1,10 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useFormStatus } from "react-dom";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import { ArrowRight, Lock, Search } from "lucide-react";
 import { importRepo } from "@/app/projects/(onboarding)/new/github/actions";
+import { useAnnounce } from "@/components/live-announcer";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -224,11 +226,40 @@ function RepoRow({
         <form action={importRepo} className="absolute inset-0">
           <input type="hidden" name="repoId" value={repo.id} />
           <input type="hidden" name="installationId" value={installationId ?? ""} />
-          <button type="submit" className={overlay} disabled={!installationId}>
-            <span className="sr-only">Import {repo.name}</span>
-          </button>
+          <ImportButton name={repo.name} className={overlay} disabled={!installationId} />
         </form>
       )}
     </li>
+  );
+}
+
+/**
+ * 줄 전체를 덮는 가져오기 버튼. 보내는 동안 막되 disabled 대신 aria-disabled 로 막는다 —
+ * disabled 가 되면 방금 누른 버튼이 포커스를 잃는다. 보내는 중이라는 것은 공용 알림으로 읽는다.
+ */
+function ImportButton({
+  name,
+  className,
+  disabled,
+}: {
+  name: string;
+  className: string;
+  disabled: boolean;
+}) {
+  const { pending } = useFormStatus();
+  useAnnounce(pending ? `Importing ${name}…` : null);
+  return (
+    <button
+      type="submit"
+      className={className}
+      disabled={disabled}
+      aria-disabled={pending}
+      aria-busy={pending || undefined}
+      onClick={(event) => {
+        if (pending) event.preventDefault();
+      }}
+    >
+      <span className="sr-only">Import {name}</span>
+    </button>
   );
 }

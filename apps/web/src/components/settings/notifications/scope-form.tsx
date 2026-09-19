@@ -63,7 +63,13 @@ export function NotificationScopeForm({
       </Section>
 
       <div className="mt-4 flex max-w-2xl items-center gap-3">
-        <Button type="submit" size="sm" disabled={pending} className="rounded-[4px]">
+        <Button
+          type="submit"
+          size="sm"
+          disabled={pending}
+          focusableWhenDisabled
+          className="rounded-[4px]"
+        >
           {pending ? "Saving..." : "Save"}
         </Button>
         {state?.saved && (

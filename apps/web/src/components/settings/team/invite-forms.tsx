@@ -31,10 +31,15 @@ export function InviteForm({ teamId }: { teamId: string }) {
           required
           placeholder="name@company.com"
           autoComplete="off"
-          disabled={pending}
+          readOnly={pending}
           className="rounded-[4px]"
         />
-        <Button type="submit" disabled={pending} className="shrink-0 rounded-[4px]">
+        <Button
+          type="submit"
+          disabled={pending}
+          focusableWhenDisabled
+          className="shrink-0 rounded-[4px]"
+        >
           <SteadyLabel labels={["Send invite", "Sending…"]} active={pending ? 1 : 0} />
         </Button>
       </div>
@@ -104,7 +109,14 @@ export function RevokeInviteButton({ teamId, inviteId }: { teamId: string; invit
     <form action={action} className="relative shrink-0">
       <input type="hidden" name="teamId" value={teamId} />
       <input type="hidden" name="inviteId" value={inviteId} />
-      <Button type="submit" variant="ghost" size="sm" disabled={pending} className="rounded-[4px]">
+      <Button
+        type="submit"
+        variant="ghost"
+        size="sm"
+        disabled={pending}
+        focusableWhenDisabled
+        className="rounded-[4px]"
+      >
         {pending ? "Revoking…" : "Revoke"}
       </Button>
       {state && !state.ok && (

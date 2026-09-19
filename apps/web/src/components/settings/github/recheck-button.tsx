@@ -26,6 +26,7 @@ export function RecheckButton({ projectRef }: { projectRef: string }) {
         variant="ghost"
         size="sm"
         disabled={pending}
+        focusableWhenDisabled
         className="shrink-0 rounded-[4px]"
       >
         <RefreshCw

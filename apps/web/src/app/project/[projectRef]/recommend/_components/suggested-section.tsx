@@ -55,6 +55,7 @@ export function SuggestedSection({
   const [pending, startTransition] = useTransition();
 
   function rerank() {
+    if (pending) return;
     startTransition(async () => {
       try {
         const result: AiRecommendationResult = await rerankRecommendations(projectRef);
@@ -135,8 +136,9 @@ export function SuggestedSection({
           <button
             type="button"
             onClick={rerank}
-            disabled={pending}
-            className="border-border hover:bg-muted flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+            // 정렬 중에도 포커스가 버튼에 남게 aria-disabled. 중복 실행은 rerank() 가 막는다.
+            aria-disabled={pending}
+            className="border-border hover:bg-muted flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium aria-disabled:opacity-50"
           >
             <Sparkles className="size-3.5" />
             {pending ? "Sorting..." : "Sort with AI"}

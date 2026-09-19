@@ -50,6 +50,7 @@ function DeleteAccountDialogForm({ confirmation }: { confirmation: string }) {
             variant="destructive"
             size="sm"
             disabled={!matches || pending}
+            focusableWhenDisabled
             className="rounded-[4px]"
           >
             {pending ? "Deleting…" : "Delete my account"}

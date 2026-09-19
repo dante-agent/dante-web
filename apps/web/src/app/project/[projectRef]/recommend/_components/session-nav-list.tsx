@@ -44,7 +44,10 @@ function groupByBatch(sessions: GeneratedSession[]): GeneratedSession[][] {
 function SessionRow({ projectRef, session }: { projectRef: string; session: GeneratedSession }) {
   const Icon = STATUS_ICON[session.status];
   return (
-    <div className="group hover:bg-sidebar-accent/60 flex items-center gap-1 rounded-md pr-1">
+    <div
+      data-row
+      className="group hover:bg-sidebar-accent/60 flex items-center gap-1 rounded-md pr-1"
+    >
       <Link
         href={`/project/${projectRef}/recommend/${session.id}`}
         title={session.title}
@@ -110,7 +113,12 @@ export function SessionNavList({
       </div>
 
       {/* 스크롤은 되지만 스크롤바는 숨긴다(좁은 사이드바에서 폭을 먹지 않게). */}
-      <div className="flex min-h-0 flex-1 [scrollbar-width:none] flex-col gap-1 overflow-y-auto [&::-webkit-scrollbar]:hidden">
+      {/* data-rows·tabIndex: 세션을 지운 뒤 포커스가 옮겨 갈 자리(lib/focus-neighbor.ts). */}
+      <div
+        data-rows
+        tabIndex={-1}
+        className="flex min-h-0 flex-1 [scrollbar-width:none] flex-col gap-1 overflow-y-auto outline-none [&::-webkit-scrollbar]:hidden"
+      >
         <p className="text-muted-foreground px-2 text-[11px] font-medium tracking-wide uppercase">
           Recent sessions
         </p>

@@ -70,6 +70,7 @@ export function TestRunPanel({
   const message = regenError ?? (!view ? (initialRun?.errorMessage ?? null) : null);
 
   function regenerate() {
+    if (busy) return;
     setRegenError(null);
     startRegen(async () => {
       try {
@@ -108,8 +109,9 @@ export function TestRunPanel({
             <button
               type="button"
               onClick={regenerate}
-              disabled={busy}
-              className="border-border hover:bg-muted/40 flex cursor-pointer items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium text-[#eeedf0] disabled:cursor-not-allowed disabled:opacity-50"
+              // 실행·재생성 중에도 누른 버튼이 포커스를 잃지 않게 aria-disabled. 막는 건 핸들러가 한다.
+              aria-disabled={busy}
+              className="border-border hover:bg-muted/40 flex cursor-pointer items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium text-[#eeedf0] aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
             >
               {regenerating ? (
                 <Loader2 className="size-3.5 animate-spin" />
@@ -124,13 +126,13 @@ export function TestRunPanel({
             onClick={() => {
               if (!busy && runnerConfigured) start(versionId);
             }}
-            disabled={busy || !runnerConfigured}
+            aria-disabled={busy || !runnerConfigured}
             title={
               runnerConfigured
                 ? undefined
                 : "The test runner is not configured in this environment."
             }
-            className="bg-primary text-primary-foreground flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
+            className="bg-primary text-primary-foreground flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
           >
             {running ? (
               <Loader2 className="size-3.5 animate-spin" />
