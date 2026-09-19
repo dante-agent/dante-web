@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import { EngineCards } from "@/components/ai/engine-cards";
+import { AiChatStyleForm } from "@/components/settings/ai/chat-style-form";
 import { AiQualityForm } from "@/components/settings/ai/quality-form";
 import { ComingSoon, SettingsHeader } from "@/components/settings/settings-section";
 import { getMonthlyBudgetStatus, type BudgetStatus } from "@/lib/ai/budget";
 import { ACTIVE_ENGINE } from "@/lib/ai/engine";
+import { getUserAiChatPreferences } from "@/lib/ai/persona-queries";
 import { getUserAiQuality } from "@/lib/ai/quality-queries";
 import {
   formatUsageCalls,
@@ -31,10 +33,11 @@ export const metadata: Metadata = { title: "AI settings" };
 // 확인할 수 있도록" 하겠다고 약속한다.
 export default async function AccountAiPage() {
   const user = await requireUser();
-  const [usage, budget, quality] = await Promise.all([
+  const [usage, budget, quality, chatStyle] = await Promise.all([
     getMonthlyUserAiUsage(user.id),
     getMonthlyBudgetStatus(user.id),
     getUserAiQuality(user.id),
+    getUserAiChatPreferences(user.id),
   ]);
 
   return (
@@ -55,6 +58,17 @@ export default async function AccountAiPage() {
         </p>
         <div className="mt-4">
           <AiQualityForm initial={quality} />
+        </div>
+      </section>
+
+      <section className="mt-10 max-w-2xl">
+        <h2 className="text-[15px] font-medium">Chat style</h2>
+        <p className="text-muted-foreground mt-2 text-[13px] leading-relaxed">
+          How the AI chat talks to you. It changes the tone and detail of answers, not what the chat
+          can do.
+        </p>
+        <div className="mt-4">
+          <AiChatStyleForm initial={chatStyle} />
         </div>
       </section>
 
