@@ -38,6 +38,7 @@ import { requestTestTyping } from "@/components/generation/test-typing-request";
 import { announce } from "@/components/live-announcer";
 import { requestTestRun } from "@/components/run-terminal";
 import { Button } from "@/components/ui/button";
+import { useElementSize, useResizeHandle } from "@/components/use-resize-handle";
 import { splitStream } from "@/lib/chat/stream-tail";
 import { cn } from "@/lib/utils";
 
@@ -192,6 +193,21 @@ export function AiChatDock({ projectRef, children }: { projectRef: string; child
   };
   const onDividerUp = () => setDragging(false);
 
+  // 키보드로도 폭을 바꾼다. 아직 끌지 않았으면(width null) 지금 그려진 폭에서 시작한다.
+  const asideRef = useRef<HTMLElement>(null);
+  const dockSize = useElementSize(dockRef);
+  const asideSize = useElementSize(asideRef);
+  const dividerHandle = useResizeHandle({
+    label: "Resize AI chat",
+    orientation: "vertical",
+    value: width ?? asideSize.width,
+    min: MIN_WIDTH,
+    max: dockSize.width * MAX_RATIO,
+    step: 24,
+    onChange: setWidth,
+    grow: "backward",
+  });
+
   return (
     <div ref={dockRef} className="flex">
       <div className="min-w-0 flex-1">
@@ -202,6 +218,7 @@ export function AiChatDock({ projectRef, children }: { projectRef: string; child
           부드럽게 줄고(늘고), 닫았다 열어도 대화가 남는다. 본문과는 border-l 한 줄로만
           나눈다 — 여백을 두면 에디터가 화면 끝까지 못 간다. */}
       <aside
+        ref={asideRef}
         aria-label="AI chat"
         // 닫혀 있을 때 폭 0 짜리 안쪽 버튼·입력창으로 탭 이동이 들어가지 않게.
         inert={!open}
@@ -216,18 +233,16 @@ export function AiChatDock({ projectRef, children }: { projectRef: string; child
             왼쪽 끝 8px 을 잡는 영역으로 쓴다. 선은 border-l 자리에 겹쳐 보인다. */}
         {open && (
           <div
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Resize AI chat"
+            {...dividerHandle}
             onPointerDown={onDividerDown}
             onPointerMove={onDividerMove}
             onPointerUp={onDividerUp}
             onPointerCancel={onDividerUp}
-            className="group absolute inset-y-0 left-0 z-10 w-2 cursor-col-resize touch-none"
+            className="group absolute inset-y-0 left-0 z-10 w-2 cursor-col-resize touch-none outline-none"
           >
             <span
               className={cn(
-                "group-hover:bg-brand-orange/70 block h-full w-0.5 bg-transparent transition-colors",
+                "group-hover:bg-brand-orange/70 group-focus-visible:bg-brand-orange block h-full w-0.5 bg-transparent transition-colors",
                 dragging && "bg-brand-orange/70"
               )}
             />

@@ -11,6 +11,7 @@ import Anser from "anser";
 import { CheckCircle2, ChevronRight, ChevronUp, Loader2, TimerOff, XCircle } from "lucide-react";
 import type { LiveRunMessage } from "@/app/api/projects/[projectRef]/runs/live/route";
 import { useAnnounce } from "@/components/live-announcer";
+import type { useResizeHandle } from "@/components/use-resize-handle";
 import { parseStoredRunLog } from "@/lib/projects/stored-run-log";
 import { cn } from "@/lib/utils";
 
@@ -337,6 +338,7 @@ export function RunPanel({
   open,
   height,
   onToggle,
+  resizeHandle,
   onResizeDown,
   onResizeMove,
 }: {
@@ -344,6 +346,8 @@ export function RunPanel({
   open: boolean;
   height: number;
   onToggle: () => void;
+  /** 윗선의 키보드 조작·aria-value* (useResizeHandle). */
+  resizeHandle: ReturnType<typeof useResizeHandle>;
   onResizeDown: (e: React.PointerEvent<HTMLDivElement>) => void;
   onResizeMove: (e: React.PointerEvent<HTMLDivElement>) => void;
 }) {
@@ -362,9 +366,7 @@ export function RunPanel({
     >
       {open && (
         <div
-          role="separator"
-          aria-orientation="horizontal"
-          aria-label="Resize terminal"
+          {...resizeHandle}
           onPointerDown={(e) => {
             setResizing(true);
             onResizeDown(e);
@@ -372,9 +374,9 @@ export function RunPanel({
           onPointerMove={onResizeMove}
           onPointerUp={() => setResizing(false)}
           onPointerCancel={() => setResizing(false)}
-          className="group absolute inset-x-0 -top-1 z-10 flex h-2 cursor-row-resize touch-none items-center"
+          className="group absolute inset-x-0 -top-1 z-10 flex h-2 cursor-row-resize touch-none items-center outline-none"
         >
-          <span className="group-hover:bg-brand-orange/70 h-0.5 w-full bg-transparent transition-colors" />
+          <span className="group-hover:bg-brand-orange/70 group-focus-visible:bg-brand-orange h-0.5 w-full bg-transparent transition-colors" />
         </div>
       )}
       <button

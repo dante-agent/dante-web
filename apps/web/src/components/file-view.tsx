@@ -35,6 +35,7 @@ import { useTypewriter } from "@/components/generation/use-typewriter";
 import { copyAndAnnounce } from "@/components/live-announcer";
 import { onTestRunRequest, RunPanel, useLiveRun } from "@/components/run-terminal";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { useElementSize, useResizeHandle } from "@/components/use-resize-handle";
 import { MONACO_THEME as THEME, setupMonaco } from "@/lib/monaco-theme";
 import { pushRecent } from "@/lib/recent-files";
 import { cn } from "@/lib/utils";
@@ -279,23 +280,25 @@ function ExpandButton({ active, onToggle }: { active: boolean; onToggle: () => v
 
 function DragDivider({
   pct,
+  handle,
   onDown,
   onMove,
 }: {
   pct: number;
+  /** 키보드 조작·aria-value* (useResizeHandle). */
+  handle: ReturnType<typeof useResizeHandle>;
   onDown: (e: React.PointerEvent<HTMLDivElement>) => void;
   onMove: (e: React.PointerEvent<HTMLDivElement>) => void;
 }) {
   return (
     <div
-      role="separator"
-      aria-orientation="vertical"
+      {...handle}
       onPointerDown={onDown}
       onPointerMove={onMove}
       style={{ left: `${pct}%` }}
-      className="group absolute inset-y-0 z-10 flex w-2 -translate-x-1/2 cursor-col-resize touch-none justify-center"
+      className="group absolute inset-y-0 z-10 flex w-2 -translate-x-1/2 cursor-col-resize touch-none justify-center outline-none"
     >
-      <span className="group-hover:bg-brand-orange/70 h-full w-0.5 rounded-full bg-transparent transition-colors" />
+      <span className="group-hover:bg-brand-orange/70 group-focus-visible:bg-brand-orange h-full w-0.5 rounded-full bg-transparent transition-colors" />
     </div>
   );
 }
@@ -348,6 +351,15 @@ export function FileView({
     const r = gridRef.current.getBoundingClientRect();
     setLeftPct(Math.min(80, Math.max(20, ((e.clientX - r.left) / r.width) * 100)));
   };
+  const dividerHandle = useResizeHandle({
+    label: "Resize source and test panes",
+    orientation: "vertical",
+    value: leftPct,
+    min: 20,
+    max: 80,
+    step: 5,
+    onChange: setLeftPct,
+  });
 
   // AI 채팅이 테스트를 고치면 새로 읽어 온 코드를 Test Code 칸에 타이핑 연출로 보여준다.
   // 요청(이벤트)을 받으면 대기 상태로 두고, 곧이어 테스트 내용이 바뀌면 그 내용을 재생한다.
@@ -414,6 +426,17 @@ export function FileView({
     const r = shellRef.current.getBoundingClientRect();
     setTerminalHeight(Math.min(r.height * 0.7, Math.max(TERMINAL_MIN, r.bottom - e.clientY)));
   };
+  const shellSize = useElementSize(shellRef);
+  const terminalHandle = useResizeHandle({
+    label: "Resize terminal",
+    orientation: "horizontal",
+    value: terminalHeight,
+    min: TERMINAL_MIN,
+    max: shellSize.height * 0.7,
+    step: 24,
+    onChange: setTerminalHeight,
+    grow: "backward",
+  });
 
   const [expanded, setExpanded] = useState<null | "left" | "right">(null);
   const toggle = (s: "left" | "right") => setExpanded((e) => (e === s ? null : s));
@@ -675,7 +698,14 @@ export function FileView({
           )}
         </Cell>
 
-        {!expanded && <DragDivider pct={leftPct} onDown={onDividerDown} onMove={onDividerMove} />}
+        {!expanded && (
+          <DragDivider
+            pct={leftPct}
+            handle={dividerHandle}
+            onDown={onDividerDown}
+            onMove={onDividerMove}
+          />
+        )}
       </div>
       {terminal && (
         <RunPanel
@@ -683,6 +713,7 @@ export function FileView({
           open={terminalOpen}
           height={terminalHeight}
           onToggle={() => setTerminalOpen((open) => !open)}
+          resizeHandle={terminalHandle}
           onResizeDown={onTerminalResizeDown}
           onResizeMove={onTerminalResizeMove}
         />
