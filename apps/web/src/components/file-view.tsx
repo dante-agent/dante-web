@@ -28,11 +28,18 @@ import { SendingFiles } from "@/components/generation/sending-files";
 import { onTestApplyRequest } from "@/components/generation/test-apply-request";
 import { onTestTypingRequest } from "@/components/generation/test-typing-request";
 import {
+  prefersReducedMotion,
+  typeDuration,
   useGenerationPerformance,
   type GenerationOutcome,
 } from "@/components/generation/use-generation-performance";
-import { useTypewriter } from "@/components/generation/use-typewriter";
-import { onTestRunRequest, RunPanel, useLiveRun } from "@/components/run-terminal";
+import {
+  onTestRunRequest,
+  RunPanel,
+  useLiveRunStore,
+  useRunRunning,
+  type LiveRun,
+} from "@/components/run-terminal";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { MONACO_THEME as THEME, setupMonaco } from "@/lib/monaco-theme";
 import { pushRecent } from "@/lib/recent-files";
@@ -65,6 +72,18 @@ const OPTIONS = {
   automaticLayout: true,
   padding: { top: 12 },
 } as const;
+// 수정 모드 옵션. 렌더마다 새 객체를 넘기면 입력할 때마다 에디터가 updateOptions 를 다시 돈다(참조 비교).
+const EDIT_OPTIONS = { ...OPTIONS, readOnly: false } as const;
+const DIFF_OPTIONS = {
+  ...OPTIONS,
+  readOnly: false,
+  originalEditable: false,
+  renderSideBySide: true,
+  renderSideBySideInlineBreakpoint: 0,
+  useInlineViewWhenSpaceIsLimited: false,
+  enableSplitViewResizing: false,
+  overviewRulerBorder: false,
+} as const;
 
 function langOf(path: string): string {
   const ext = path.split(".").pop();
@@ -80,21 +99,101 @@ function guessTestName(path: string): string {
   return dot === -1 ? `${base}.test` : `${base.slice(0, dot)}.test${base.slice(dot)}`;
 }
 
+type CodeEditor = Parameters<OnMount>[0];
+
+/** 타이핑 연출 하나. 객체가 곧 연출의 정체다 — 시작 시각을 이 객체에 묶어, 칸이 다시 마운트돼도 이어서 쓴다. */
+type Typing = { text: string };
+const typingStarts = new WeakMap<Typing, number>();
+
 function CodePane({
   lang,
   value,
   follow = false,
+  typing = null,
+  onTyped,
 }: {
   lang: string;
   value: string;
   /** 내용이 늘어날 때마다 마지막 줄로 스크롤한다 — 생성 연출에서 코드가 써지는 걸 따라간다. */
   follow?: boolean;
+  /** 있으면 value 대신 이 코드를 빈 칸에서부터 한 글자씩 써 보인다. 다 쓰면 onTyped. */
+  typing?: Typing | null;
+  onTyped?: () => void;
 }) {
-  const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
+  // 에디터 내용은 value prop 으로 넘기지 않고 여기서 직접 맞춘다. 라이브러리는 value 가 바뀔 때마다
+  // 모델 전체를 setValue 로 갈아 끼우는데, 코드가 한 글자씩 늘어나는 연출에선 끝에 덧붙이기만 하면 된다.
+  const [editor, setEditor] = useState<CodeEditor | null>(null);
+  /** 모델에 지금 들어 있는 텍스트(우리가 넣은 그대로). */
+  const shownRef = useRef<string | null>(null);
+  const onTypedRef = useRef(onTyped);
   useEffect(() => {
-    const lines = editorRef.current?.getModel()?.getLineCount();
-    if (follow && lines) editorRef.current?.revealLine(lines);
-  }, [follow, value]);
+    onTypedRef.current = onTyped;
+  });
+
+  const onMount = useCallback((mounted: CodeEditor) => {
+    shownRef.current = mounted.getValue();
+    setEditor(mounted);
+  }, []);
+
+  const write = useCallback(
+    (text: string, reveal: boolean) => {
+      const model = editor?.getModel();
+      if (!editor || !model) return;
+      const shown = shownRef.current;
+      if (text !== shown) {
+        // \r 로 끝났으면 다음 \n 과 떨어져 줄바꿈이 두 번 들어간다. 그때만 통째로 넣는다.
+        if (shown !== null && text.startsWith(shown) && !shown.endsWith("\r")) {
+          const end = model.getFullModelRange();
+          model.applyEdits([
+            {
+              range: {
+                startLineNumber: end.endLineNumber,
+                startColumn: end.endColumn,
+                endLineNumber: end.endLineNumber,
+                endColumn: end.endColumn,
+              },
+              text: text.slice(shown.length),
+            },
+          ]);
+        } else {
+          editor.setValue(text);
+        }
+        shownRef.current = text;
+      }
+      if (reveal) editor.revealLine(model.getLineCount());
+    },
+    [editor]
+  );
+
+  useEffect(() => {
+    if (typing === null) write(value, follow);
+  }, [typing, value, follow, write]);
+
+  // 타이핑은 React 상태 없이 프레임마다 모델에 덧붙인다 — 이 칸도, 위의 FileView 도 다시 그리지 않는다.
+  useEffect(() => {
+    if (!editor || typing === null) return;
+    const { text } = typing;
+    const duration = typeDuration(text.length, prefersReducedMotion());
+    const begin = typingStarts.get(typing) ?? performance.now();
+    typingStarts.set(typing, begin);
+    const progressAt = (now: number) =>
+      duration === 0 ? 1 : Math.min(1, Math.max(0, (now - begin) / duration));
+    // 칸이 없던 사이에 이미 다 썼으면 연출 없이 끝낸다.
+    if (progressAt(performance.now()) >= 1 && shownRef.current !== text) {
+      onTypedRef.current?.();
+      return;
+    }
+    let frame = 0;
+    const tick = (now: number) => {
+      const progress = progressAt(now);
+      write(text.slice(0, Math.round(text.length * progress)), true);
+      if (progress < 1) frame = requestAnimationFrame(tick);
+      else onTypedRef.current?.();
+    };
+    write(text.slice(0, Math.round(text.length * progressAt(performance.now()))), true);
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [editor, typing, write]);
 
   return (
     <Editor
@@ -102,11 +201,9 @@ function CodePane({
       theme={THEME}
       beforeMount={setupMonaco}
       loading={<Fallback />}
-      value={value}
+      defaultValue={typing === null ? value : ""}
       options={OPTIONS}
-      onMount={(editor) => {
-        editorRef.current = editor;
-      }}
+      onMount={onMount}
     />
   );
 }
@@ -225,6 +322,24 @@ function GenerateTest({ projectRef, file }: { projectRef: string; file: string }
         <CodeSkeleton pulsing={stage === "write"} />
       )}
     </div>
+  );
+}
+
+/** Test Code 칸의 실행 버튼. 실행 중인지만 구독해 시작·끝날 때만 다시 그린다. */
+function RunTestsButton({ run, onRun }: { run: LiveRun; onRun: () => void }) {
+  const running = useRunRunning(run);
+  return (
+    <Button
+      size="icon-sm"
+      variant="ghost"
+      onClick={onRun}
+      disabled={running}
+      title={running ? "Running…" : "Run tests"}
+      aria-label="Run tests"
+      className="text-brand-orange"
+    >
+      {running ? <Loader2 className="animate-spin" /> : <Play />}
+    </Button>
   );
 }
 
@@ -351,7 +466,8 @@ export function FileView({
   // AI 채팅이 테스트를 고치면 새로 읽어 온 코드를 Test Code 칸에 타이핑 연출로 보여준다.
   // 요청(이벤트)을 받으면 대기 상태로 두고, 곧이어 테스트 내용이 바뀌면 그 내용을 재생한다.
   // 저장·생성처럼 요청 없이 바뀐 경우엔 재생하지 않는다(생성은 자체 연출이 이미 끝났다).
-  const typer = useTypewriter();
+  const [typing, setTyping] = useState<Typing | null>(null);
+  const stopTyping = useCallback(() => setTyping(null), []);
   const [typingArmed, setTypingArmed] = useState(false);
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -372,12 +488,14 @@ export function FileView({
     setLastTest(content.test);
     if (typingArmed) {
       setTypingArmed(false);
-      if (content.test) typer.play(content.test);
+      if (content.test) setTyping({ text: content.test });
     }
   }
 
   // 실행 상태는 파일마다 따로다(부모가 key={file} 로 새로 띄운다). 파일을 옮기면 실행도 멈춘다.
-  const run = useLiveRun(projectRef);
+  // 실행 상태는 구독하지 않는다 — 로그가 프레임마다 붙어도 FileView(두 에디터 칸)는 다시 그리지 않는다.
+  // 상태를 읽는 건 실행 버튼(RunTestsButton)과 터미널(RunPanel)뿐이다.
+  const run = useLiveRunStore(projectRef);
   // 하단 터미널. 접혀 있어도 바는 보인다. Run 을 누르면 펼친다.
   const shellRef = useRef<HTMLDivElement>(null);
   const [terminalOpen, setTerminalOpen] = useState(false);
@@ -425,6 +543,8 @@ export function FileView({
   const original = content.test ?? "";
   const [editing, setEditing] = useState(content.testDraft ?? original);
   const [saveError, setSaveError] = useState(false);
+  // 입력마다 같은 함수를 넘긴다 — 바뀌면 라이브러리가 모델 변경 구독을 풀고 다시 건다.
+  const onEditorChange = useCallback((value: string | undefined) => setEditing(value ?? ""), []);
   const [editMode, setEditMode] = useState(mode);
   if (editMode !== mode) {
     setEditMode(mode);
@@ -534,8 +654,8 @@ export function FileView({
               beforeMount={setupMonaco}
               loading={<Fallback />}
               value={editing}
-              onChange={(value) => setEditing(value ?? "")}
-              options={{ ...OPTIONS, readOnly: false }}
+              onChange={onEditorChange}
+              options={EDIT_OPTIONS}
             />
           ) : (
             <DiffEditor
@@ -550,16 +670,7 @@ export function FileView({
                 const after = editor.getModifiedEditor();
                 after.onDidChangeModelContent(() => setEditing(after.getValue()));
               }}
-              options={{
-                ...OPTIONS,
-                readOnly: false,
-                originalEditable: false,
-                renderSideBySide: true,
-                renderSideBySideInlineBreakpoint: 0,
-                useInlineViewWhenSpaceIsLimited: false,
-                enableSplitViewResizing: false,
-                overviewRulerBorder: false,
-              }}
+              options={DIFF_OPTIONS}
             />
           )}
         </div>
@@ -594,20 +705,13 @@ export function FileView({
             <div className="ml-auto flex items-center gap-0.5">
               {/* 실행은 저장된 버전(레포에서 가져온 것·AI draft 모두)을 돌린다. 한 번에 하나만. */}
               {versionId && (
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  onClick={() => {
+                <RunTestsButton
+                  run={run}
+                  onRun={() => {
                     setTerminalOpen(true);
                     void run.start(versionId);
                   }}
-                  disabled={run.view?.running}
-                  title={run.view?.running ? "Running…" : "Run tests"}
-                  aria-label="Run tests"
-                  className="text-brand-orange"
-                >
-                  {run.view?.running ? <Loader2 className="animate-spin" /> : <Play />}
-                </Button>
+                />
               )}
               {/* 레포에서 온 테스트든 Dante 에서 만든 테스트든 고칠 수 있다. Before 는 지금 저장된 내용이다. */}
               <Link
@@ -664,11 +768,7 @@ export function FileView({
         </Cell>
         <Cell show={showRight} className="bg-black">
           {content.test ? (
-            <CodePane
-              lang={lang}
-              value={typer.shown ?? content.test}
-              follow={typer.shown !== null}
-            />
+            <CodePane lang={lang} value={content.test} typing={typing} onTyped={stopTyping} />
           ) : (
             <GenerateTest projectRef={projectRef} file={file} />
           )}
@@ -678,7 +778,7 @@ export function FileView({
       </div>
       {terminal && (
         <RunPanel
-          view={run.view}
+          run={run}
           open={terminalOpen}
           height={terminalHeight}
           onToggle={() => setTerminalOpen((open) => !open)}
