@@ -34,7 +34,10 @@ export function SidebarRail({ items }: { items: RailItem[] }) {
   const collapsed = useSubSidebarCollapsed();
 
   return (
-    <aside className="group/rail bg-sidebar border-sidebar-border fixed top-[47px] bottom-0 left-0 z-30 flex w-14 flex-col gap-1 overflow-hidden border-r p-2 transition-[width] duration-200 hover:w-56 has-[:focus-visible]:w-56">
+    <nav
+      aria-label="Main"
+      className="group/rail bg-sidebar border-sidebar-border fixed top-[47px] bottom-0 left-0 z-30 flex w-14 flex-col gap-1 overflow-hidden border-r p-2 transition-[width] duration-200 hover:w-56 has-[:focus-visible]:w-56"
+    >
       {items.map(({ href, label, Icon, togglesSubSidebar, onClick }) => {
         const active = pathname.startsWith(href);
         const toggles = active && togglesSubSidebar;
@@ -93,6 +96,6 @@ export function SidebarRail({ items }: { items: RailItem[] }) {
           </Link>
         );
       })}
-    </aside>
+    </nav>
   );
 }

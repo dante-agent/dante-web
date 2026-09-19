@@ -8,6 +8,7 @@ import danteLogo from "@/assets/dante-logo.png";
 import { AccountSidebar } from "@/components/account/account-sidebar";
 import { FeedbackLink } from "@/components/feedback-link";
 import { SettingsShell } from "@/components/settings/settings-shell";
+import { MAIN_CONTENT_ID } from "@/components/skip-link";
 import { TeamSwitcher } from "@/components/team-switcher";
 import { UserMenu } from "@/components/user-menu";
 import { avatarUrl, displayName } from "@/lib/auth/user";
@@ -64,11 +65,13 @@ export default async function TeamSettingsLayout({
           </Link>
         </div>
 
-        <div className="flex shrink-0 items-center gap-4">
-          <span className="text-muted-foreground/40 text-sm select-none">/</span>
+        <nav aria-label="Breadcrumb" className="flex shrink-0 items-center gap-4">
+          <span aria-hidden="true" className="text-muted-foreground/40 text-sm select-none">
+            /
+          </span>
           {/* 드롭다운의 값은 쿠키가 아니라 URL 의 팀이다. 고르면 그 팀의 설정으로 간다. */}
           <TeamSwitcher teams={teams} value={teamId} landing="settings" />
-        </div>
+        </nav>
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
           <FeedbackLink />
@@ -77,7 +80,7 @@ export default async function TeamSettingsLayout({
       </header>
 
       <AccountSidebar />
-      <main className="ml-14 p-8">
+      <main id={MAIN_CONTENT_ID} className="ml-14 p-8">
         <SettingsShell title="Team" scope={teamName} items={items}>
           {children}
         </SettingsShell>

@@ -18,7 +18,11 @@ import type { ProjectSummary } from "@/lib/projects/queries";
 import type { TeamOption } from "@/lib/teams/current";
 
 function Slash() {
-  return <span className="text-muted-foreground/40 text-sm select-none">/</span>;
+  return (
+    <span aria-hidden="true" className="text-muted-foreground/40 text-sm select-none">
+      /
+    </span>
+  );
 }
 
 export function AppHeader({
@@ -67,7 +71,7 @@ export function AppHeader({
         </Link>
       </div>
 
-      <div className="flex shrink-0 items-center gap-4">
+      <nav aria-label="Breadcrumb" className="flex shrink-0 items-center gap-4">
         {/* 팀은 쿠키가 아니라 이 프로젝트의 팀이다(lib/teams/current.ts). */}
         <Slash />
         <TeamSwitcher teams={teams} value={project.teamId} landing="projects" />
@@ -100,7 +104,7 @@ export function AppHeader({
           icon={<Box className="text-muted-foreground size-3.5 shrink-0" />}
           footer={newRow("New repository", "/projects/new/github")}
         />
-      </div>
+      </nav>
 
       <div className="ml-auto flex shrink-0 items-center gap-2">
         <FeedbackLink />

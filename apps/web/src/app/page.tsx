@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import danteLogo from "@/assets/dante-logo.png";
 import { SocialLoginButtons } from "@/components/auth/social-login-buttons";
+import { MAIN_CONTENT_ID } from "@/components/skip-link";
 import { Button } from "@/components/ui/button";
 import { isDemoEnabled, signInAsDemo } from "@/app/auth/actions";
 import { safeNext } from "@/lib/auth/redirect";
@@ -47,7 +48,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/">) {
         </Link>
 
         {/* flex-1 + 가운데 정렬: 로고/약관 높이와 무관하게 폼이 세로 중앙에 온다 */}
-        <div className="flex flex-1 items-center justify-center py-16">
+        <main id={MAIN_CONTENT_ID} className="flex flex-1 items-center justify-center py-16">
           <div className="w-full max-w-sm">
             <h1 className="font-heading text-3xl font-semibold tracking-tight">Welcome back</h1>
             <p className="text-muted-foreground mt-2 text-sm">Sign in to your account</p>
@@ -72,7 +73,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/">) {
               </form>
             )}
           </div>
-        </div>
+        </main>
 
         <p className="text-muted-foreground text-center text-xs leading-relaxed text-balance">
           By continuing, you agree to Dante&apos;s{" "}
@@ -88,7 +89,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/">) {
       </div>
 
       {/* 오른쪽: 제품 소개. 좁은 화면에서는 통째로 사라진다. */}
-      <div className="border-border relative hidden border-l lg:flex lg:items-center lg:justify-center">
+      <aside className="border-border relative hidden border-l lg:flex lg:items-center lg:justify-center">
         <blockquote className="relative max-w-lg px-10">
           {/* 장식용 따옴표 — 본문 첫 줄에 겹쳐 놓는다.
               absolute 라서 문단 흐름에 영향을 주지 않고, 스크린리더는 aria-hidden 으로 건너뛴다. */}
@@ -106,7 +107,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/">) {
             AI-powered test generation and management
           </footer>
         </blockquote>
-      </div>
+      </aside>
     </div>
   );
 }

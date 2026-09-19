@@ -201,6 +201,7 @@ export function AiChatDock({ projectRef, children }: { projectRef: string; child
           부드럽게 줄고(늘고), 닫았다 열어도 대화가 남는다. 본문과는 border-l 한 줄로만
           나눈다 — 여백을 두면 에디터가 화면 끝까지 못 간다. */}
       <aside
+        aria-label="AI chat"
         // 닫혀 있을 때 폭 0 짜리 안쪽 버튼·입력창으로 탭 이동이 들어가지 않게.
         inert={!open}
         style={open && width !== null ? { width } : undefined}
