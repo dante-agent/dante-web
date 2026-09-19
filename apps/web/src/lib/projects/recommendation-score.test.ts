@@ -71,4 +71,26 @@ describe("scoreFile", () => {
     assert.ok(big.score > small.score);
     assert.equal(scoreFile("src/auth/login.ts", { size: 3_000 }).priority, "high");
   });
+
+  it("코드를 못 읽고 도메인 신호도 없으면 경로 기반임을 사유로 밝힌다", () => {
+    assert.match(scoreFile("src/lib/engine.ts", { size: 3_000 }).reason, /path only/i);
+  });
+
+  it("한글로 이름 지은 도메인도 위험으로 잡는다", () => {
+    const c = code({ lines: 100, branches: 10, fanIn: 3 });
+    const ko = scoreFile("src/결제.ts", { code: c });
+    const plain = scoreFile("src/기타.ts", { code: c });
+    assert.ok(ko.score > plain.score);
+    assert.match(ko.reason, /결제/);
+  });
+
+  it("구조상 깎인 파일만 deprioritized 로 표시한다", () => {
+    assert.equal(scoreFile("src/index.ts", { code: code({ barrel: true }) }).deprioritized, true);
+    assert.equal(scoreFile("src/components/ui/button.tsx", { code: code({}) }).deprioritized, true);
+    assert.equal(
+      scoreFile("src/lib/pricing.ts", { code: code({ branches: 40, fanIn: 12, lines: 300 }) })
+        .deprioritized,
+      false
+    );
+  });
 });

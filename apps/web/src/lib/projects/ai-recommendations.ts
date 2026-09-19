@@ -105,6 +105,12 @@ function buildPrompt(candidates: TestRecommendation[]): string {
 // AI 가 준 경로만 우선순위·사유를 덮어쓰고, 빠뜨린 파일은 점수 값을 유지한다.
 // 같은 우선순위 안에서는 점수 순서를 지킨다.
 // AI 가 지어낸(목록에 없는) 경로는 Map 조회에서 자연히 버려진다.
+//
+// 다만 구조상 깎인 파일(deprioritized: 배럴·타입 전용·스토리·단순 UI)은 테스트할 로직이 거의
+// 없다. AI 는 파일 본문을 못 보고 경로만 보므로 이런 파일을 "high" 로 올릴 수 있는데, 그러면
+// 휴리스틱이 일부러 깎아둔 게 무위로 돌아가 상단으로 튄다. 그래서 이 파일들은 high 로는 못
+// 올리고 medium 까지만 허용한다(내리는 건 자유). 프롬프트로도 "단순 UI 는 low"라 안내하지만
+// 강제는 아니라 여기서 한 번 더 묶는다.
 function mergeRanking(
   candidates: TestRecommendation[],
   items: z.infer<typeof rankingSchema>["items"]
@@ -113,7 +119,9 @@ function mergeRanking(
   return candidates
     .map((c) => {
       const ai = byPath.get(c.filePath);
-      return ai ? { ...c, priority: ai.priority, reason: ai.reason } : c;
+      if (!ai) return c;
+      const priority = c.deprioritized && ai.priority === "high" ? "medium" : ai.priority;
+      return { ...c, priority, reason: ai.reason };
     })
     .sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority] || b.score - a.score);
 }

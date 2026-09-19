@@ -26,6 +26,8 @@ export interface TestRecommendation {
   priority: RecommendationPriority;
   /** 0~1. 높을수록 먼저 테스트할 파일. 정렬 기준. */
   score: number;
+  /** 구조상 테스트할 로직이 거의 없어 점수를 깎은 파일(배럴·타입 전용·스토리·단순 UI). */
+  deprioritized: boolean;
 }
 
 /**
