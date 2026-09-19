@@ -73,6 +73,13 @@ function langOf(path: string): string {
   return "plaintext";
 }
 
+/**
+ * Monaco 모델 경로. 두 가지를 동시에 푼다.
+ * - 확장자가 있어야 TS 가 .tsx 를 TSX 로 읽는다. 없으면 JSX 를 전부 문법 오류로 찍는다.
+ * - 칸마다 달라야 한다. 같은 경로면 Before|After 가 모델을 공유해 한쪽을 고치면 양쪽이 바뀐다.
+ */
+const modelPath = (role: string, path: string) => `file:///${role}/${path}`;
+
 /** 테스트 파일이 아직 없을 때 표시용 이름. `src/lib/format.ts` → `format.test.ts` */
 function guessTestName(path: string): string {
   const base = path.split("/").pop() ?? path;
@@ -82,10 +89,13 @@ function guessTestName(path: string): string {
 
 function CodePane({
   lang,
+  path,
   value,
   follow = false,
 }: {
   lang: string;
+  /** 이 칸만의 모델 경로(modelPath). 확장자로 TSX 여부가 갈린다. */
+  path: string;
   value: string;
   /** 내용이 늘어날 때마다 마지막 줄로 스크롤한다 — 생성 연출에서 코드가 써지는 걸 따라간다. */
   follow?: boolean;
@@ -99,6 +109,7 @@ function CodePane({
   return (
     <Editor
       language={lang}
+      path={path}
       theme={THEME}
       beforeMount={setupMonaco}
       loading={<Fallback />}
@@ -219,7 +230,12 @@ function GenerateTest({ projectRef, file }: { projectRef: string; file: string }
       </div>
       {files ? (
         <div className="min-h-0 flex-1">
-          <CodePane lang={langOf(file)} value={files[0].code.slice(0, typing.chars)} follow />
+          <CodePane
+            lang={langOf(file)}
+            path={modelPath("generating", guessTestName(file))}
+            value={files[0].code.slice(0, typing.chars)}
+            follow
+          />
         </div>
       ) : (
         <CodeSkeleton pulsing={stage === "write"} />
@@ -526,10 +542,11 @@ export function FileView({
 
         <div className={cn("min-h-0 bg-black", !expanded && "col-span-2")}>
           {expanded === "left" ? (
-            <CodePane lang={lang} value={original} />
+            <CodePane lang={lang} path={modelPath("before", testName)} value={original} />
           ) : expanded === "right" ? (
             <Editor
               language={lang}
+              path={modelPath("after", testName)}
               theme={THEME}
               beforeMount={setupMonaco}
               loading={<Fallback />}
@@ -543,6 +560,8 @@ export function FileView({
               theme={THEME}
               beforeMount={setupMonaco}
               loading={<Fallback />}
+              originalModelPath={modelPath("before", testName)}
+              modifiedModelPath={modelPath("after", testName)}
               original={original}
               modified={editing}
               // DiffEditor 에는 onChange 가 없다. 오른쪽(After) 에디터에 직접 붙인다.
@@ -660,12 +679,13 @@ export function FileView({
         </Cell>
 
         <Cell show={showLeft} className={cn("bg-black", showRight && "border-r")}>
-          <CodePane lang={lang} value={content.source} />
+          <CodePane lang={lang} path={modelPath("source", file)} value={content.source} />
         </Cell>
         <Cell show={showRight} className="bg-black">
           {content.test ? (
             <CodePane
               lang={lang}
+              path={modelPath("test", testName)}
               value={typer.shown ?? content.test}
               follow={typer.shown !== null}
             />
