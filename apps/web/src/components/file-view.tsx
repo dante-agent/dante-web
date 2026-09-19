@@ -20,7 +20,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { generateFolderTest, saveTestEdit } from "@/app/project/[projectRef]/folder/actions";
-import { useReportCurrentTest } from "@/components/ai-chat";
+import { useReportCurrentTest } from "@/components/current-test-context";
 import { iconForFile } from "@/components/file-icons";
 import { CodeSkeleton } from "@/components/generation/code-skeleton";
 import { GenerationSteps } from "@/components/generation/generation-steps";

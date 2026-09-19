@@ -9,16 +9,7 @@
 // react-query 캐시에서 읽는다. 전송할 때도 과거 메시지는 보내지 않는다 — 서버가 DB 에서
 // 읽는다. 클라이언트가 보낸 대화를 믿으면 "AI 가 하지 않은 말"을 끼워 넣을 수 있다.
 
-import {
-  createContext,
-  Suspense,
-  useContext,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { Suspense, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
@@ -34,6 +25,7 @@ import {
   X,
 } from "lucide-react";
 import { ChatMarkdown } from "@/components/chat-markdown";
+import { CurrentTestContext } from "@/components/current-test-context";
 import { requestTestTyping } from "@/components/generation/test-typing-request";
 import { requestTestRun } from "@/components/run-terminal";
 import { Button } from "@/components/ui/button";
@@ -76,19 +68,6 @@ const suggestedPrompts = (hasTest: boolean, editing: boolean) =>
         ...(editing ? [] : ["Run the tests for this file"]),
       ]
     : ["Write tests for this file"];
-
-/**
- * 본문이 지금 연 파일의 테스트 코드를 알리는 통로(없으면 null). dock 밖(PR 화면)에서는 아무 일도 안 한다.
- * 유무뿐 아니라 내용까지 싣는 이유: 답의 코드가 이미 저장된 내용과 같으면 Apply 를 막아야 하는데,
- * 버튼의 "누름" 표시는 컴포넌트 state 라 새로고침·모드 전환에 초기화된다.
- */
-const CurrentTestContext = createContext<(test: string | null) => void>(() => {});
-
-/** 본문(FileView)이 부른다. 채팅은 본문과 형제라 테스트를 따로 받아오지 않고 이렇게 전해 받는다. */
-export function useReportCurrentTest(test: string | null) {
-  const report = useContext(CurrentTestContext);
-  useEffect(() => report(test), [report, test]);
-}
 
 // ── 서버 계약 (/api/chat, /api/chat/conversations) ─────────────────────────────
 type Role = "user" | "assistant";
