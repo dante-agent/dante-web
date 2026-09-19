@@ -71,7 +71,10 @@ export function LegalDocument({
                   href={`#${section.id}`}
                   className="hover:text-foreground underline-offset-2 hover:underline"
                 >
-                  <span className="font-mono text-xs">{String(index + 1).padStart(2, "0")}</span>{" "}
+                  {/* 조항 제목에 이미 "제1조" 번호가 있어 스크린리더에는 앞 번호를 읽히지 않는다. */}
+                  <span aria-hidden="true" className="font-mono text-xs">
+                    {String(index + 1).padStart(2, "0")}
+                  </span>{" "}
                   {section.title}
                 </a>
               </li>

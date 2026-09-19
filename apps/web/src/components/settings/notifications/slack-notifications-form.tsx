@@ -155,21 +155,30 @@ export function SlackNotificationsForm({
         title="Message language"
         description="Test names and error messages stay as they are."
       >
-        {NOTIFICATION_LOCALES.map((option) => (
-          <RadioRow
-            key={option.id}
-            name="slackLocale"
-            value={option.id}
-            label={option.label}
-            selected={locale === option.id}
-            onSelect={() => setLocale(option.id)}
-          />
-        ))}
+        {/* 이름을 준다 — 채널마다 "Message language" 섹션이 있어 제목만으로는 구분되지 않는다. */}
+        <div role="radiogroup" aria-label="Slack message language">
+          {NOTIFICATION_LOCALES.map((option) => (
+            <RadioRow
+              key={option.id}
+              name="slackLocale"
+              value={option.id}
+              label={option.label}
+              selected={locale === option.id}
+              onSelect={() => setLocale(option.id)}
+            />
+          ))}
+        </div>
       </Section>
 
       {/* 버튼 글자는 진행 중에도 바꾸지 않는다(discord-form.tsx). 진행 표시는 상태 자리 하나에서만. */}
       <div className="mt-4 flex max-w-2xl flex-wrap items-center gap-3">
-        <Button type="submit" size="sm" disabled={saving || testing} className="rounded-[4px]">
+        <Button
+          type="submit"
+          size="sm"
+          disabled={saving || testing}
+          focusableWhenDisabled
+          className="rounded-[4px]"
+        >
           Save
         </Button>
         <Button

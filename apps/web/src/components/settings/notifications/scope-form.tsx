@@ -36,14 +36,22 @@ export function NotificationScopeForm({
       <input type="hidden" name="projectRef" value={projectRef} />
 
       <Section title="Where it applies" description="Which pull requests Dante writes to at all.">
-        <label className="border-border block border-b p-4">
-          <span className="block text-[13px] leading-tight">Base branches</span>
-          <span className="text-muted-foreground mt-1 block text-[12px] leading-relaxed">
+        {/* 이름은 제목만, 긴 안내는 aria-describedby 로 — label 이 안내까지 감싸면 이름이 문단이 된다. */}
+        <div className="border-border block border-b p-4">
+          <label htmlFor="branch-filters" className="block text-[13px] leading-tight">
+            Base branches
+          </label>
+          <span
+            id="branch-filters-hint"
+            className="text-muted-foreground mt-1 block text-[12px] leading-relaxed"
+          >
             One pattern per line — <code className="font-mono">release/*</code> is allowed. Leave it
             empty to only watch pull requests into{" "}
             <code className="font-mono">{defaultBranch}</code>.
           </span>
           <textarea
+            id="branch-filters"
+            aria-describedby="branch-filters-hint"
             name="branchFilters"
             defaultValue={initial.branchFilters.join("\n")}
             rows={3}
@@ -51,7 +59,7 @@ export function NotificationScopeForm({
             placeholder={defaultBranch}
             className="border-border bg-background mt-3 w-full resize-none border p-2 font-mono text-[12px]"
           />
-        </label>
+        </div>
 
         <ToggleRow
           name="skipDraftPr"

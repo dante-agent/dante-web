@@ -69,13 +69,21 @@ export function DiscordNotificationsForm({
           onChange={setEnabled}
         />
 
-        <label className="border-border block border-b p-4">
-          <span className="block text-[13px] leading-tight">Webhook URL</span>
-          <span className="text-muted-foreground mt-1 block text-[12px] leading-relaxed">
+        {/* 이름은 제목만, 긴 안내는 aria-describedby 로 — label 이 안내까지 감싸면 이름이 문단이 된다. */}
+        <div className="border-border block border-b p-4">
+          <label htmlFor="discord-webhook-url" className="block text-[13px] leading-tight">
+            Webhook URL
+          </label>
+          <span
+            id="discord-webhook-hint"
+            className="text-muted-foreground mt-1 block text-[12px] leading-relaxed"
+          >
             In Discord: channel settings → Integrations → Webhooks → Copy Webhook URL.
             {initial.discordWebhookSaved && " A webhook is saved. Paste a new one to replace it."}
           </span>
           <input
+            id="discord-webhook-url"
+            aria-describedby="discord-webhook-hint"
             type="url"
             name="discordWebhookUrl"
             autoComplete="off"
@@ -86,7 +94,7 @@ export function DiscordNotificationsForm({
             }
             className="border-border bg-background mt-3 w-full border px-2 py-1.5 font-mono text-[12px]"
           />
-        </label>
+        </div>
 
         {DISCORD_EVENTS.map((event) => (
           <ToggleRow
@@ -105,22 +113,31 @@ export function DiscordNotificationsForm({
         title="Message language"
         description="Test names and error messages stay as they are."
       >
-        {NOTIFICATION_LOCALES.map((option) => (
-          <RadioRow
-            key={option.id}
-            name="discordLocale"
-            value={option.id}
-            label={option.label}
-            selected={locale === option.id}
-            onSelect={() => setLocale(option.id)}
-          />
-        ))}
+        {/* 이름을 준다 — 채널마다 "Message language" 섹션이 있어 제목만으로는 구분되지 않는다. */}
+        <div role="radiogroup" aria-label="Discord message language">
+          {NOTIFICATION_LOCALES.map((option) => (
+            <RadioRow
+              key={option.id}
+              name="discordLocale"
+              value={option.id}
+              label={option.label}
+              selected={locale === option.id}
+              onSelect={() => setLocale(option.id)}
+            />
+          ))}
+        </div>
       </Section>
 
       {/* 버튼 글자는 진행 중에도 바꾸지 않는다. 폭이 바뀌면 옆 버튼과 상태 문구가 밀린다.
           진행 표시는 오른쪽 상태 자리 하나에서만 한다. */}
       <div className="mt-6 flex max-w-2xl flex-wrap items-center gap-3">
-        <Button type="submit" size="sm" disabled={saving || testing} className="rounded-[4px]">
+        <Button
+          type="submit"
+          size="sm"
+          disabled={saving || testing}
+          focusableWhenDisabled
+          className="rounded-[4px]"
+        >
           Save
         </Button>
         {/* 같은 폼을 테스트 액션으로 보낸다(submit 참고). 붙여 넣고 아직 저장하지 않은 URL 로도 시험할 수 있다. */}
@@ -130,6 +147,7 @@ export function DiscordNotificationsForm({
           variant="outline"
           data-action="test"
           disabled={saving || testing}
+          focusableWhenDisabled
           className="rounded-[4px]"
         >
           Send a test notification

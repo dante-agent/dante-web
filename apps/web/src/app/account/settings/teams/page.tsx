@@ -64,6 +64,8 @@ export default async function AccountTeamsPage() {
                 <form action={switchTeam.bind(null, team.id, "/projects")}>
                   <Button type="submit" variant="ghost" size="sm" className="rounded-[4px]">
                     Switch
+                    {/* 줄마다 같은 버튼이라 스크린리더용으로 어느 팀인지 덧붙인다. */}
+                    <span className="sr-only"> to {team.name}</span>
                   </Button>
                 </form>
               )}
@@ -76,6 +78,7 @@ export default async function AccountTeamsPage() {
                 })}
               >
                 Settings
+                <span className="sr-only"> for {team.name}</span>
               </Link>
             </li>
           );

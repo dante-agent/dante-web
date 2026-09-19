@@ -42,6 +42,7 @@ export default async function AiPage({ params }: PageProps<"/projects/setup/[pro
       </div>
 
       <StepHeader
+        step={4}
         title={`${ACTIVE_ENGINE.name} writes your tests`}
         description="Already connected — there is no key to paste and nothing to install."
       />

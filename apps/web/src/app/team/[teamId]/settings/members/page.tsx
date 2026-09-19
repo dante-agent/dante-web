@@ -57,7 +57,10 @@ export default async function TeamMembersPage({
 
           return (
             <li key={member.id} className="flex items-center gap-3 px-5 py-3">
-              <UserAvatar src={member.avatarUrl} name={name} />
+              {/* 옆에 이름이 바로 있어 사진의 alt(이름)가 두 번 읽힌다. 이 자리에서는 숨긴다. */}
+              <span aria-hidden="true" className="contents">
+                <UserAvatar src={member.avatarUrl} name={name} />
+              </span>
 
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[14px] font-medium">
@@ -78,6 +81,7 @@ export default async function TeamMembersPage({
               <MemberControls
                 teamId={teamId}
                 userId={member.id}
+                name={name}
                 role={memberRole}
                 isSelf={isSelf}
                 canManage={viewerIsOwner && !personalOwner}
@@ -107,7 +111,9 @@ export default async function TeamMembersPage({
                     Expires {EXPIRY_FORMAT.format(invite.expiresAt)}
                   </p>
                 </div>
-                {viewerIsOwner && <RevokeInviteButton teamId={teamId} inviteId={invite.id} />}
+                {viewerIsOwner && (
+                  <RevokeInviteButton teamId={teamId} inviteId={invite.id} email={invite.email} />
+                )}
               </li>
             ))}
           </ul>

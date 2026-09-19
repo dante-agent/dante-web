@@ -86,6 +86,7 @@ export default async function PullRequestPreviewPage({
               rel="noreferrer"
             >
               {project.repoOwner}/{project.repoName}
+              <span className="sr-only"> (opens in new tab)</span>
             </a>
             {job && (
               <>
@@ -208,9 +209,9 @@ function Panel({ title, children }: { title?: string; children: React.ReactNode 
   return (
     <section className="border-border overflow-hidden rounded-md border">
       {title && (
-        <div className="text-muted-foreground border-border border-b px-3 py-1.5 text-[11px] font-medium">
+        <h2 className="text-muted-foreground border-border border-b px-3 py-1.5 text-[11px] font-medium">
           {title}
-        </div>
+        </h2>
       )}
       <div className="px-3 py-2.5 text-xs">{children}</div>
     </section>

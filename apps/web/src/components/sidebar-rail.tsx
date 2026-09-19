@@ -13,6 +13,7 @@
 // 다시 닫는(여는) 자리로도 가장 자연스럽다. 접힌 서브 사이드바는 폭이 0 이라 자기 버튼을
 // 둘 자리가 없다 — 그 버튼을 여기서 대신 받는다.
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { PanelLeftOpen, type LucideIcon } from "lucide-react";
@@ -32,11 +33,20 @@ export type RailItem = {
 export function SidebarRail({ items }: { items: RailItem[] }) {
   const pathname = usePathname();
   const collapsed = useSubSidebarCollapsed();
+  // hover·포커스로 펼쳐진 레일은 본문을 덮는다. Esc 로 접을 수 있게 한다(1.4.13) —
+  // 마우스가 나가거나 포커스가 다른 항목으로 옮겨 가면 다시 평소처럼 펼쳐진다.
+  const [dismissed, setDismissed] = useState(false);
 
   return (
     <nav
       aria-label="Main"
-      className="group/rail bg-sidebar border-sidebar-border fixed top-[47px] bottom-0 left-0 z-30 flex w-14 flex-col gap-1 overflow-hidden border-r p-2 transition-[width] duration-200 hover:w-56 has-[:focus-visible]:w-56"
+      data-dismissed={dismissed || undefined}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") setDismissed(true);
+      }}
+      onFocus={() => setDismissed(false)}
+      onMouseLeave={() => setDismissed(false)}
+      className="group/rail bg-sidebar border-sidebar-border fixed top-[47px] bottom-0 left-0 z-30 flex w-14 flex-col gap-1 overflow-hidden border-r p-2 transition-[width] duration-200 hover:w-56 has-[:focus-visible]:w-56 data-dismissed:w-14!"
     >
       {items.map(({ href, label, Icon, togglesSubSidebar, onClick }) => {
         const active = pathname.startsWith(href);
@@ -53,12 +63,12 @@ export function SidebarRail({ items }: { items: RailItem[] }) {
           <>
             <Icon className="size-4 shrink-0" />
             {/* hidden 이 아니라 opacity — a11y 트리에 남겨 스크린리더가 읽게 한다 */}
-            <span className="opacity-0 transition-opacity duration-150 group-hover/rail:opacity-100 group-has-[:focus-visible]/rail:opacity-100">
+            <span className="opacity-0 transition-opacity duration-150 group-hover/rail:opacity-100 group-has-[:focus-visible]/rail:opacity-100 group-data-dismissed/rail:opacity-0!">
               {label}
             </span>
             {/* 접혀 있을 때만, 레일을 펼쳤을 때만 보이는 힌트 — 여기가 다시 여는 버튼이라는 표시 */}
             {toggles && collapsed && (
-              <PanelLeftOpen className="ml-auto size-3.5 shrink-0 opacity-0 transition-opacity duration-150 group-hover/rail:opacity-60 group-has-[:focus-visible]/rail:opacity-60" />
+              <PanelLeftOpen className="ml-auto size-3.5 shrink-0 opacity-0 transition-opacity duration-150 group-hover/rail:opacity-60 group-has-[:focus-visible]/rail:opacity-60 group-data-dismissed/rail:opacity-0!" />
             )}
           </>
         );
@@ -70,6 +80,7 @@ export function SidebarRail({ items }: { items: RailItem[] }) {
             type="button"
             // 서브 사이드바를 접으면 포커스가 여기로 온다(sub-sidebar.tsx collapseFrom).
             data-sub-sidebar-toggle
+            aria-keyshortcuts="Meta+B Control+B"
             onClick={toggleSubSidebar}
             aria-label={collapsed ? `Expand ${label} sidebar` : `Collapse ${label} sidebar`}
             aria-expanded={!collapsed}

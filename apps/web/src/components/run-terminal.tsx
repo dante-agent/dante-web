@@ -383,6 +383,9 @@ export function RunPanel({
         type="button"
         onClick={onToggle}
         aria-expanded={open}
+        // ⌘J / Ctrl+J 로도 여닫는다(file-view.tsx). 화면에는 툴팁으로, 스크린리더에는 속성으로 알린다.
+        aria-keyshortcuts="Meta+J Control+J"
+        title="Toggle terminal (⌘J)"
         className="border-border bg-sidebar hover:bg-muted/60 flex h-8 w-full shrink-0 items-center gap-2 px-2.5 text-left text-xs transition-colors"
       >
         {/* 접기·펼치기 표시는 왼쪽 끝에 — 오른쪽 끝은 AI 채팅 버튼 근처라 눈에 잘 안 띈다. */}
@@ -495,7 +498,7 @@ export function TerminalBody({ view }: { view: RunView }) {
         const el = e.currentTarget;
         stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
       }}
-      className="border-border min-h-0 flex-1 overflow-auto border-t px-3 py-2 font-mono text-xs leading-relaxed"
+      className="border-border focus-visible:outline-ring min-h-0 flex-1 overflow-auto border-t px-3 py-2 font-mono text-xs leading-relaxed focus-visible:outline-2 focus-visible:-outline-offset-2"
       role="log"
       aria-live="off"
       aria-label="Run output"

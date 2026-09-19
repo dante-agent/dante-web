@@ -6,7 +6,11 @@ import type { ReactNode } from "react";
 export function SettingsHeader({ title, description }: { title: string; description: string }) {
   return (
     <header className="max-w-2xl">
-      <h1 className="font-heading text-[22px] leading-tight font-medium tracking-[-0.02em]">
+      {/* tabIndex=-1: 누른 버튼이 사라진 뒤 포커스를 돌려받을 자리(connection-panel.tsx). */}
+      <h1
+        tabIndex={-1}
+        className="font-heading text-[22px] leading-tight font-medium tracking-[-0.02em] outline-none"
+      >
         {title}
       </h1>
       <p className="text-muted-foreground mt-2 text-[13px] leading-relaxed">{description}</p>

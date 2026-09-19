@@ -21,7 +21,7 @@ export function AiQualityForm({ initial }: { initial: AiQuality }) {
         {AI_QUALITIES.map((quality) => (
           <label
             key={quality}
-            className="border-border bg-card hover:border-input block cursor-pointer border p-5 transition-colors duration-[180ms] ease-out has-[:checked]:border-[#ff570a] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[#ff570a]"
+            className="group border-border bg-card hover:border-input block cursor-pointer border p-5 transition-colors duration-[180ms] ease-out has-[:checked]:border-[#ff570a] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[#ff570a]"
           >
             <input
               type="radio"
@@ -30,8 +30,13 @@ export function AiQualityForm({ initial }: { initial: AiQuality }) {
               defaultChecked={initial === quality}
               className="sr-only"
             />
-            <span className="block text-[14px] leading-tight font-medium">
+            {/* 선택은 테두리 색만으로 구분되지 않게 체크 표시를 함께 띄운다(스크린리더는 라디오로 안다). */}
+            <span className="flex items-center justify-between gap-2 text-[14px] leading-tight font-medium">
               {AI_QUALITY_OPTIONS[quality].label}
+              <Check
+                aria-hidden="true"
+                className="text-brand-orange hidden size-4 shrink-0 group-has-[:checked]:block"
+              />
             </span>
             <span className="text-muted-foreground mt-2 block text-[13px] leading-relaxed">
               {AI_QUALITY_OPTIONS[quality].description}

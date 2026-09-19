@@ -154,14 +154,23 @@ export function FileSearch({ projectRef }: { projectRef: string }) {
                   aria-selected={i === active}
                   onMouseEnter={() => setActive(i)}
                   onClick={() => go(path)}
+                  // 고른 줄은 배경(대비 1.11:1)만으로는 안 보여 왼쪽 막대를 더하고, 경로 글자도 밝힌다
+                  // (muted 글자는 muted 배경 위에서 4.18:1).
                   className={cn(
                     "flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs",
-                    i === active && "bg-muted"
+                    i === active && "bg-muted shadow-[inset_2px_0_0_var(--ring)]"
                   )}
                 >
                   {iconForFile(name, { className: "size-3.5 shrink-0" })}
                   <span className="font-medium">{name}</span>
-                  <span className="text-muted-foreground truncate">{dir}</span>
+                  <span
+                    className={cn(
+                      "truncate",
+                      i === active ? "text-foreground/80" : "text-muted-foreground"
+                    )}
+                  >
+                    {dir}
+                  </span>
                 </li>
               );
             })}

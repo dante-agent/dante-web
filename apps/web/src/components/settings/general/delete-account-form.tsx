@@ -29,12 +29,20 @@ function DeleteAccountDialogForm({ confirmation }: { confirmation: string }) {
           autoCorrect="off"
           autoCapitalize="off"
           spellCheck={false}
+          // 실패 문구(아래 status)를 이 칸의 설명으로 잇는다.
+          aria-invalid={Boolean(!pending && state?.message) || undefined}
+          aria-describedby="delete-account-status"
           className="rounded-[4px] font-mono"
         />
       </div>
 
       <div className="flex min-h-8 items-center justify-between gap-3">
-        <p role="status" aria-live="polite" className="text-destructive min-w-0 text-[13px]">
+        <p
+          id="delete-account-status"
+          role="status"
+          aria-live="polite"
+          className="text-destructive min-w-0 text-[13px]"
+        >
           {pending ? "" : (state?.message ?? "")}
         </p>
 

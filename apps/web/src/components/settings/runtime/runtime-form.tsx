@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useActionState } from "react";
+import { useActionState, useEffect, useId } from "react";
 import { Check } from "lucide-react";
 import {
   saveRuntimeSettings,
@@ -47,6 +47,13 @@ export function RuntimeForm({
   );
   // "Saved" 는 조건부로 나타나서 스크린리더가 놓친다. 제출마다 새 state 라 연달아 저장해도 다시 읽힌다.
   useAnnounce(state?.saved ? "Saved" : null, state);
+  // 잘못된 칸이 있으면 그 칸으로 포커스를 옮긴다. 오류 문구는 아래 role="alert" 가 읽는다.
+  useEffect(() => {
+    if (state?.field && state.field !== "timeoutMs") {
+      document.querySelector<HTMLElement>(`[name="${state.field}"]`)?.focus();
+    }
+  }, [state]);
+  const invalid = (field: NonNullable<SaveState>["field"]) => state?.field === field;
 
   return (
     <form action={formAction}>
@@ -66,6 +73,7 @@ export function RuntimeForm({
           hint="Runs first. If it fails the run stops here and is reported as an error, not a test failure."
           defaultValue={initial.installCommand}
           placeholder={placeholders.install}
+          invalid={invalid("installCommand")}
         />
         <CommandField
           name="testCommand"
@@ -73,6 +81,7 @@ export function RuntimeForm({
           hint="Its exit code decides pass or fail. Anything it prints becomes the run log."
           defaultValue={initial.testCommand}
           placeholder={placeholders.test}
+          invalid={invalid("testCommand")}
           last
         />
       </Section>
@@ -132,7 +141,7 @@ export function RuntimeForm({
           </span>
         )}
         {state?.error && (
-          <span role="alert" className="text-destructive text-[13px]">
+          <span id={RUNTIME_ERROR_ID} role="alert" className="text-destructive text-[13px]">
             {state.error}
           </span>
         )}
@@ -164,12 +173,16 @@ function Section({
   );
 }
 
+/** 저장 오류 문구의 id. 잘못된 칸이 aria-describedby 로 가리킨다. */
+const RUNTIME_ERROR_ID = "runtime-error";
+
 function CommandField({
   name,
   label,
   hint,
   defaultValue,
   placeholder,
+  invalid,
   last,
 }: {
   name: string;
@@ -177,13 +190,27 @@ function CommandField({
   hint: string;
   defaultValue: string;
   placeholder: string;
+  /** 서버가 이 칸을 잘못됐다고 돌려보냈나. */
+  invalid?: boolean;
   last?: boolean;
 }) {
+  const id = useId();
+  // 이름은 제목만, 긴 안내는 aria-describedby 로 — label 이 안내까지 감싸면 이름이 문단이 된다.
   return (
-    <label className={last ? "block p-4" : "border-border block border-b p-4"}>
-      <span className="block text-[13px] leading-tight">{label}</span>
-      <span className="text-muted-foreground mt-1 block text-[12px] leading-relaxed">{hint}</span>
+    <div className={last ? "block p-4" : "border-border block border-b p-4"}>
+      <label htmlFor={id} className="block text-[13px] leading-tight">
+        {label}
+      </label>
+      <span
+        id={`${id}-hint`}
+        className="text-muted-foreground mt-1 block text-[12px] leading-relaxed"
+      >
+        {hint}
+      </span>
       <input
+        id={id}
+        aria-describedby={invalid ? `${id}-hint ${RUNTIME_ERROR_ID}` : `${id}-hint`}
+        aria-invalid={invalid || undefined}
         type="text"
         name={name}
         defaultValue={defaultValue}
@@ -192,6 +219,6 @@ function CommandField({
         autoComplete="off"
         className="border-border bg-background mt-3 w-full border p-2 font-mono text-[12px]"
       />
-    </label>
+    </div>
   );
 }

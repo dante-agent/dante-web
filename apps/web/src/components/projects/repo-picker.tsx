@@ -72,6 +72,16 @@ export function RepoPicker({
     );
   }, [repos, activeOwner, query]);
 
+  // 검색 결과 수는 화면 글자만 바뀌어서 스크린리더용으로 따로 알린다(검색어가 있을 때만).
+  const needle = query.trim();
+  useAnnounce(
+    needle && repos.length > 0
+      ? visible.length === 0
+        ? `No repositories match "${needle}"`
+        : `${visible.length} ${visible.length === 1 ? "repository" : "repositories"} found`
+      : null
+  );
+
   return (
     <>
       <div className="flex gap-2">
@@ -146,7 +156,8 @@ export function RepoPicker({
                 rel="noreferrer noopener"
                 className={footerLink}
               >
-                Add one on GitHub ↗
+                Add one on GitHub <span aria-hidden="true">↗</span>
+                <span className="sr-only"> (opens in new tab)</span>
               </a>
             </dd>
           </>
@@ -166,9 +177,9 @@ export function RepoPicker({
 
 // 목록 아래 두 링크. 쉬는 상태는 밝게(주변 라벨이 muted 라 링크만 떠 보인다),
 // hover·키보드 포커스에는 행의 액센트와 같은 주황을 쓴다 — 같은 화면에서 두
-// 가지 강조색을 쓰지 않는다.
+// 가지 강조색을 쓰지 않는다. 포커스는 글자색만으로는 약해서 같은 주황 outline 도 둔다.
 const footerLink =
-  "text-foreground underline underline-offset-4 transition-colors duration-[180ms] ease-out hover:text-[#ff570a] focus-visible:text-[#ff570a] focus-visible:outline-none motion-reduce:transition-none";
+  "text-foreground underline underline-offset-4 transition-colors duration-[180ms] ease-out hover:text-[#ff570a] focus-visible:text-[#ff570a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#ff570a] motion-reduce:transition-none";
 
 function RepoRow({
   repo,
@@ -186,7 +197,7 @@ function RepoRow({
   const overlay = "absolute inset-0 cursor-pointer outline-none disabled:cursor-not-allowed";
 
   return (
-    <li className="group hover:bg-muted/30 has-[:focus-visible]:bg-muted/30 relative flex items-center gap-4 px-6 py-4 transition-colors duration-[180ms] ease-out has-[:focus-visible]:inset-ring-2 has-[:focus-visible]:inset-ring-[#ff570a]/40">
+    <li className="group hover:bg-muted/30 has-[:focus-visible]:bg-muted/30 relative flex items-center gap-4 px-6 py-4 transition-colors duration-[180ms] ease-out has-[:focus-visible]:inset-ring-2 has-[:focus-visible]:inset-ring-[#ff570a]">
       {/* 왼쪽 액센트 바. 세로로 펼쳐지며 들어온다 — CodeRabbit 활성 표시와 같은 장치.
           420ms expo-out 은 칸 확장용이고, 이런 작은 요소는 180ms 가 맞다. */}
       <span
@@ -196,7 +207,12 @@ function RepoRow({
       <div className="min-w-0 flex-1">
         <p className="flex items-center gap-2 truncate text-[15px] font-medium">
           {repo.name}
-          {repo.private && <Lock className="text-muted-foreground size-3 shrink-0" />}
+          {repo.private && (
+            <>
+              <Lock className="text-muted-foreground size-3 shrink-0" />
+              <span className="sr-only">Private</span>
+            </>
+          )}
         </p>
         <p className="text-muted-foreground mt-1 font-mono text-[11px] tracking-wide">
           {repo.language ?? "—"}

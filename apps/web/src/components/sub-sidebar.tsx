@@ -88,6 +88,7 @@ export function SubSidebar({ nav, children }: { nav?: ReactNode; children: React
             onClick={() => collapseFrom(asideRef.current)}
             title="Collapse sub sidebar (⌘B)"
             aria-label="Collapse sub sidebar"
+            aria-keyshortcuts="Meta+B Control+B"
             aria-expanded
             className="text-sidebar-foreground/70 hover:text-sidebar-foreground absolute top-2 right-1 grid h-9 w-10 place-items-center transition-colors"
           >

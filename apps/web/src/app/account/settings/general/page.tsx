@@ -92,7 +92,7 @@ function Field({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline gap-4 px-5 py-4">
       <dt className="text-muted-foreground w-32 shrink-0 text-[13px]">{label}</dt>
-      <dd className="min-w-0 flex-1 truncate font-mono text-[13px]">{value}</dd>
+      <dd className="min-w-0 flex-1 font-mono text-[13px] wrap-break-word">{value}</dd>
     </div>
   );
 }

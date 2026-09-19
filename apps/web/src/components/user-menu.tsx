@@ -32,7 +32,10 @@ export function UserMenu({ user }: { user: HeaderUser }) {
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Positioner side="bottom" align="end" sideOffset={8} className="z-50">
-          <Popover.Popup className="border-border bg-popover data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-open:slide-in-from-top-1 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 w-56 origin-[var(--transform-origin)] overflow-hidden rounded-lg border shadow-md duration-100 outline-none">
+          <Popover.Popup
+            aria-label="Account menu"
+            className="border-border bg-popover data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-open:slide-in-from-top-1 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 w-56 origin-[var(--transform-origin)] overflow-hidden rounded-lg border shadow-md duration-100 outline-none"
+          >
             <div className="border-border border-b px-3 py-2.5">
               <p className="text-muted-foreground font-mono text-[10px] font-bold tracking-[0.12em] uppercase">
                 Signed in as

@@ -57,13 +57,6 @@ export function AppHeader({
 
   return (
     <header className="bg-sidebar border-sidebar-border fixed inset-x-0 top-0 z-40 flex h-[47px] items-center border-b pr-3">
-      {/* 검색창은 브레드크럼 길이와 무관하게 화면 중앙 고정 (레이아웃 시프트 방지) */}
-      <div className="pointer-events-none absolute inset-x-0 flex justify-center px-3">
-        <div className="pointer-events-auto w-full max-w-[556px]">
-          <FileSearch projectRef={project.ref} />
-        </div>
-      </div>
-
       {/* 로고 = 메인 레일(w-14)과 같은 열 → 첫 구분자가 레일 border-r 선에 맞음 */}
       <div className="flex h-full w-14 shrink-0 items-center pl-[18px]">
         <Link href="/projects" aria-label="Dante">
@@ -107,6 +100,14 @@ export function AppHeader({
           footer={newRow("New repository", "/projects/new/github")}
         />
       </nav>
+
+      {/* 검색창은 브레드크럼 길이와 무관하게 화면 중앙 고정 (레이아웃 시프트 방지).
+          absolute 라 DOM 순서와 화면 위치가 무관하다 — 탭 순서가 로고·브레드크럼 다음이 되게 뒤에 둔다. */}
+      <div className="pointer-events-none absolute inset-x-0 flex justify-center px-3">
+        <div className="pointer-events-auto w-full max-w-[556px]">
+          <FileSearch projectRef={project.ref} />
+        </div>
+      </div>
 
       <div className="ml-auto flex shrink-0 items-center gap-2">
         <FeedbackLink />

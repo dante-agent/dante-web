@@ -45,8 +45,9 @@ type FileContent = { source: string; test: string | null; testDraft: string | nu
 type Draft = { version: number; source: string };
 
 const Fallback = () => (
-  <div className="flex h-full items-center justify-center bg-black">
+  <div role="status" className="flex h-full items-center justify-center bg-black">
     <Loader2 className="text-muted-foreground size-5 animate-spin" />
+    <span className="sr-only">Loading editor…</span>
   </div>
 );
 
@@ -83,10 +84,13 @@ function guessTestName(path: string): string {
 }
 
 function CodePane({
+  label,
   lang,
   value,
   follow = false,
 }: {
+  /** 스크린리더가 읽는 에디터 이름("Source: src/foo.ts"). 없으면 모든 에디터가 "Editor content" 다. */
+  label: string;
   lang: string;
   value: string;
   /** 내용이 늘어날 때마다 마지막 줄로 스크롤한다 — 생성 연출에서 코드가 써지는 걸 따라간다. */
@@ -105,7 +109,7 @@ function CodePane({
       beforeMount={setupMonaco}
       loading={<Fallback />}
       value={value}
-      options={OPTIONS}
+      options={{ ...OPTIONS, ariaLabel: label }}
       onMount={(editor) => {
         editorRef.current = editor;
       }}
@@ -221,7 +225,12 @@ function GenerateTest({ projectRef, file }: { projectRef: string; file: string }
       </div>
       {files ? (
         <div className="min-h-0 flex-1">
-          <CodePane lang={langOf(file)} value={files[0].code.slice(0, typing.chars)} follow />
+          <CodePane
+            label={`Generated test for ${file}`}
+            lang={langOf(file)}
+            value={files[0].code.slice(0, typing.chars)}
+            follow
+          />
         </div>
       ) : (
         <CodeSkeleton pulsing={stage === "write"} />
@@ -265,13 +274,15 @@ function FileHeading({ name }: { name: string }) {
 }
 
 function ExpandButton({ active, onToggle }: { active: boolean; onToggle: () => void }) {
+  // 이름은 고정하고 상태는 aria-pressed 로 — 이름이 Expand ↔ Restore 로 바뀌면 눌렸는지 알 수 없다.
   return (
     <Button
       size="icon-sm"
       variant="ghost"
       onClick={onToggle}
       title={active ? "Restore" : "Expand"}
-      aria-label={active ? "Restore" : "Expand"}
+      aria-label="Expand"
+      aria-pressed={active}
     >
       {active ? <Minimize2 /> : <Maximize2 />}
     </Button>
@@ -482,11 +493,13 @@ export function FileView({
   if (mode === "edit") {
     return (
       <div className={cn(GRID, PANE_HEIGHT)} style={{ gridTemplateColumns: expandedCols }}>
+        {/* 화면 제목. sr-only 는 absolute 라 그리드 칸을 차지하지 않는다. */}
+        <h1 className="sr-only">Edit test: {testName}</h1>
         <Cell show={showLeft} className="bg-sidebar flex items-center border-b px-2.5 text-xs">
-          <span className="font-semibold">Before</span>
+          <h2 className="font-semibold">Before</h2>
         </Cell>
         <Cell show={showRight} className="bg-sidebar flex items-center border-b px-2.5 text-xs">
-          <span className="font-semibold">After</span>
+          <h2 className="font-semibold">After</h2>
           <div className="ml-auto flex items-center gap-1">
             {saveError && (
               <span role="alert" className="text-destructive mr-1 text-xs">
@@ -502,6 +515,8 @@ export function FileView({
               size="xs"
               onClick={saveEdit}
               disabled={!saveable || !dirty || saving}
+              // 누르면 바로 막힌다. 포커스를 잃지 않게 aria-disabled 로 막는다.
+              focusableWhenDisabled
               className="text-brand-orange"
             >
               {saving && <Loader2 className="animate-spin" />}
@@ -514,6 +529,7 @@ export function FileView({
               variant="ghost"
               onClick={() => setEditing(original)}
               disabled={!dirty || saving}
+              focusableWhenDisabled
               title="Revert changes"
               aria-label="Revert changes"
             >
@@ -550,7 +566,7 @@ export function FileView({
 
         <div className={cn("min-h-0 bg-black", !expanded && "col-span-2")}>
           {expanded === "left" ? (
-            <CodePane lang={lang} value={original} />
+            <CodePane label={`Before: ${testName}`} lang={lang} value={original} />
           ) : expanded === "right" ? (
             <Editor
               language={lang}
@@ -559,7 +575,12 @@ export function FileView({
               loading={<Fallback />}
               value={editing}
               onChange={(value) => setEditing(value ?? "")}
-              options={{ ...OPTIONS, readOnly: false }}
+              // 쓰기 가능한 에디터에서는 Tab 이 들여쓰기라 빠져나가는 방법을 이름에 함께 알린다.
+              options={{
+                ...OPTIONS,
+                readOnly: false,
+                ariaLabel: `After: ${testName}. Press Ctrl+M (Ctrl+Shift+M on Mac) to move focus with Tab.`,
+              }}
             />
           ) : (
             <DiffEditor
@@ -583,6 +604,8 @@ export function FileView({
                 useInlineViewWhenSpaceIsLimited: false,
                 enableSplitViewResizing: false,
                 overviewRulerBorder: false,
+                originalAriaLabel: `Before: ${testName}`,
+                modifiedAriaLabel: `After: ${testName}. Press Ctrl+M (Ctrl+Shift+M on Mac) to move focus with Tab.`,
               }}
             />
           )}
@@ -595,6 +618,7 @@ export function FileView({
 
   return (
     <div ref={shellRef} className={cn("flex flex-col", PANE_HEIGHT)}>
+      <h1 className="sr-only">{file}</h1>
       <div
         ref={gridRef}
         className={cn(GRID, "min-h-0 flex-1")}
@@ -607,13 +631,13 @@ export function FileView({
             showRight && "border-r"
           )}
         >
-          <span className="font-semibold">Source Code</span>
+          <h2 className="font-semibold">Source Code</h2>
         </Cell>
         <Cell
           show={showRight}
           className="bg-sidebar flex items-center gap-1.5 border-b px-2.5 text-xs"
         >
-          <span className="font-semibold">Test Code</span>
+          <h2 className="font-semibold">Test Code</h2>
           {content.test && (
             <div className="ml-auto flex items-center gap-0.5">
               {/* 실행은 저장된 버전(레포에서 가져온 것·AI draft 모두)을 돌린다. 한 번에 하나만. */}
@@ -684,11 +708,12 @@ export function FileView({
         </Cell>
 
         <Cell show={showLeft} className={cn("bg-black", showRight && "border-r")}>
-          <CodePane lang={lang} value={content.source} />
+          <CodePane label={`Source: ${file}`} lang={lang} value={content.source} />
         </Cell>
         <Cell show={showRight} className="bg-black">
           {content.test ? (
             <CodePane
+              label={`Test: ${testName}`}
               lang={lang}
               value={typer.shown ?? content.test}
               follow={typer.shown !== null}

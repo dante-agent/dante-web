@@ -15,6 +15,7 @@ export default function NewProjectPage() {
   return (
     <>
       <StepHeader
+        step={1}
         title="Where is your code?"
         description="One repository becomes one project. Dante reads the code and finds the tests you are missing"
       />

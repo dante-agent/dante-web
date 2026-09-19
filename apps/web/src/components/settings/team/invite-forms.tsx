@@ -15,9 +15,10 @@ export function InviteForm({ teamId }: { teamId: string }) {
   return (
     <form action={action} className="border-border bg-card mt-8 max-w-2xl border p-5">
       <input type="hidden" name="teamId" value={teamId} />
-      <label htmlFor="invite-email" className="text-[15px] leading-snug font-medium">
-        Invite by email
-      </label>
+      {/* 폼 제목을 헤딩으로도 둔다 — 제목 목록으로 이동할 때 이 폼이 빠지지 않게. 모양은 그대로. */}
+      <h2 className="text-[15px] leading-snug font-medium">
+        <label htmlFor="invite-email">Invite by email</label>
+      </h2>
       <p className="text-muted-foreground mt-1.5 text-[13px] leading-relaxed">
         They join as a member. The link works once and expires in 7 days, and they can accept with
         any account they sign in with.
@@ -32,6 +33,8 @@ export function InviteForm({ teamId }: { teamId: string }) {
           placeholder="name@company.com"
           autoComplete="off"
           readOnly={pending}
+          aria-invalid={state?.ok === false || undefined}
+          aria-describedby="invite-status"
           className="rounded-[4px]"
         />
         <Button
@@ -45,6 +48,7 @@ export function InviteForm({ teamId }: { teamId: string }) {
       </div>
 
       <p
+        id="invite-status"
         role="status"
         aria-live="polite"
         className={`mt-2 min-h-5 text-[13px] ${state?.ok && !state.link ? "text-muted-foreground" : "text-destructive"}`}
@@ -101,7 +105,16 @@ function SteadyLabel({ labels, active }: { labels: string[]; active: number }) {
   );
 }
 
-export function RevokeInviteButton({ teamId, inviteId }: { teamId: string; inviteId: string }) {
+export function RevokeInviteButton({
+  teamId,
+  inviteId,
+  email,
+}: {
+  teamId: string;
+  inviteId: string;
+  /** 줄마다 같은 버튼이 있어 스크린리더용으로 어느 초대인지 덧붙인다. */
+  email: string;
+}) {
   const [state, action, pending] = useActionState(revokeInvite, null);
 
   return (
@@ -118,15 +131,16 @@ export function RevokeInviteButton({ teamId, inviteId }: { teamId: string; invit
         className="rounded-[4px]"
       >
         {pending ? "Revoking…" : "Revoke"}
+        <span className="sr-only"> invite for {email}</span>
       </Button>
-      {state && !state.ok && (
-        <p
-          role="status"
-          className="text-destructive absolute top-full right-0 mt-0.5 text-[12px] whitespace-nowrap"
-        >
-          {state.message}
-        </p>
-      )}
+      {/* live 영역은 늘 그려 둔다 — 문구와 함께 끼워 넣으면 스크린리더가 놓친다.
+          넘치지 않게 폭을 제한하고 줄바꿈을 허용한다. */}
+      <p
+        role="status"
+        className="text-destructive absolute top-full right-0 mt-0.5 w-max max-w-64 text-right text-[12px]"
+      >
+        {state && !state.ok ? state.message : ""}
+      </p>
     </form>
   );
 }

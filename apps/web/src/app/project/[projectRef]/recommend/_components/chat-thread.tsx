@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { ArrowRight, Sparkles } from "lucide-react";
+import { useAnnounce } from "@/components/live-announcer";
 import { Button } from "@/components/ui/button";
 
 // 채팅 형식 UI(메시지 목록 + 입력창)의 공용 뼈대. 세션 상세의 후속 대화(FollowUp)와
@@ -48,6 +49,16 @@ export function ChatThread({
 }) {
   const [draft, setDraft] = useState("");
 
+  // 새 AI 메시지(오류 포함)와 기다리는 문구를 스크린리더에 알린다. 서버가 준 지난 대화는
+  // 처음 그릴 때 이미 있던 것이라 읽지 않는다. 생성 연출(pendingContent)은 자기 단계를 알린다.
+  const last = messages.at(-1);
+  const [initialLastId] = useState(last?.id);
+  useAnnounce(
+    last && last.role === "assistant" && last.id !== initialLastId ? `AI: ${last.text}` : null,
+    last?.id
+  );
+  useAnnounce(pending && !pendingContent ? pendingLabel : null);
+
   const send = () => {
     const text = draft.trim();
     if (!text || pending || disabled) return;
@@ -61,13 +72,20 @@ export function ChatThread({
         {messages.map((m) =>
           m.role === "user" ? (
             <div key={m.id} className="flex justify-end">
-              <p className="bg-muted max-w-[85%] rounded-lg px-3 py-2 text-sm">{m.text}</p>
+              {/* 누가 한 말인지는 좌우 위치로만 보여서 스크린리더용 이름을 붙인다. */}
+              <p className="bg-muted max-w-[85%] rounded-lg px-3 py-2 text-sm">
+                <span className="sr-only">You: </span>
+                {m.text}
+              </p>
             </div>
           ) : (
             <div key={m.id} className="flex gap-2">
               <Sparkles className="text-brand-cobalt mt-0.5 size-4 shrink-0" />
               <div className="flex max-w-[85%] flex-col gap-2">
-                <p className="text-foreground/90 text-sm whitespace-pre-line">{m.text}</p>
+                <p className="text-foreground/90 text-sm whitespace-pre-line">
+                  <span className="sr-only">AI: </span>
+                  {m.text}
+                </p>
                 {m.actions && m.actions.length > 0 && (
                   <div className="flex flex-wrap gap-2">
                     {m.actions.map((action) => (
@@ -105,7 +123,7 @@ export function ChatThread({
       </div>
 
       <div className="p-3">
-        <div className="border-border bg-muted/40 focus-within:border-brand-orange/60 flex items-center gap-2 rounded-lg border px-3 py-2.5 transition-colors">
+        <div className="border-border bg-muted/40 focus-within:border-ring flex items-center gap-2 rounded-lg border px-3 py-2.5 transition-colors">
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}

@@ -290,6 +290,7 @@ function buildComponents(streaming: boolean, applyTo: ApplyTarget | null): Compo
           className="text-brand-cobalt underline underline-offset-2"
         >
           {children}
+          <span className="sr-only"> (opens in new tab)</span>
         </a>
       ) : (
         <span>{children}</span>

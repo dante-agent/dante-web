@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { RefreshCw } from "lucide-react";
 import { recheckConnection } from "@/app/project/[projectRef]/settings/github/actions";
+import { useAnnounce } from "@/components/live-announcer";
 import { Button } from "@/components/ui/button";
 
 // "지금 다시 확인해줘" 버튼. 무엇을 왜 확인하는지는 actions.ts 주석에 있다.
@@ -16,6 +17,8 @@ import { Button } from "@/components/ui/button";
 // 전송 중 상태(pending)를 같이 준다. onClick 으로 부르면 둘 다 직접 해야 한다.
 export function RecheckButton({ projectRef }: { projectRef: string }) {
   const [state, formAction, pending] = useActionState(recheckConnection, null);
+  // 결과는 공용 알림으로 읽는다. 성공하면 배너가 inert 로 접혀 아래 문구도 트리에서 빠지기 때문이다.
+  useAnnounce(pending ? null : state?.message, state);
 
   return (
     <form action={formAction} className="flex min-w-0 flex-1 items-center gap-3">
@@ -36,13 +39,10 @@ export function RecheckButton({ projectRef }: { projectRef: string }) {
         Recheck
       </Button>
 
-      {/* aria-live: 버튼을 눌러 생긴 결과라 스크린리더가 이어서 읽어야 한다.
-          polite 는 읽던 것을 끊지 않고 끝난 뒤에 읽는다는 뜻이다.
-          truncate: 문구가 길어도 줄바꿈으로 배너를 키우지 않는다. */}
+      {/* 스크린리더에는 위 useAnnounce 가 읽어 주므로 여기는 보이는 문구만 둔다.
+          잘리지 않게 줄바꿈을 허용한다 — 오류 문구 끝이 "…" 로 잘리면 무엇을 할지 알 수 없다. */}
       <p
-        role="status"
-        aria-live="polite"
-        className={`min-w-0 truncate text-[13px] ${state?.ok ? "text-brand-mint" : "text-muted-foreground"}`}
+        className={`min-w-0 text-[13px] wrap-break-word ${state?.ok ? "text-brand-mint" : "text-muted-foreground"}`}
       >
         {pending ? "Checking…" : (state?.message ?? "")}
       </p>

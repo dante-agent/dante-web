@@ -21,8 +21,9 @@ export default async function FolderLayout({
       nav={
         <Suspense
           fallback={
-            <div className="flex flex-1 items-center justify-center">
+            <div role="status" className="flex flex-1 items-center justify-center">
               <Loader2 className="text-muted-foreground size-5 animate-spin" />
+              <span className="sr-only">Loading files…</span>
             </div>
           }
         >

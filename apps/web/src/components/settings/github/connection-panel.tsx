@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ConnectionBanner } from "@/components/settings/github/connection-banner";
 import type { ConnectionNotice } from "@/lib/github/connection";
 
@@ -50,11 +50,27 @@ export function ConnectionPanel({
   const [shown, setShown] = useState(notice);
   if (notice && notice.title !== shown?.title) setShown(notice);
 
+  // Recheck 가 성공하면 배너가 inert 로 접히면서 방금 누른 버튼의 포커스가 body 로 빠진다.
+  // 배너 안에 포커스가 있었으면 페이지 제목으로 옮긴다.
+  const hadFocus = useRef(false);
+  useEffect(() => {
+    if (open || !hadFocus.current) return;
+    hadFocus.current = false;
+    document.querySelector<HTMLElement>("main h1")?.focus();
+  }, [open]);
+
   return (
     <div className={`${SHELL} ${open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
       {/* inert: 접힌 배너는 화면에 없는 것과 같아야 한다. 탭 이동·스크린리더에서
           통째로 빠진다. */}
-      <div className="overflow-hidden" inert={!open}>
+      <div
+        className="overflow-hidden"
+        inert={!open}
+        onFocus={() => (hadFocus.current = true)}
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) hadFocus.current = false;
+        }}
+      >
         <div className={open ? ENTERING : LEAVING}>
           {shown && <ConnectionBanner notice={shown} projectRef={projectRef} />}
         </div>

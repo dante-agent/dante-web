@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import { isDemoEnabled, signInAsDemo } from "@/app/auth/actions";
 import { safeNext } from "@/lib/auth/redirect";
 
-// 공개 페이지. 루트 기본값(noindex)을 여기서 연다. 제목은 루트 기본값 "Dante" 그대로.
-export const metadata: Metadata = { robots: { index: true, follow: true } };
+// 공개 페이지. 루트 기본값(noindex)을 여기서 연다. 탭 제목은 "Sign in · Dante"(루트 템플릿).
+export const metadata: Metadata = { title: "Sign in", robots: { index: true, follow: true } };
 
 // /auth/callback 이 실패하면 ?error=<코드> 를 달고 여기로 돌려보낸다.
 // 보여줄 문구는 코드로만 고른다 — 쿼리 문자열을 화면에 그대로 찍지 않는다.

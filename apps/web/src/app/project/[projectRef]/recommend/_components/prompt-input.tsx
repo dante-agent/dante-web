@@ -39,7 +39,8 @@ export function PromptInput({ projectRef }: { projectRef: string }) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="bg-background/60 border-border flex flex-col gap-2 rounded-xl border p-3"
+      // 입력칸은 outline-none 이라 포커스 표시는 폼 테두리가 맡는다(chat-thread 와 같은 방식).
+      className="bg-background/60 border-border has-[input:focus]:border-ring flex flex-col gap-2 rounded-xl border p-3 transition-colors"
     >
       <div className="flex min-h-10 items-center gap-3">
         <input

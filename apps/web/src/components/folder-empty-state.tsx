@@ -44,7 +44,9 @@ export function FolderEmptyState({ projectRef }: { projectRef: string }) {
           <button
             type="button"
             onClick={() => clearRecent(projectRef)}
-            className="text-muted-foreground hover:text-foreground self-end text-[10px]"
+            // 글자만 있으면 누를 자리가 15px 남짓이라 최소 높이·좌우 여백을 준다(2.5.8 권고).
+            className="text-muted-foreground hover:text-foreground min-h-6 self-end px-1.5 text-[10px]"
+            aria-label="Clear recently opened"
           >
             Clear
           </button>

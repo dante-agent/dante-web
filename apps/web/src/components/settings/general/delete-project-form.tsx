@@ -49,16 +49,21 @@ function DeleteProjectDialogForm({
           autoCorrect="off"
           autoCapitalize="off"
           spellCheck={false}
+          // 실패 문구(아래 status)를 이 칸의 설명으로 잇는다.
+          aria-invalid={Boolean(!pending && state?.message) || undefined}
+          aria-describedby="delete-project-status"
           className="rounded-[4px] font-mono"
         />
       </div>
 
       {/* min-h 고정: 실패 문구가 생겼다 없어져도 모달 높이가 흔들리지 않는다. */}
       <div className="flex min-h-8 items-center justify-between gap-3">
+        {/* 오류 문구는 자르지 않고 줄바꿈한다 — 끝이 잘리면 무엇이 틀렸는지 알 수 없다. */}
         <p
+          id="delete-project-status"
           role="status"
           aria-live="polite"
-          className="text-destructive min-w-0 truncate text-[13px]"
+          className="text-destructive min-w-0 text-[13px] wrap-break-word"
         >
           {pending ? "" : (state?.message ?? "")}
         </p>

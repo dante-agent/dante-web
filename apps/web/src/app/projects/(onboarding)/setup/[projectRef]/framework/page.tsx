@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { Check } from "lucide-react";
 import { prisma } from "@dante/db";
 import { selectFramework } from "@/app/projects/(onboarding)/setup/[projectRef]/actions";
 import { StepHeader } from "@/components/projects/step-header";
@@ -33,6 +34,7 @@ export default async function FrameworkPage({
   return (
     <>
       <StepHeader
+        step={3}
         title="How do you run tests?"
         description="Dante writes test files to match. File location and imports differ by runner"
       />
@@ -52,7 +54,7 @@ export default async function FrameworkPage({
             // 로 CSS 가 처리하므로 이 화면에는 클라이언트 JS 가 필요 없다.
             <label
               key={framework.id}
-              className="border-border bg-card hover:border-input block cursor-pointer border p-6 transition-colors duration-[180ms] ease-out has-[:checked]:border-[#ff570a] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[#ff570a]"
+              className="group border-border bg-card hover:border-input block cursor-pointer border p-6 transition-colors duration-[180ms] ease-out has-[:checked]:border-[#ff570a] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[#ff570a]"
             >
               <input
                 type="radio"
@@ -70,6 +72,11 @@ export default async function FrameworkPage({
                     CURRENT
                   </span>
                 )}
+                {/* 선택 표시를 테두리 색에만 맡기지 않는다(WCAG 1.4.1). 스크린리더는 radio 로 안다. */}
+                <Check
+                  aria-hidden="true"
+                  className="ml-auto hidden size-4 shrink-0 self-center text-[#ff570a] group-has-[:checked]:block"
+                />
               </div>
               <p className="text-muted-foreground mt-2 text-[13px] leading-relaxed">
                 {framework.tagline}

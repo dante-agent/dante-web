@@ -87,22 +87,26 @@ export function GithubNotificationsForm({
               checked={comment}
               onChange={(value) => patch({ prCommentEnabled: value })}
             />
-            <RadioRow
-              name="prCommentMode"
-              value="sticky"
-              label="Keep one comment and edit it"
-              hint="Every push overwrites the same comment, so the timeline stays readable."
-              selected={settings.prCommentMode === "sticky"}
-              onSelect={() => patch({ prCommentMode: "sticky" })}
-            />
-            <RadioRow
-              name="prCommentMode"
-              value="append"
-              label="Post a new comment on every push"
-              hint="For teams who would rather keep the history."
-              selected={settings.prCommentMode === "append"}
-              onSelect={() => patch({ prCommentMode: "append" })}
-            />
+            {/* 라디오 묶음에 이름을 준다 — 이 화면엔 라디오 세트가 여럿이라 이름 없이는 구분되지 않는다.
+                테두리는 묶음이 대신 긋는다(안쪽 마지막 줄은 last:border-b-0 으로 선이 빠진다). */}
+            <div role="radiogroup" aria-label="Comment mode" className="border-border border-b">
+              <RadioRow
+                name="prCommentMode"
+                value="sticky"
+                label="Keep one comment and edit it"
+                hint="Every push overwrites the same comment, so the timeline stays readable."
+                selected={settings.prCommentMode === "sticky"}
+                onSelect={() => patch({ prCommentMode: "sticky" })}
+              />
+              <RadioRow
+                name="prCommentMode"
+                value="append"
+                label="Post a new comment on every push"
+                hint="For teams who would rather keep the history."
+                selected={settings.prCommentMode === "append"}
+                onSelect={() => patch({ prCommentMode: "append" })}
+              />
+            </div>
             <ToggleRow
               name="prCommentSkipUnchanged"
               label="Say nothing when no component changed"
@@ -126,6 +130,8 @@ export function GithubNotificationsForm({
                 <button
                   key={name}
                   type="button"
+                  // 고른 프리셋은 색으로만 보인다. 스크린리더에는 눌림 상태로 전한다.
+                  aria-pressed={preset === name}
                   onClick={() => choosePreset(name)}
                   className={
                     preset === name
@@ -182,16 +188,18 @@ export function GithubNotificationsForm({
             title="Language"
             description="For the comment and the check run. Test names and error messages stay as they are."
           >
-            {NOTIFICATION_LOCALES.map((option) => (
-              <RadioRow
-                key={option.id}
-                name="prCommentLocale"
-                value={option.id}
-                label={option.label}
-                selected={settings.prCommentLocale === option.id}
-                onSelect={() => patch({ prCommentLocale: option.id })}
-              />
-            ))}
+            <div role="radiogroup" aria-label="GitHub comment language">
+              {NOTIFICATION_LOCALES.map((option) => (
+                <RadioRow
+                  key={option.id}
+                  name="prCommentLocale"
+                  value={option.id}
+                  label={option.label}
+                  selected={settings.prCommentLocale === option.id}
+                  onSelect={() => patch({ prCommentLocale: option.id })}
+                />
+              ))}
+            </div>
           </Section>
 
           <Section
@@ -313,14 +321,16 @@ function CommentPreview({
   return (
     <div className="mt-8 w-full shrink-0 xl:sticky xl:top-20 xl:mt-16 xl:w-[26rem] xl:self-start">
       <div className="flex items-center justify-between">
-        <p className="text-muted-foreground font-mono text-[10px] font-bold tracking-[0.12em] uppercase">
+        {/* h2: 미리보기 안의 h3 가 앞 섹션 밑으로 들어가지 않게 제목 단계를 맞춘다. 모양은 그대로. */}
+        <h2 className="text-muted-foreground font-mono text-[10px] font-bold tracking-[0.12em] uppercase">
           Preview
-        </p>
+        </h2>
         <div className="flex gap-1">
           {(["failing", "passing"] as const).map((name) => (
             <button
               key={name}
               type="button"
+              aria-pressed={tab === name}
               onClick={() => onTab(name)}
               className={
                 tab === name

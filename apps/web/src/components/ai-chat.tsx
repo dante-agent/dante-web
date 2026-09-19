@@ -454,6 +454,7 @@ function ChatPanel({
     setInput("");
     setError(null);
     setPending(true);
+    announce("Waiting for AI reply…");
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -636,10 +637,20 @@ function ChatPanel({
       ) : (
         // 메시지 영역만 한 단계 어둡게(Mauve 1). 헤더·입력 영역(Mauve 2)이 위아래 틀이 되고
         // 내용은 그 사이에 들어앉은 것으로 읽힌다 — 셋이 같은 색이면 한 덩어리로 보인다.
-        <div ref={listRef} className="bg-background flex-1 space-y-3 overflow-y-auto p-3">
+        // 스크롤 영역에 키보드로 닿게 tabIndex. 새 글은 조각마다 읽히지 않게 aria-live="off" 로 두고,
+        // 다 받은 답만 공용 알림으로 읽는다(send).
+        <div
+          ref={listRef}
+          role="log"
+          aria-live="off"
+          aria-label="Messages"
+          tabIndex={0}
+          className="bg-background focus-visible:outline-ring flex-1 space-y-3 overflow-y-auto p-3 focus-visible:outline-2 focus-visible:-outline-offset-2"
+        >
           {conversation.isPending && conversationId !== null ? (
-            <div className="flex h-full items-center justify-center">
+            <div role="status" className="flex h-full items-center justify-center">
               <Loader2 className="text-muted-foreground size-4 animate-spin" />
+              <span className="sr-only">Loading chat…</span>
             </div>
           ) : conversation.isError ? (
             <p className="text-destructive text-sm leading-relaxed wrap-break-word whitespace-pre-line">
@@ -690,6 +701,8 @@ function ChatPanel({
                       : "text-foreground max-w-full leading-relaxed"
                   )}
                 >
+                  {/* 누가 한 말인지는 말풍선 위치·색으로만 보여서 스크린리더용 글자를 붙인다. */}
+                  <span className="sr-only">{m.role === "user" ? "You:" : "AI:"}</span>
                   {m.role === "user" ? (
                     <CollapsibleText text={m.content} />
                   ) : m.content ? (
@@ -707,7 +720,12 @@ function ChatPanel({
                       appliedCode={m.filePath === file ? currentTest : null}
                     />
                   ) : (
-                    pending && <Loader2 className="text-muted-foreground size-4 animate-spin" />
+                    pending && (
+                      <>
+                        <Loader2 className="text-muted-foreground size-4 animate-spin" />
+                        <span className="sr-only">AI is replying…</span>
+                      </>
+                    )
                   )}
                   {"aborted" in m && m.aborted && (
                     <p className="text-muted-foreground mt-1 text-xs">Stopped · Not saved</p>
@@ -904,8 +922,9 @@ function HistoryList({
 
   if (list.isPending) {
     return (
-      <div className="bg-background flex flex-1 justify-center pt-10">
+      <div role="status" className="bg-background flex flex-1 justify-center pt-10">
         <Loader2 className="text-muted-foreground size-4 animate-spin" />
+        <span className="sr-only">Loading saved chats…</span>
       </div>
     );
   }

@@ -1,6 +1,7 @@
 "use client";
 
 import { setSnooze } from "@/app/project/[projectRef]/settings/notifications/actions";
+import { announce } from "@/components/live-announcer";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -25,9 +26,11 @@ const OPTIONS = [
 ];
 
 export function SnoozeControl({ projectRef }: { projectRef: string }) {
-  const submit = (formData: FormData) => {
+  const submit = async (formData: FormData) => {
     formData.set("tzOffset", String(new Date().getTimezoneOffset()));
-    return setSnooze(formData);
+    await setSnooze(formData);
+    // 화면에는 위쪽 배너만 생긴다. 스크린리더에는 따로 알린다.
+    announce("Notifications paused.");
   };
 
   return (

@@ -1,6 +1,5 @@
 import { formatDistanceToNow } from "date-fns";
-import { setSnooze } from "@/app/project/[projectRef]/settings/notifications/actions";
-import { Button } from "@/components/ui/button";
+import { ResumeForm } from "@/components/settings/notifications/action-buttons";
 
 // 스누즈 (§6.3). 대규모 리팩터링 기간에 "GitHub 에 아무것도 쓰지 않기"를 켠다.
 //
@@ -27,13 +26,7 @@ export function SnoozeBanner({ projectRef, until }: { projectRef: string; until:
         {message} Analysis keeps running, so the dashboard stays up to date.
       </p>
 
-      <form action={setSnooze}>
-        <input type="hidden" name="projectRef" value={projectRef} />
-        <input type="hidden" name="duration" value="off" />
-        <Button type="submit" size="sm" variant="outline" className="rounded-[4px]">
-          Resume
-        </Button>
-      </form>
+      <ResumeForm projectRef={projectRef} />
     </div>
   );
 }
