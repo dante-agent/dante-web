@@ -56,7 +56,7 @@ export function AppHeader({
       {/* 검색창은 브레드크럼 길이와 무관하게 화면 중앙 고정 (레이아웃 시프트 방지) */}
       <div className="pointer-events-none absolute inset-x-0 flex justify-center px-3">
         <div className="pointer-events-auto w-full max-w-[556px]">
-          <FileSearch projectRef={project.ref} files={[]} />
+          <FileSearch projectRef={project.ref} />
         </div>
       </div>
 
