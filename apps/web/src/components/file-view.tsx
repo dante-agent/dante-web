@@ -25,7 +25,7 @@ import { iconForFile } from "@/components/file-icons";
 import { CodeSkeleton } from "@/components/generation/code-skeleton";
 import { GenerationSteps } from "@/components/generation/generation-steps";
 import { SendingFiles } from "@/components/generation/sending-files";
-import { onTestApplyRequest } from "@/components/generation/test-apply-request";
+import { onTestApplyRequest, provideAfterCode } from "@/components/generation/test-apply-request";
 import { onTestTypingRequest } from "@/components/generation/test-typing-request";
 import {
   useGenerationPerformance,
@@ -76,6 +76,13 @@ function langOf(path: string): string {
   return "plaintext";
 }
 
+/**
+ * Monaco 모델 경로. 두 가지를 동시에 푼다.
+ * - 확장자가 있어야 TS 가 .tsx 를 TSX 로 읽는다. 없으면 JSX 를 전부 문법 오류로 찍는다.
+ * - 칸마다 달라야 한다. 같은 경로면 Before|After 가 모델을 공유해 한쪽을 고치면 양쪽이 바뀐다.
+ */
+const modelPath = (role: string, path: string) => `file:///${role}/${path}`;
+
 /** 테스트 파일이 아직 없을 때 표시용 이름. `src/lib/format.ts` → `format.test.ts` */
 function guessTestName(path: string): string {
   const base = path.split("/").pop() ?? path;
@@ -86,12 +93,15 @@ function guessTestName(path: string): string {
 function CodePane({
   label,
   lang,
+  path,
   value,
   follow = false,
 }: {
   /** 스크린리더가 읽는 에디터 이름("Source: src/foo.ts"). 없으면 모든 에디터가 "Editor content" 다. */
   label: string;
   lang: string;
+  /** 이 칸만의 모델 경로(modelPath). 확장자로 TSX 여부가 갈린다. */
+  path: string;
   value: string;
   /** 내용이 늘어날 때마다 마지막 줄로 스크롤한다 — 생성 연출에서 코드가 써지는 걸 따라간다. */
   follow?: boolean;
@@ -105,6 +115,7 @@ function CodePane({
   return (
     <Editor
       language={lang}
+      path={path}
       theme={THEME}
       beforeMount={setupMonaco}
       loading={<Fallback />}
@@ -228,6 +239,7 @@ function GenerateTest({ projectRef, file }: { projectRef: string; file: string }
           <CodePane
             label={`Generated test for ${file}`}
             lang={langOf(file)}
+            path={modelPath("generating", guessTestName(file))}
             value={files[0].code.slice(0, typing.chars)}
             follow
           />
@@ -468,6 +480,17 @@ export function FileView({
       setSaveError(false);
     }
   }
+  // 수정 중인 내용을 채팅이 물어볼 수 있게 열어 둔다. ref 로 읽는 이유는 등록을 글자마다
+  // 다시 하지 않으려는 것이다 — 채팅은 보낼 때 한 번만 읽는다.
+  const editingRef = useRef(editing);
+  useEffect(() => {
+    editingRef.current = editing;
+  }, [editing]);
+  useEffect(() => {
+    if (mode !== "edit") return;
+    return provideAfterCode(() => editingRef.current);
+  }, [mode]);
+
   // 채팅 답의 Apply. 저장하지 않고 After 칸만 채운다 — 잘못 눌렀으면 ⌘Z 로 되돌아간다.
   useEffect(() => {
     if (mode !== "edit") return;
@@ -566,10 +589,16 @@ export function FileView({
 
         <div className={cn("min-h-0 bg-black", !expanded && "col-span-2")}>
           {expanded === "left" ? (
-            <CodePane label={`Before: ${testName}`} lang={lang} value={original} />
+            <CodePane
+              label={`Before: ${testName}`}
+              lang={lang}
+              path={modelPath("before", testName)}
+              value={original}
+            />
           ) : expanded === "right" ? (
             <Editor
               language={lang}
+              path={modelPath("after", testName)}
               theme={THEME}
               beforeMount={setupMonaco}
               loading={<Fallback />}
@@ -588,6 +617,8 @@ export function FileView({
               theme={THEME}
               beforeMount={setupMonaco}
               loading={<Fallback />}
+              originalModelPath={modelPath("before", testName)}
+              modifiedModelPath={modelPath("after", testName)}
               original={original}
               modified={editing}
               // DiffEditor 에는 onChange 가 없다. 오른쪽(After) 에디터에 직접 붙인다.
@@ -708,13 +739,19 @@ export function FileView({
         </Cell>
 
         <Cell show={showLeft} className={cn("bg-black", showRight && "border-r")}>
-          <CodePane label={`Source: ${file}`} lang={lang} value={content.source} />
+          <CodePane
+            label={`Source: ${file}`}
+            lang={lang}
+            path={modelPath("source", file)}
+            value={content.source}
+          />
         </Cell>
         <Cell show={showRight} className="bg-black">
           {content.test ? (
             <CodePane
               label={`Test: ${testName}`}
               lang={lang}
+              path={modelPath("test", testName)}
               value={typer.shown ?? content.test}
               follow={typer.shown !== null}
             />

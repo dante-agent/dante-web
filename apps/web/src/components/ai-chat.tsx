@@ -34,6 +34,7 @@ import {
   X,
 } from "lucide-react";
 import { ChatMarkdown } from "@/components/chat-markdown";
+import { currentAfterCode } from "@/components/generation/test-apply-request";
 import { requestTestTyping } from "@/components/generation/test-typing-request";
 import { announce } from "@/components/live-announcer";
 import { requestTestRun } from "@/components/run-terminal";
@@ -474,6 +475,8 @@ function ChatPanel({
           conversationId: sentTo,
           file,
           mode: editing ? "edit" : "view",
+          // 수정 중이면 저장된 버전 말고 지금 치고 있는 내용을 보고 고치게 한다.
+          testCode: editing ? currentAfterCode() : null,
           message: content,
         }),
         signal: controller.signal,
@@ -715,9 +718,10 @@ function ChatPanel({
                       // 지금 열어 둔 파일에 대한 답일 때만 After 에 꽂는다 — 다른 파일 답이면
                       // 꽂을 에디터가 화면에 없다.
                       applyWhere={editing && m.filePath === file ? "after" : "version"}
-                      // 지금 열어 둔 파일의 답일 때만 "이미 적용됨"을 알 수 있다. 다른 파일 답이면
-                      // 비교할 내용이 화면에 없으니 그냥 누를 수 있게 둔다.
-                      appliedCode={m.filePath === file ? currentTest : null}
+                      // 저장하는 버튼일 때만 "이미 적용됨"을 따진다. 막는 이유가 같은 내용이
+                      // 새 버전으로 쌓이는 걸 피하려는 것인데, After 에 꽂는 건 버전을 만들지
+                      // 않는다. 같은 내용이면 Save 가 비활성이라 거기서 걸린다.
+                      appliedCode={!editing && m.filePath === file ? currentTest : null}
                     />
                   ) : (
                     pending && (
