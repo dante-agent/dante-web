@@ -72,6 +72,18 @@ const OPTIONS = {
   automaticLayout: true,
   padding: { top: 12 },
 } as const;
+// 수정 모드 옵션. 렌더마다 새 객체를 넘기면 입력할 때마다 에디터가 updateOptions 를 다시 돈다(참조 비교).
+const EDIT_OPTIONS = { ...OPTIONS, readOnly: false } as const;
+const DIFF_OPTIONS = {
+  ...OPTIONS,
+  readOnly: false,
+  originalEditable: false,
+  renderSideBySide: true,
+  renderSideBySideInlineBreakpoint: 0,
+  useInlineViewWhenSpaceIsLimited: false,
+  enableSplitViewResizing: false,
+  overviewRulerBorder: false,
+} as const;
 
 function langOf(path: string): string {
   const ext = path.split(".").pop();
@@ -531,6 +543,8 @@ export function FileView({
   const original = content.test ?? "";
   const [editing, setEditing] = useState(content.testDraft ?? original);
   const [saveError, setSaveError] = useState(false);
+  // 입력마다 같은 함수를 넘긴다 — 바뀌면 라이브러리가 모델 변경 구독을 풀고 다시 건다.
+  const onEditorChange = useCallback((value: string | undefined) => setEditing(value ?? ""), []);
   const [editMode, setEditMode] = useState(mode);
   if (editMode !== mode) {
     setEditMode(mode);
@@ -640,8 +654,8 @@ export function FileView({
               beforeMount={setupMonaco}
               loading={<Fallback />}
               value={editing}
-              onChange={(value) => setEditing(value ?? "")}
-              options={{ ...OPTIONS, readOnly: false }}
+              onChange={onEditorChange}
+              options={EDIT_OPTIONS}
             />
           ) : (
             <DiffEditor
@@ -656,16 +670,7 @@ export function FileView({
                 const after = editor.getModifiedEditor();
                 after.onDidChangeModelContent(() => setEditing(after.getValue()));
               }}
-              options={{
-                ...OPTIONS,
-                readOnly: false,
-                originalEditable: false,
-                renderSideBySide: true,
-                renderSideBySideInlineBreakpoint: 0,
-                useInlineViewWhenSpaceIsLimited: false,
-                enableSplitViewResizing: false,
-                overviewRulerBorder: false,
-              }}
+              options={DIFF_OPTIONS}
             />
           )}
         </div>
