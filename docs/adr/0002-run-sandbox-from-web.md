@@ -1,8 +1,8 @@
 # ADR-0002. runner 서버를 없애고 web 에서 샌드박스를 부른다
 
-- 상태: 제안
+- 상태: 채택
 - 날짜: 2026-09-15
-- 관련: `apps/runner`, `apps/web/src/lib/notifications/pull-request-job.ts`, `pr-test-run.ts`, `runner-client.ts`
+- 관련: `packages/sandbox/run.ts`, `apps/web/src/lib/notifications/pull-request-job.ts`, `apps/web/src/lib/notifications/pr-test-run.ts`, `apps/web/src/lib/notifications/test-run-queue.ts`, `apps/web/src/lib/notifications/test-run-rules.ts`, `apps/web/src/app/api/internal/pr-test-run/route.ts` (`runner-client.ts` 는 커밋 6bfa147, `apps/runner` 는 커밋 9eb7b21 에서 지웠다)
 - 이어받는 결정: [ADR-0001](./0001-test-runtime.md) (실행 환경은 Vercel Sandbox)
 
 ## 배경
@@ -116,6 +116,30 @@ queued ─▶ running(생성) ─▶ awaiting_run ─┬─▶ running(실행) �
 있다. 실행은 패키지 함수 하나로 모여 있으므로, 샌드박스 제공자를 바꾸거나 나중에 다시 별도 서버로 떼어도 web 의 호출부와 직렬 규칙은 그대로다.
 
 대기열이 길어져 "내부 API 호출로 넘기기" 가 자주 끊기면 Vercel Queues/Workflows 같은 외부 큐로 옮기는 것을 다시 판단한다.
+
+## 현재 구현 (2026-09-19, main 041609d 기준)
+
+설계대로 된 것
+
+- `run.ts`·`report.ts` 와 테스트는 `packages/sandbox` 로 옮겼고(커밋 0d4e9f7), DB 를 모른다(`packages/sandbox/run.ts:10-15`). `apps/runner` 는 지웠다(커밋 9eb7b21). `RUNNER_URL`·`RUNNER_SECRET` 은 코드·`.env.example` 어디에도 남지 않았다.
+- 로컬 인증은 `VERCEL_TOKEN`·`VERCEL_TEAM_ID`·`VERCEL_PROJECT_ID` 세 값이다(`packages/sandbox/run.ts:292-298`, `.env.example:73-78`). 인증이 없으면 실행을 건너뛴다(`packages/sandbox/run.ts:96-99`, `apps/web/src/lib/notifications/pr-test-run.ts:41`).
+- 생성 끝 상태는 `awaiting_run` 이다(`apps/web/src/lib/notifications/pull-request-job.ts:509`). 자리 잡기는 짧은 트랜잭션 안의 `pg_advisory_xact_lock` 이고, 락 키는 `hashtext('pr-test-run:<teamId>')` 다(`apps/web/src/lib/notifications/test-run-queue.ts:50-60`). 차례는 `awaiting_run` 중 `updatedAt` 이 오래된 순이다(`test-run-queue.ts:83-87`).
+- 다음 작업은 내부 API `POST /api/internal/pr-test-run` 으로 새 함수에서 시작한다(`test-run-queue.ts:106-122`). 받는 쪽은 202 를 먼저 돌려주고 `after()` 로 실행한다(`apps/web/src/app/api/internal/pr-test-run/route.ts:34-40`). 요청은 `GITHUB_APP_WEBHOOK_SECRET` 으로 작업 ID·만료(5분)를 HMAC 서명한다(`apps/web/src/lib/notifications/test-run-rules.ts:55-89`). 부를 주소는 `INTERNAL_APP_URL` 이 우선이다(`test-run-queue.ts:131-144`).
+- `maxDuration = 800` 을 웹훅(생성, `apps/web/src/app/api/github/webhook/route.ts:19`), 내부 실행(`apps/web/src/app/api/internal/pr-test-run/route.ts:13`), 실시간 실행(`apps/web/src/app/api/projects/[projectRef]/runs/live/route.ts:15`) 라우트에 둔다. 설정·PR 화면 두 곳에도 같은 값이 있다(`apps/web/src/app/project/[projectRef]/settings/notifications/page.tsx:31`, `apps/web/src/app/project/[projectRef]/pull/[prNumber]/page.tsx:16`). "설정 없음 = 300초" 는 더 이상 해당하지 않는다.
+- `queue.ts` 는 `apps/runner` 와 함께 지웠다(커밋 9eb7b21).
+
+설계와 다른 것
+
+- 실행 중 상태값은 `testing` 으로 정했다. 생성 쪽 `running` 과 상태값으로 나눴다(`packages/db/prisma/schema.prisma:655-657`, `apps/web/src/lib/notifications/pull-request-job.ts:55`). 생성이 넘기는 값은 `runInput`, 실행 시작 시각은 `runStartedAt` 컬럼에 둔다(`packages/db/prisma/schema.prisma:671`, `:673`).
+- 명령 상한은 기본 5분, 최대 10분이고, 명령마다가 아니라 전체 마감에서 남은 시간을 준다. 샌드박스 수명은 여기에 1분을 더한다(`packages/sandbox/run.ts:18`, `:26`, `:107-111`, `:139`). Runtime 탭도 10분까지만 받고, 예전에 15분으로 저장된 값은 10분으로 접는다(`apps/web/src/lib/projects/runtime.ts:25-29`, `:89`).
+- 죽은 작업은 "무시" 하지 않고, 자리 잡기 트랜잭션 안에서 `failed` 로 닫는다. 기준은 `runStartedAt` 이 15분 넘은 `testing` 이다(`apps/web/src/lib/notifications/test-run-rules.ts:47-53`, `test-run-queue.ts:67-79`). 새 작업·Re-run 은 15분 넘게 멈춘 진행 중 작업도 다시 `queued` 로 되돌린다(`apps/web/src/lib/notifications/pull-request-job.ts:128-132`).
+- 자리 잡기를 다시 시도하는 때는 "새 작업이 들어올 때" 가 아니라 그 작업의 생성이 끝났을 때와 앞 실행이 끝났을 때다(`pull-request-job.ts:178-179`, `:233-235`). 넘기는 요청이 실패하면 작업을 `awaiting_run` 으로 되돌린다(`test-run-queue.ts:29-40`).
+- `@vercel/sandbox` 의존성은 web 이 아니라 `packages/sandbox` 에 있다(`packages/sandbox/package.json:16`). web 은 `@dante/sandbox` 만 의존한다(`apps/web/package.json:19`).
+- `pnpm-workspace.yaml` 은 `apps/*` 글롭이라 고치지 않았다(`pnpm-workspace.yaml:2`).
+
+아직 안 된 것
+
+- 대시보드 수동 실행(`TestRun`)은 이미 샌드박스를 쓰지만(`apps/web/src/app/api/projects/[projectRef]/runs/live/route.ts:85`) 자리 잡기를 거치지 않는다. 줄은 `PullRequestJob` 만 본다(`test-run-queue.ts:62-65`). [ADR-0003](./0003-dante-provided-test-toolkit.md) 의 "미해결: 팀 단위 직렬" 과 같은 문제다.
 
 ## 참고
 

@@ -1,8 +1,8 @@
 # ADR-0001. 생성된 테스트를 어디서 실행할 것인가
 
-- 상태: 채택
+- 상태: 채택 · 실행 위치(`apps/runner` 서버)는 [ADR-0002](./0002-run-sandbox-from-web.md) 로 대체
 - 날짜: 2026-09-10
-- 관련: `apps/runner`, `/project/[ref]/settings/runtime`
+- 관련: `packages/sandbox`, `apps/web/src/app/project/[projectRef]/settings/runtime/page.tsx`, `apps/web/src/lib/projects/runtime.ts` (`apps/runner` 는 커밋 9eb7b21 에서 지웠다)
 
 ## 배경
 
@@ -68,6 +68,16 @@ dante 는 사용자 레포의 컴포넌트를 읽어 테스트 코드를 만들�
 있다. web 은 `apps/runner` 의 `POST /runs` 만 호출하므로, 그 안쪽 구현을 Vercel Sandbox → Daytona → 자체 Docker 중 무엇으로 바꿔도 web 코드는 그대로다. 이 경계를 유지하는 것이 이 결정의 전제다.
 
 비용이 실제로 문제가 될 만큼 사용량이 커지면 그때 다시 판단한다. 고정비가 없고 단가도 싼 Daytona 가 1순위 대안, 규모가 더 커지면 1번이다.
+
+## 현재 구현 (2026-09-19, main 041609d 기준)
+
+- Vercel Sandbox 선택은 그대로다. 샌드박스는 vCPU 2개로 띄운다(`packages/sandbox/run.ts:134-143`).
+- `apps/runner` 의 `POST /runs` 는 채우지 않는다. ADR-0002 로 runner 서버를 `Dockerfile` 과 함께 지웠고(커밋 9eb7b21), 같은 흐름은 `packages/sandbox` 의 함수 `runTest`·`runTestLive` 가 한다(`packages/sandbox/index.ts:5-6`). "web 은 `POST /runs` 만 호출한다" 는 경계는 이 패키지 입구가 대신 지킨다.
+- 인증은 OIDC 그대로다. 로컬에서 OIDC 를 못 받는 경우(팀 뷰어 등)를 위해 `VERCEL_TOKEN`·`VERCEL_TEAM_ID`·`VERCEL_PROJECT_ID` 세 값도 받는다(`packages/sandbox/run.ts:96-99`, `packages/sandbox/run.ts:292-298`, `.env.example:73-78`).
+- README 인프라 표는 "Vercel Sandbox" 로 고쳤다(`README.md:93`).
+- Runtime 탭이 받는 값은 install 커맨드, test 커맨드, 타임아웃 셋이다(`apps/web/src/components/settings/runtime/runtime-form.tsx:71`, `:79`, `:99`). 타임아웃은 30초~10분이고(`apps/web/src/lib/projects/runtime.ts:28-29`), 화면에서 고르는 값은 1·3·5·10분이다(`apps/web/src/lib/projects/runtime.ts:99`).
+- 패키지 매니저는 따로 받지 않는다. 레포 lockfile 로 정해 install 커맨드 기본값에 녹인다(`apps/web/src/lib/projects/detect-runtime.ts:46-48`).
+- 아직 안 된 것: Node 버전과 환경 변수. 화면에는 ComingSoon 안내만 있고(`apps/web/src/app/project/[projectRef]/settings/runtime/page.tsx:57-62`), DB 컬럼도 없다(`packages/db/prisma/schema.prisma:251-252`).
 
 ## 참고
 
