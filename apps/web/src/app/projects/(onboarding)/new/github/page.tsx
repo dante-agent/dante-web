@@ -121,6 +121,7 @@ export default async function GitHubConnectPage({
       </div>
 
       <StepHeader
+        step={2}
         title="Which repository?"
         description="One is enough to start. You can add more projects later"
       />
@@ -194,10 +195,11 @@ function errorMessage(code: string) {
 
 // 상태 색은 DESIGN.md §1 을 따른다 — 오류는 destructive, 안내는 Cobalt(정보).
 // 각진 테두리 대신 왼쪽 굵은 선만 쓴다. 배너가 패널처럼 보이면 시선을 뺏는다.
+// 오류만 alert(바로 끊고 읽음), 정보성 안내는 status.
 function Banner({ tone, children }: { tone: "error" | "notice"; children: React.ReactNode }) {
   return (
     <p
-      role="alert"
+      role={tone === "error" ? "alert" : "status"}
       className={`mt-6 border-l-2 py-1 pl-4 text-[13px] leading-relaxed ${
         tone === "error"
           ? "border-destructive text-destructive"

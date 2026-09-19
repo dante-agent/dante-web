@@ -1,5 +1,6 @@
 "use client";
 
+import { useId } from "react";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { MAX_SELECT } from "./suggested-list";
@@ -41,7 +42,16 @@ export function GenerateTestButton({
 }) {
   const locked = selectMode && !checked && selectionFull;
   const className =
-    "flex w-full items-center gap-3 rounded-lg p-2.5 text-left disabled:cursor-default";
+    "flex w-full items-center gap-3 rounded-lg p-2.5 text-left aria-disabled:cursor-default";
+  // 이름(aria-label)은 짧게 두고, 카드 본문(우선순위·경로·추천 사유)은 설명으로 잇는다.
+  // aria-label 만 두면 본문이 통째로 가려져 스크린리더로는 왜 추천됐는지 들을 수 없다.
+  const bodyId = useId();
+  const lockedId = useId();
+  const body = (
+    <span id={bodyId} className="contents">
+      {children}
+    </span>
+  );
 
   if (selectMode) {
     return (
@@ -50,12 +60,21 @@ export function GenerateTestButton({
         role="checkbox"
         aria-checked={checked}
         aria-label={`Select ${componentName}`}
+        aria-describedby={locked ? `${lockedId} ${bodyId}` : bodyId}
         title={locked ? `Up to ${MAX_SELECT} files at a time` : undefined}
-        disabled={locked}
-        onClick={onToggle}
+        // 한도에 닿은 카드도 포커스는 받아야 이유(title)를 들을 수 있다 — disabled 대신 aria-disabled.
+        aria-disabled={locked}
+        onClick={() => {
+          if (!locked) onToggle?.();
+        }}
         className={className}
       >
-        {children}
+        {body}
+        {locked && (
+          <span id={lockedId} className="sr-only">
+            Maximum reached. Up to {MAX_SELECT} files at a time.
+          </span>
+        )}
         <input
           type="checkbox"
           checked={checked}
@@ -76,9 +95,10 @@ export function GenerateTestButton({
       // 미리 받을 이유도 없다.
       prefetch={false}
       aria-label={`Generate tests for ${componentName}`}
+      aria-describedby={bodyId}
       className={className}
     >
-      {children}
+      {body}
       <ArrowRight
         aria-hidden
         className="text-muted-foreground group-hover:text-foreground size-4 shrink-0 transition-transform duration-150 group-hover:translate-x-0.5 motion-reduce:transition-none"

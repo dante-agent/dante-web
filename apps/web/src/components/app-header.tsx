@@ -18,7 +18,11 @@ import type { ProjectSummary } from "@/lib/projects/queries";
 import type { TeamOption } from "@/lib/teams/current";
 
 function Slash() {
-  return <span className="text-muted-foreground/40 text-sm select-none">/</span>;
+  return (
+    <span aria-hidden="true" className="text-muted-foreground/40 text-sm select-none">
+      /
+    </span>
+  );
 }
 
 export function AppHeader({
@@ -53,13 +57,6 @@ export function AppHeader({
 
   return (
     <header className="bg-sidebar border-sidebar-border fixed inset-x-0 top-0 z-40 flex h-[47px] items-center border-b pr-3">
-      {/* 검색창은 브레드크럼 길이와 무관하게 화면 중앙 고정 (레이아웃 시프트 방지) */}
-      <div className="pointer-events-none absolute inset-x-0 flex justify-center px-3">
-        <div className="pointer-events-auto w-full max-w-[556px]">
-          <FileSearch projectRef={project.ref} />
-        </div>
-      </div>
-
       {/* 로고 = 메인 레일(w-14)과 같은 열 → 첫 구분자가 레일 border-r 선에 맞음 */}
       <div className="flex h-full w-14 shrink-0 items-center pl-[18px]">
         <Link href="/projects" aria-label="Dante">
@@ -67,13 +64,14 @@ export function AppHeader({
         </Link>
       </div>
 
-      <div className="flex shrink-0 items-center gap-4">
+      <nav aria-label="Breadcrumb" className="flex shrink-0 items-center gap-4">
         {/* 팀은 쿠키가 아니라 이 프로젝트의 팀이다(lib/teams/current.ts). */}
         <Slash />
         <TeamSwitcher teams={teams} value={project.teamId} landing="projects" />
 
         <Slash />
         <HeaderSwitcher
+          kind="Organization"
           value={owner}
           items={owners.map((o) => ({ value: o, label: o }))}
           findLabel="Find organization…"
@@ -93,6 +91,7 @@ export function AppHeader({
 
         <Slash />
         <HeaderSwitcher
+          kind="Repository"
           value={project.ref}
           items={ownerProjects.map((p) => ({ value: p.ref, label: p.name }))}
           findLabel="Find repository…"
@@ -100,6 +99,14 @@ export function AppHeader({
           icon={<Box className="text-muted-foreground size-3.5 shrink-0" />}
           footer={newRow("New repository", "/projects/new/github")}
         />
+      </nav>
+
+      {/* 검색창은 브레드크럼 길이와 무관하게 화면 중앙 고정 (레이아웃 시프트 방지).
+          absolute 라 DOM 순서와 화면 위치가 무관하다 — 탭 순서가 로고·브레드크럼 다음이 되게 뒤에 둔다. */}
+      <div className="pointer-events-none absolute inset-x-0 flex justify-center px-3">
+        <div className="pointer-events-auto w-full max-w-[556px]">
+          <FileSearch projectRef={project.ref} />
+        </div>
       </div>
 
       <div className="ml-auto flex shrink-0 items-center gap-2">

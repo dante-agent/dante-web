@@ -1,8 +1,8 @@
 # ADR-0003. 테스트 실행 환경은 Dante 가 전부 제공하고, 테스트 대상만 사용자 레포에서 가져온다
 
-- 상태: 제안
+- 상태: 채택
 - 날짜: 2026-09-16
-- 관련: `packages/sandbox/live.ts`, `apps/web/src/app/api/projects/[projectRef]/runs/live/route.ts`, `apps/web/src/lib/projects/test-generation.ts`, `apps/web/src/app/api/chat/route.ts`
+- 관련: `packages/sandbox/live.ts`, `packages/sandbox/toolkit.ts`, `apps/web/src/app/api/projects/[projectRef]/runs/live/route.ts`, `apps/web/src/lib/projects/test-generation.ts`, `apps/web/src/lib/projects/test-generation-prompt.ts`, `apps/web/src/app/api/chat/route.ts`
 - 이어받는 결정: [ADR-0001](./0001-test-runtime.md) (실행 환경은 Vercel Sandbox), [ADR-0002](./0002-run-sandbox-from-web.md) (web 이 샌드박스를 부른다)
 
 ## 배경
@@ -225,6 +225,26 @@ ADR-0002 는 "대시보드의 수동 실행(`TestRun`)이 샌드박스를 쓰게
 있다. Dante 환경은 샌드박스 실행 흐름의 한 단계(도구 설치)와 실행 커맨드·설정 파일, 프롬프트 한 줄이다. 되돌리면 1번(레포 그대로)이 된다.
 
 도구 제공이 PR 자동 테스트에도 필요해지면, PR 경로 담당과 함께 `runTest` 에 같은 환경을 넣을지 다시 판단한다. 도구 설치 시간이 문제가 되면 도구가 미리 깔린 샌드박스 스냅샷을 검토한다.
+
+## 현재 구현 (2026-09-19, main 041609d 기준)
+
+설계대로 된 것
+
+- 도구 폴더는 `/tmp/dante-toolkit`, 도구 버전은 "검증" 절의 버전으로 고정했다(`packages/sandbox/toolkit.ts:9-32`). vitest 는 도구 폴더의 React 를 지운다(`packages/sandbox/toolkit.ts:285-294`).
+- vitest 설정(`root`·별칭·`jsdom`·`server.deps.inline`·`setupFiles`)과 `NODE_PATH`, jest 설정(CSS 스텁을 별칭보다 먼저 둔 `moduleNameMapper`·swc·`setupFilesAfterEnv`)이 설계와 같다(`packages/sandbox/toolkit.ts:197-278`).
+- 실시간 실행은 install 커맨드는 쓰고 test 커맨드는 쓰지 않는다(`packages/sandbox/live.ts:108-115`, `:151-158`). PR 경로 `runTest` 에는 도구 설치 단계가 없다(`packages/sandbox/run.ts:156-181`).
+- 폴더 보기·추천 화면 생성은 도구 안내를 켜고(`apps/web/src/lib/projects/test-generation.ts:75-76`, `apps/web/src/lib/projects/test-generation-prompt.ts:98-100`), AI 채팅 시스템 프롬프트도 같은 도구를 알린다(`apps/web/src/app/api/chat/route.ts:101`).
+
+설계와 다른 것
+
+- 실시간 실행(`/runs/live`)은 폴더 보기 터미널뿐 아니라 추천 세션 상세의 실행 패널도 쓴다(`apps/web/src/app/api/projects/[projectRef]/runs/live/route.ts:6-7`, `apps/web/src/app/project/[projectRef]/recommend/[session]/_components/test-run-panel.tsx:53`). 그래서 이 결정의 실행 범위도 두 화면이다.
+- vitest setup 은 `@testing-library/react` 를 못 불러오면 화면 정리만 건너뛴다. React 가 없는 레포도 돌게 하려는 것이다(`packages/sandbox/toolkit.ts:221-229`). 채팅 프롬프트도 `@testing-library/react` 는 레포에 React 가 있어야 한다고 알린다(`apps/web/src/app/api/chat/route.ts:101`).
+- vitest 는 JSON 리포트와 함께 기본 리포터도 켠다(`--reporter=default --reporter=json`, `packages/sandbox/toolkit.ts:234-237`).
+- "검증" 절의 "저장용 로그에 색 코드가 남지 않는다" 는 지금과 다르다. 저장 로그는 색(SGR) 코드만 남기고 나머지 제어 코드를 뺀다(`packages/sandbox/live.ts:225-226`, `packages/sandbox/run.ts:241-247`, 커밋 d3df6ad).
+
+아직 안 된 것
+
+- 팀 단위 직렬은 여전히 미해결이다. `/runs/live` 는 자리 잡기 없이 `runTestLive` 를 부른다(`apps/web/src/app/api/projects/[projectRef]/runs/live/route.ts:85`). 폴더 보기는 실행 중 버튼을 막고(`apps/web/src/components/file-view.tsx:683`), 한 화면에서 새 실행을 시작하면 앞 요청을 끊는다(`apps/web/src/components/run-terminal.tsx:89`).
 
 ## 참고
 

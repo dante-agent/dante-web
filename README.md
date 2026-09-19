@@ -52,6 +52,7 @@ packages/sandbox  Vercel Sandbox 로 테스트 한 번 실행 (ADR-0001, ADR-000
 | class-variance-authority    | 0.7.1           | variant                                     |
 | cn                          | 0.2.5           | className 병합 (clsx + tailwind-merge 대체) |
 | lucide-react                | 1.41.0          | 아이콘                                      |
+| hack-font                   | 3.3.0           | mono 서체 Hack (DESIGN.md §3)               |
 | tw-animate-css              | 1.4.0           | 애니메이션 유틸                             |
 | @tanstack/react-query       | 5.102.8         | 서버 상태                                   |
 | zod                         | 4.5.4           | 스키마 검증                                 |
@@ -60,6 +61,8 @@ packages/sandbox  Vercel Sandbox 로 테스트 한 번 실행 (ADR-0001, ADR-000
 | @supabase/supabase-js       | 2.115.0         | Supabase 클라이언트                         |
 | @supabase/ssr               | 0.12.6          | 세션/쿠키 (server·client·proxy)             |
 | @monaco-editor/react        | 4.7.0           | 코드 에디터 + diff                          |
+| react-markdown / remark-gfm | 10.1.0 / 4.0.1  | 채팅·코멘트 마크다운 렌더링                 |
+| anser                       | 2.3.5           | 실행 로그 ANSI 색                           |
 | octokit                     | 5.0.5           | GitHub API                                  |
 | semver                      | 7.8.5           | 실행 환경 판별                              |
 | ts-morph                    | 28.0.0          | 컴포넌트 추출                               |
@@ -88,6 +91,6 @@ packages/sandbox  Vercel Sandbox 로 테스트 한 번 실행 (ADR-0001, ADR-000
 
 |                |                                  |
 | -------------- | -------------------------------- |
-| Supabase       | Auth + Postgres + Realtime       |
+| Supabase       | Auth + Postgres                  |
 | Vercel         | web 배포                         |
 | Vercel Sandbox | 테스트 실행 (ADR-0001, ADR-0002) |

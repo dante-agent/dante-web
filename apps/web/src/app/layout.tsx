@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
+import { SkipLink } from "@/components/skip-link";
 import { siteUrl } from "@/lib/site-url";
 import { Providers } from "./providers";
 
@@ -60,8 +61,10 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="ko" className={`${geist.variable} ${hack.variable}`}>
+    // 화면 문구가 영어라 lang 은 en. 한국어 문서(약관·개인정보)는 그 <main> 에만 lang="ko" 를 붙인다.
+    <html lang="en" className={`${geist.variable} ${hack.variable}`}>
       <body>
+        <SkipLink />
         <Providers>{children}</Providers>
       </body>
     </html>

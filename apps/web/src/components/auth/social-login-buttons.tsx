@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { GitHubIcon, GoogleIcon } from "@/components/brand-icons";
+import { useAnnounce } from "@/components/live-announcer";
 import { createClient } from "@/lib/supabase/client";
 
 // GitHub·Google 둘 다 흐름이 같아서 provider 만 바꿔 끼운다.
@@ -17,6 +18,8 @@ export function SocialLoginButtons({ next }: { next: string }) {
   // 이동하는 동안 두 버튼을 함께 잠글 수 있다.
   const [pending, setPending] = useState<Provider | null>(null);
   const [failed, setFailed] = useState(false);
+  // 누르면 버튼만 잠기고 화면 글자는 그대로라, 이동 중이라는 것을 스크린리더에 알린다.
+  useAnnounce(pending === "github" ? "Redirecting to GitHub…" : null);
 
   async function signIn(provider: Provider) {
     setPending(provider);
@@ -48,6 +51,7 @@ export function SocialLoginButtons({ next }: { next: string }) {
         className="h-10 w-full gap-2.5"
         onClick={() => signIn("github")}
         disabled={pending !== null}
+        focusableWhenDisabled
       >
         <GitHubIcon className="size-4" />
         Continue with GitHub
@@ -64,9 +68,14 @@ export function SocialLoginButtons({ next }: { next: string }) {
       >
         <GoogleIcon className="size-4" />
         Continue with Google
-        <span className="text-muted-foreground border-border absolute right-2.5 hidden border px-1 py-0.5 font-mono text-[9px] font-bold tracking-[0.06em] @min-[360px]:block">
+        {/* 배지는 좁으면 숨겨지므로 스크린리더에는 폭과 상관없이 sr-only 글자로 알린다. */}
+        <span
+          aria-hidden="true"
+          className="text-muted-foreground border-border absolute right-2.5 hidden border px-1 py-0.5 font-mono text-[9px] font-bold tracking-[0.06em] @min-[360px]:block"
+        >
           COMING SOON
         </span>
+        <span className="sr-only">(coming soon)</span>
       </Button>
 
       {failed && (

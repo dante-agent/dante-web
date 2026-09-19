@@ -35,7 +35,8 @@ export function DeletedNotice({
         <CircleCheck className="text-brand-mint mt-0.5 size-4 shrink-0" aria-hidden="true" />
 
         <div className="min-w-0 flex-1">
-          <h2 className="text-[15px] leading-snug font-medium">Project deleted</h2>
+          {/* 제목 태그를 쓰지 않는다 — 페이지 h1(Projects)보다 앞에 놓여 헤딩 순서가 뒤집힌다. */}
+          <p className="text-[15px] leading-snug font-medium">Project deleted</p>
 
           {installation ? (
             <>
@@ -51,7 +52,8 @@ export function DeletedNotice({
                 rel="noreferrer noopener"
                 className="text-muted-foreground hover:text-foreground mt-4 inline-block font-mono text-[11px] tracking-wide transition-colors duration-[180ms] ease-out"
               >
-                MANAGE ON GITHUB ↗
+                MANAGE ON GITHUB <span aria-hidden="true">↗</span>
+                <span className="sr-only"> (opens in new tab)</span>
               </a>
             </>
           ) : (

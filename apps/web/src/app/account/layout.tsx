@@ -3,6 +3,7 @@ import Link from "next/link";
 import danteLogo from "@/assets/dante-logo.png";
 import { AccountSidebar } from "@/components/account/account-sidebar";
 import { FeedbackLink } from "@/components/feedback-link";
+import { MAIN_CONTENT_ID } from "@/components/skip-link";
 import { UserMenu } from "@/components/user-menu";
 import { avatarUrl, displayName, requireUser } from "@/lib/auth/user";
 
@@ -23,10 +24,12 @@ export default async function AccountLayout({ children }: LayoutProps<"/account"
           </Link>
         </div>
 
-        <div className="flex shrink-0 items-center gap-4">
-          <span className="text-muted-foreground/40 text-sm select-none">/</span>
+        <nav aria-label="Breadcrumb" className="flex shrink-0 items-center gap-4">
+          <span aria-hidden="true" className="text-muted-foreground/40 text-sm select-none">
+            /
+          </span>
           <span className="px-2 text-sm font-medium">Account</span>
-        </div>
+        </nav>
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
           <FeedbackLink />
@@ -35,7 +38,9 @@ export default async function AccountLayout({ children }: LayoutProps<"/account"
       </header>
 
       <AccountSidebar />
-      <main className="ml-14 p-8">{children}</main>
+      <main id={MAIN_CONTENT_ID} className="ml-14 p-8">
+        {children}
+      </main>
     </div>
   );
 }

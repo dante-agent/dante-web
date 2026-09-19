@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import danteLogo from "@/assets/dante-logo.png";
+import { MAIN_CONTENT_ID } from "@/components/skip-link";
 
 // 약관/방침처럼 "제목 + 조항 나열" 구조가 같은 문서를 하나의 셸로 그린다.
 // 본문을 JSX 로 직접 쓰지 않고 데이터로 받는 이유:
@@ -53,7 +54,7 @@ export function LegalDocument({
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-12">
+      <main id={MAIN_CONTENT_ID} lang="ko" className="mx-auto w-full max-w-3xl flex-1 px-6 py-12">
         <h1 className="font-heading text-3xl font-semibold tracking-tight">{title}</h1>
         {/* 날짜·메타데이터는 Utility 서체(Hack) — DESIGN.md §3 */}
         <p className="text-muted-foreground mt-3 font-mono text-xs tracking-wide uppercase">
@@ -70,7 +71,10 @@ export function LegalDocument({
                   href={`#${section.id}`}
                   className="hover:text-foreground underline-offset-2 hover:underline"
                 >
-                  <span className="font-mono text-xs">{String(index + 1).padStart(2, "0")}</span>{" "}
+                  {/* 조항 제목에 이미 "제1조" 번호가 있어 스크린리더에는 앞 번호를 읽히지 않는다. */}
+                  <span aria-hidden="true" className="font-mono text-xs">
+                    {String(index + 1).padStart(2, "0")}
+                  </span>{" "}
                   {section.title}
                 </a>
               </li>
@@ -81,7 +85,8 @@ export function LegalDocument({
         <div className="mt-12 space-y-10">
           {sections.map((section) => (
             // scroll-mt: 목차에서 점프했을 때 sticky 헤더(h-14) 뒤로 제목이 숨지 않게 한다.
-            <section key={section.id} id={section.id} className="scroll-mt-20">
+            // html 의 scroll-padding-top(47px)에 더해져 합이 전과 같은 약 80px 이 된다.
+            <section key={section.id} id={section.id} className="scroll-mt-8">
               <h2 className="font-heading text-lg font-semibold tracking-tight">{section.title}</h2>
               <div className="mt-4 space-y-4">
                 {section.blocks.map((block, index) => (

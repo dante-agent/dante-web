@@ -4,7 +4,7 @@ Dante 디자인 시스템 초안. **Brand colors / Supporting palette / Typograp
 값은 [CodeRabbit brand guidelines](https://www.coderabbit.ai/brand) (2026-09-08 기준)를 참조해 가져온 것이고,
 로고·마크·브랜드 락업은 가져오지 않는다 (상표).
 
-스페이싱·radius·shadow·컴포넌트 스펙은 이 문서 범위 밖. shadcn 기본값(`apps/web/src/app/globals.css`)을 그대로 쓴다.
+스페이싱·radius·shadow·컴포넌트 스펙은 이 문서 범위 밖. shadcn 기본값(`apps/web/src/app/globals.css`)을 그대로 쓴다. 단 `--radius` 는 `0.5rem`(shadcn 기본 `0.625rem`)으로 바꿨다.
 
 ---
 
@@ -42,6 +42,8 @@ Dante 디자인 시스템 초안. **Brand colors / Supporting palette / Typograp
 | 10  | `#7D7982` | secondary 텍스트      |
 | 11  | `#B5B2B9` | body 텍스트           |
 | 12  | `#EEEDF0` | heading·고대비 텍스트 |
+
+`--muted-foreground` 는 Mauve 9 가 아니라 Mauve 10 의 명도를 올린 `#85818A` 다 — 배경·카드 대비 4.6:1 이상(WCAG AA).
 
 > 라이트 모드 없음. 앱은 다크 단일 — 토글/`prefers-color-scheme` 대응 안 한다.
 
@@ -122,5 +124,5 @@ CodeRabbit이 공개한 스텝 번호만 존재. 표면 틴트 → 진한 배경
 이 문서는 팔레트(다크 전용)와 타이포만 정의한다. 아래는 없다:
 
 - 라이트 모드 — 다크 단일, 대응 안 함
-- 스페이싱·radius·shadow — shadcn/Tailwind 기본값 사용
+- 스페이싱·radius·shadow — shadcn/Tailwind 기본값 사용 (`--radius` 만 `0.5rem`)
 - 컴포넌트별 스펙

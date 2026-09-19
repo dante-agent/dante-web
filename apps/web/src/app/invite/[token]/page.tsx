@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import danteLogo from "@/assets/dante-logo.png";
+import { MAIN_CONTENT_ID } from "@/components/skip-link";
 import { AcceptInvite } from "@/components/team/accept-invite";
 import { buttonVariants } from "@/components/ui/button";
 import { displayName, requireUser } from "@/lib/auth/user";
@@ -77,7 +78,10 @@ function GoToProjects() {
 // auth/extension/page.tsx 와 같은 틀. 로그인 화면 계열의 한 장짜리 화면이다.
 function Frame({ children }: { children: ReactNode }) {
   return (
-    <main className="bg-background-warm flex min-h-svh items-center justify-center px-6 py-16">
+    <main
+      id={MAIN_CONTENT_ID}
+      className="bg-background-warm flex min-h-svh items-center justify-center px-6 py-16"
+    >
       <div className="w-full max-w-sm">
         <Image
           src={danteLogo}

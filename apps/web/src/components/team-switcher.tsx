@@ -25,6 +25,7 @@ export function TeamSwitcher({
 
   return (
     <HeaderSwitcher
+      kind="Team"
       value={value}
       items={teams.map((team) => ({ value: team.id, label: team.name }))}
       findLabel="Find team…"

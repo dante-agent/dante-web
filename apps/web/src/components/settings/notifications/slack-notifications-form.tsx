@@ -7,16 +7,13 @@ import {
   type SaveState,
   type SlackTestState,
 } from "@/app/project/[projectRef]/settings/notifications/actions";
-import {
-  FormStatus,
-  RadioRow,
-  Section,
-  ToggleRow,
-} from "@/components/settings/notifications/controls";
+import { RadioRow, Section, ToggleRow } from "@/components/settings/notifications/controls";
+import { FormStatus } from "@/components/settings/notifications/form-status";
 import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
+  SelectFieldLabel,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -105,10 +102,6 @@ export function SlackNotificationsForm({
         />
 
         <div className="border-border border-b p-4">
-          <span className="block text-[13px] leading-tight">Channel</span>
-          <span className="text-muted-foreground mt-1 block text-[12px] leading-relaxed">
-            Private channels only show up after you invite @dante to them.
-          </span>
           {/* name 을 주면 Base UI 가 숨은 input 을 만들어 폼에 값이 실린다 (runtime-form.tsx). */}
           <Select
             name="slackChannelId"
@@ -116,7 +109,15 @@ export function SlackNotificationsForm({
             onValueChange={(value) => setChannelId(String(value ?? ""))}
             items={items}
           >
+            <SelectFieldLabel className="block text-[13px] leading-tight">Channel</SelectFieldLabel>
+            <span
+              id="slack-channel-hint"
+              className="text-muted-foreground mt-1 block text-[12px] leading-relaxed"
+            >
+              Private channels only show up after you invite @dante to them.
+            </span>
             <SelectTrigger
+              aria-describedby="slack-channel-hint"
               size="sm"
               className="mt-3 w-64 pr-2.5 text-[13px] data-[size=sm]:rounded-[4px]"
             >
@@ -154,21 +155,30 @@ export function SlackNotificationsForm({
         title="Message language"
         description="Test names and error messages stay as they are."
       >
-        {NOTIFICATION_LOCALES.map((option) => (
-          <RadioRow
-            key={option.id}
-            name="slackLocale"
-            value={option.id}
-            label={option.label}
-            selected={locale === option.id}
-            onSelect={() => setLocale(option.id)}
-          />
-        ))}
+        {/* 이름을 준다 — 채널마다 "Message language" 섹션이 있어 제목만으로는 구분되지 않는다. */}
+        <div role="radiogroup" aria-label="Slack message language">
+          {NOTIFICATION_LOCALES.map((option) => (
+            <RadioRow
+              key={option.id}
+              name="slackLocale"
+              value={option.id}
+              label={option.label}
+              selected={locale === option.id}
+              onSelect={() => setLocale(option.id)}
+            />
+          ))}
+        </div>
       </Section>
 
       {/* 버튼 글자는 진행 중에도 바꾸지 않는다(discord-form.tsx). 진행 표시는 상태 자리 하나에서만. */}
       <div className="mt-4 flex max-w-2xl flex-wrap items-center gap-3">
-        <Button type="submit" size="sm" disabled={saving || testing} className="rounded-[4px]">
+        <Button
+          type="submit"
+          size="sm"
+          disabled={saving || testing}
+          focusableWhenDisabled
+          className="rounded-[4px]"
+        >
           Save
         </Button>
         <Button

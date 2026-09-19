@@ -1,10 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useFormStatus } from "react-dom";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import { ArrowRight, Lock, Search } from "lucide-react";
 import { importRepo } from "@/app/projects/(onboarding)/new/github/actions";
+import { useAnnounce } from "@/components/live-announcer";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -69,6 +71,16 @@ export function RepoPicker({
     );
   }, [repos, activeOwner, query]);
 
+  // 검색 결과 수는 화면 글자만 바뀌어서 스크린리더용으로 따로 알린다(검색어가 있을 때만).
+  const needle = query.trim();
+  useAnnounce(
+    needle && repos.length > 0
+      ? visible.length === 0
+        ? `No repositories match "${needle}"`
+        : `${visible.length} ${visible.length === 1 ? "repository" : "repositories"} found`
+      : null
+  );
+
   return (
     <>
       <div className="flex gap-2">
@@ -79,7 +91,16 @@ export function RepoPicker({
           {/* SelectTrigger 의 기본 클래스에 data-[size=default]:h-8 이 들어 있어
               h-9 만으로는 안 먹는다(선택자가 달라 tailwind-merge 가 못 합친다).
               옆 검색 입력과 높이를 맞추려면 같은 선택자로 덮어야 한다. */}
-          <SelectTrigger className="shrink-0 rounded-[4px] data-[size=default]:h-9">
+          {/* 이름은 Select.Label 로 잇는 게 Base UI 방식인데, 이 화면에서는 트리거에 aria-labelledby 가
+              붙지 않았다(런타임 설정 화면은 붙는다 — 원인 미상). 트리거에 직접 건다. Base UI 는
+              넘긴 prop 을 내부 값보다 나중에 합치므로 이 값이 남는다. */}
+          <span id="github-account-label" className="sr-only">
+            GitHub account
+          </span>
+          <SelectTrigger
+            aria-labelledby="github-account-label"
+            className="shrink-0 rounded-[4px] data-[size=default]:h-9"
+          >
             <SelectValue />
           </SelectTrigger>
           {/* alignItemWithTrigger 기본값(true)은 선택 항목을 트리거 위에 겹쳐
@@ -101,6 +122,7 @@ export function RepoPicker({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search repositories"
+            aria-label="Search repositories"
             className="bg-card h-9 rounded-[4px] pl-9 text-sm md:text-sm"
           />
         </div>
@@ -141,7 +163,8 @@ export function RepoPicker({
                 rel="noreferrer noopener"
                 className={footerLink}
               >
-                Add one on GitHub ↗
+                Add one on GitHub <span aria-hidden="true">↗</span>
+                <span className="sr-only"> (opens in new tab)</span>
               </a>
             </dd>
           </>
@@ -161,9 +184,9 @@ export function RepoPicker({
 
 // 목록 아래 두 링크. 쉬는 상태는 밝게(주변 라벨이 muted 라 링크만 떠 보인다),
 // hover·키보드 포커스에는 행의 액센트와 같은 주황을 쓴다 — 같은 화면에서 두
-// 가지 강조색을 쓰지 않는다.
+// 가지 강조색을 쓰지 않는다. 포커스는 글자색만으로는 약해서 같은 주황 outline 도 둔다.
 const footerLink =
-  "text-foreground underline underline-offset-4 transition-colors duration-[180ms] ease-out hover:text-[#ff570a] focus-visible:text-[#ff570a] focus-visible:outline-none motion-reduce:transition-none";
+  "text-foreground underline underline-offset-4 transition-colors duration-[180ms] ease-out hover:text-[#ff570a] focus-visible:text-[#ff570a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#ff570a] motion-reduce:transition-none";
 
 function RepoRow({
   repo,
@@ -191,7 +214,12 @@ function RepoRow({
       <div className="min-w-0 flex-1">
         <p className="flex items-center gap-2 truncate text-[15px] font-medium">
           {repo.name}
-          {repo.private && <Lock className="text-muted-foreground size-3 shrink-0" />}
+          {repo.private && (
+            <>
+              <Lock className="text-muted-foreground size-3 shrink-0" />
+              <span className="sr-only">Private</span>
+            </>
+          )}
         </p>
         <p className="text-muted-foreground mt-1 font-mono text-[11px] tracking-wide">
           {repo.language ?? "—"}
@@ -221,11 +249,40 @@ function RepoRow({
         <form action={importRepo} className="absolute inset-0">
           <input type="hidden" name="repoId" value={repo.id} />
           <input type="hidden" name="installationId" value={installationId ?? ""} />
-          <button type="submit" className={overlay} disabled={!installationId}>
-            <span className="sr-only">Import {repo.name}</span>
-          </button>
+          <ImportButton name={repo.name} className={overlay} disabled={!installationId} />
         </form>
       )}
     </li>
+  );
+}
+
+/**
+ * 줄 전체를 덮는 가져오기 버튼. 보내는 동안 막되 disabled 대신 aria-disabled 로 막는다 —
+ * disabled 가 되면 방금 누른 버튼이 포커스를 잃는다. 보내는 중이라는 것은 공용 알림으로 읽는다.
+ */
+function ImportButton({
+  name,
+  className,
+  disabled,
+}: {
+  name: string;
+  className: string;
+  disabled: boolean;
+}) {
+  const { pending } = useFormStatus();
+  useAnnounce(pending ? `Importing ${name}…` : null);
+  return (
+    <button
+      type="submit"
+      className={className}
+      disabled={disabled}
+      aria-disabled={pending}
+      aria-busy={pending || undefined}
+      onClick={(event) => {
+        if (pending) event.preventDefault();
+      }}
+    >
+      <span className="sr-only">Import {name}</span>
+    </button>
   );
 }
