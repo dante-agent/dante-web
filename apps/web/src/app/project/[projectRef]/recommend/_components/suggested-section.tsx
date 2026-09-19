@@ -14,15 +14,23 @@ import { rerankRecommendations } from "../actions";
 import { generateHref } from "./generate-test-button";
 import { MAX_SELECT, SuggestedList } from "./suggested-list";
 
-// "initial" = 아직 버튼을 안 눌러 휴리스틱만 본 상태. 나머지는 액션이 준 outcome.
-// "failed"  = 액션 자체가 예외로 죽은 경우(권한·네트워크 등 폴백조차 못 한 상황).
-type Status = "initial" | RecommendationOutcome | "failed";
+// "initial"   = 아직 버튼을 안 눌러 휴리스틱만 본 상태. 나머지는 액션이 준 outcome.
+// "unchanged" = AI 가 돌았지만 순서를 그대로 뒀다("ranked" 인데 목록 순서가 안 바뀐 경우).
+// "failed"    = 액션 자체가 예외로 죽은 경우(권한·네트워크 등 폴백조차 못 한 상황).
+type Status = "initial" | RecommendationOutcome | "unchanged" | "failed";
 
+// 사용자는 AI 제공자 키를 넣지 않는다(Dante 가 제공자와 직접 계약). 그래서 실패 문구에서
+// "API 키 확인" 같은 사용자가 손댈 수 없는 안내는 빼고, 다시 시도만 권한다. 예산 문구는
+// 한도가 팀이 아니라 "사람마다"이고 매달 1일 초기화되는 걸 밝힌다(오해를 줄인다).
 const MESSAGE: Record<Status, { text: string; tone: "muted" | "ok" | "warn" | "error" }> = {
   initial: { text: "", tone: "muted" },
   ranked: { text: "AI re-prioritized the list.", tone: "ok" },
-  budget: { text: "Exceeded this month's AI budget, so sorting was skipped.", tone: "warn" },
-  error: { text: "AI sorting failed. Check your API key and settings.", tone: "error" },
+  unchanged: { text: "AI reviewed the list and kept the current order.", tone: "ok" },
+  budget: {
+    text: "You've used up your personal AI budget this month (resets on the 1st), so sorting was skipped.",
+    tone: "warn",
+  },
+  error: { text: "AI sorting couldn't finish. Please try again in a moment.", tone: "error" },
   failed: { text: "Couldn't run AI sorting. Please try again in a moment.", tone: "error" },
 };
 
@@ -32,6 +40,11 @@ const TONE_CLASS: Record<"muted" | "ok" | "warn" | "error", string> = {
   warn: "text-amber-600 dark:text-amber-500",
   error: "text-destructive",
 };
+
+/** 두 목록이 같은 순서인지(파일 경로 나열이 같은지). AI 재정렬이 순서를 바꿨는지 판단한다. */
+function sameOrder(a: TestRecommendation[], b: TestRecommendation[]): boolean {
+  return a.length === b.length && a.every((rec, i) => rec.filePath === b[i].filePath);
+}
 
 /**
  * 추천 목록 + "AI 로 정렬" + 여러 개를 골라 한 번에 만드는 배치 생성.
@@ -59,8 +72,11 @@ export function SuggestedSection({
     startTransition(async () => {
       try {
         const result: AiRecommendationResult = await rerankRecommendations(projectRef);
+        // AI 가 돌아도(ranked) 순서가 그대로면 "재정렬했다"는 말은 사실과 다르다. 눈에 보이는
+        // 순서(파일 경로 나열)가 바뀐 게 없으면 "확인만 하고 그대로 뒀다"로 구분해 알린다.
+        const changed = !sameOrder(recommendations, result.recommendations);
         setRecommendations(result.recommendations);
-        setStatus(result.outcome);
+        setStatus(result.outcome === "ranked" && !changed ? "unchanged" : result.outcome);
       } catch {
         // 액션이 폴백조차 못 하고 죽은 경우 — 목록은 그대로 두고 실패만 알린다.
         setStatus("failed");

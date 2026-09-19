@@ -19,10 +19,13 @@ import { WritingCode } from "./writing-code";
 /** 타이핑이 끝나고 세션으로 넘어가기 전 잠깐 멈춤 — 완성된 코드를 한 번 보여준다. */
 const OPEN_DELAY_MS = 600;
 
+// 예산 한도는 팀이 아니라 사람마다이고 매달 1일 초기화된다. 사용자는 AI 제공자 키를 넣지
+// 않으므로(Dante 가 제공자와 직접 계약) 실패 문구에서 키 안내는 빼고 다시 시도만 권한다.
 const ERROR_MESSAGE = {
-  budget: "You've exceeded this month's AI budget, so tests can't be generated.",
+  budget:
+    "You've used up your personal AI budget this month, so tests can't be generated. It resets on the 1st.",
   preview: "Generated a preview, but it can't be saved because you don't own this project.",
-  error: "Test generation failed. Check your API key and AI settings.",
+  error: "Test generation failed. Please try again in a moment.",
 };
 
 const basename = (path: string) => path.split("/").pop() || path;
