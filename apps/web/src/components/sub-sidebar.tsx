@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
 import { PanelLeftClose } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 //   접힘 → 버튼 없음. 폭이 0 이라 본문이 화면 끝까지 간다. 다시 펼치는 건 메인 레일의
 //          섹션 아이콘 재클릭 (SidebarRail `togglesSubSidebar`) — 이 사이드바를 연 바로 그
 //          아이콘이다. 새 버튼을 어디 띄우는 대신 이미 있는 걸 재활용한다.
+//   단축키 → ⌘B / Ctrl+B (VS Code 의 사이드바 토글과 같은 키). 서브 사이드바가 있는 섹션에서만 동작.
 
 // 접힘 상태는 모듈 스코프 store. 서브 사이드바(섹션 layout)와 메인 레일(프로젝트 layout)이
 // 서로 다른 트리에 있어 공통 provider 를 둘 자리가 없고, 화면에 하나뿐이라 전역이 맞다.
@@ -31,6 +32,16 @@ export function toggleSubSidebar() {
   for (const l of listeners) l();
 }
 
+/**
+ * 접으면 aside 가 inert 가 되어 안에 있던 포커스가 body 로 떨어진다. 그때는 다시 여는 자리인
+ * 레일의 섹션 버튼(data-sub-sidebar-toggle)으로 옮긴다.
+ */
+function collapseFrom(aside: HTMLElement | null) {
+  const hadFocus = aside?.contains(document.activeElement) ?? false;
+  toggleSubSidebar();
+  if (hadFocus) document.querySelector<HTMLElement>("[data-sub-sidebar-toggle]")?.focus();
+}
+
 /** 접혀 있나. 레일이 아이콘에 힌트를 붙일 때도 쓴다. */
 export function useSubSidebarCollapsed() {
   return useSyncExternalStore(
@@ -42,10 +53,27 @@ export function useSubSidebarCollapsed() {
 
 export function SubSidebar({ nav, children }: { nav?: ReactNode; children: ReactNode }) {
   const isCollapsed = useSubSidebarCollapsed();
+  const asideRef = useRef<HTMLElement>(null);
+
+  // 서브 사이드바는 한 화면에 하나라 리스너도 하나. capture 단계로 받아
+  // Monaco 같은 에디터가 먼저 키를 삼켜도 토글되게 한다.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey || e.repeat) return;
+      if (e.key.toLowerCase() !== "b") return;
+      e.preventDefault();
+      if (collapsed) toggleSubSidebar();
+      else collapseFrom(asideRef.current);
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, []);
 
   return (
     <>
       <aside
+        ref={asideRef}
+        aria-label="Section sidebar"
         // 접히면 폭 0 — 안쪽 링크로 탭 이동이 들어가지 않게 inert.
         inert={isCollapsed}
         className={cn(
@@ -57,9 +85,10 @@ export function SubSidebar({ nav, children }: { nav?: ReactNode; children: React
         <div className="relative flex h-full w-60 flex-col p-3">
           <button
             type="button"
-            onClick={toggleSubSidebar}
-            title="Collapse sub sidebar"
+            onClick={() => collapseFrom(asideRef.current)}
+            title="Collapse sub sidebar (⌘B)"
             aria-label="Collapse sub sidebar"
+            aria-keyshortcuts="Meta+B Control+B"
             aria-expanded
             className="text-sidebar-foreground/70 hover:text-sidebar-foreground absolute top-2 right-1 grid h-9 w-10 place-items-center transition-colors"
           >

@@ -48,12 +48,22 @@ export function GeneratedTestsPanel({
   return (
     <div className="flex h-full w-full min-w-0 flex-col">
       {files.length > 1 && (
-        <div className="border-border flex h-9 shrink-0 items-center gap-1 overflow-x-auto border-b px-2">
+        // 지금 보는 파일은 배경색으로만 달라서 aria-current 로 알린다. 고치는 중에는 첫 파일에
+        // 고정되므로(shownIndex) 눌러도 반응이 없다 — aria-disabled 로 알리고 클릭도 무시한다.
+        <div
+          role="group"
+          aria-label="Generated test files"
+          className="border-border flex h-9 shrink-0 items-center gap-1 overflow-x-auto border-b px-2"
+        >
           {files.map((f, index) => (
             <button
               key={f.versionId}
               type="button"
-              onClick={() => setActive(index)}
+              aria-current={index === shownIndex ? "true" : undefined}
+              aria-disabled={regenerating || undefined}
+              onClick={() => {
+                if (!regenerating) setActive(index);
+              }}
               className={cn(
                 "shrink-0 rounded-md px-2.5 py-1 font-mono text-xs transition-colors",
                 index === shownIndex

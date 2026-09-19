@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, Play, RotateCcw, Sparkles } from "lucide-react";
 import { unstable_rethrow, useRouter } from "next/navigation";
+import { useAnnounce } from "@/components/live-announcer";
 import { StoredRunLog, TerminalBody, useLiveRun, type RunView } from "@/components/run-terminal";
 import type { TestRunView } from "@/lib/projects/run-version";
 import { cn } from "@/lib/utils";
@@ -75,6 +76,7 @@ export function TestRunPanel({
   const message = regenError ?? (!view ? (initialRun?.errorMessage ?? null) : null);
 
   function regenerate() {
+    if (busy) return;
     setRegenError(null);
     const fail = (reason: keyof typeof REGEN_ERROR) => {
       setRegenError(REGEN_ERROR[reason]);
@@ -100,7 +102,11 @@ export function TestRunPanel({
       <div className="border-border flex h-10 shrink-0 items-center gap-3 border-b px-3">
         <StatusLabel status={status} />
         {message && (
-          <span className="text-destructive min-w-0 flex-1 truncate text-xs" title={message}>
+          <span
+            role="alert"
+            className="text-destructive min-w-0 flex-1 truncate text-xs"
+            title={message}
+          >
             {message}
           </span>
         )}
@@ -109,8 +115,9 @@ export function TestRunPanel({
             <button
               type="button"
               onClick={regenerate}
-              disabled={busy}
-              className="border-border hover:bg-muted/40 flex cursor-pointer items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium text-[#eeedf0] disabled:cursor-not-allowed disabled:opacity-50"
+              // 실행·재생성 중에도 누른 버튼이 포커스를 잃지 않게 aria-disabled. 막는 건 핸들러가 한다.
+              aria-disabled={busy}
+              className="border-border hover:bg-muted/40 flex cursor-pointer items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium text-[#eeedf0] aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
             >
               {regenerating ? (
                 <Loader2 className="size-3.5 animate-spin" />
@@ -125,13 +132,13 @@ export function TestRunPanel({
             onClick={() => {
               if (!busy && runnerConfigured) start(versionId);
             }}
-            disabled={busy || !runnerConfigured}
+            aria-disabled={busy || !runnerConfigured}
             title={
               runnerConfigured
                 ? undefined
                 : "The test runner is not configured in this environment."
             }
-            className="bg-primary text-primary-foreground flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
+            className="bg-primary text-primary-foreground flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
           >
             {running ? (
               <Loader2 className="size-3.5 animate-spin" />
@@ -168,6 +175,15 @@ function StatusLabel({ status }: { status: Display }) {
     failed: "Failed",
     error: "Run error",
   };
+  // 처음 그릴 때의 상태(지난 실행 결과)는 읽지 않고, 이 화면에서 바뀐 뒤부터 알린다.
+  // 끝났을 때는 터미널(TerminalBody)이 개수까지 붙여 한 번 더 알린다 — 나중 것이 이긴다.
+  const [shown, setShown] = useState(status);
+  const [changed, setChanged] = useState(false);
+  if (status !== shown) {
+    setShown(status);
+    setChanged(true);
+  }
+  useAnnounce(changed ? `Tests: ${labels[status]}` : null);
   return (
     <span
       className={cn(

@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { CheckCircle2, Circle, LoaderCircle, XCircle } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import type { GeneratedSession, SessionStatus } from "@/lib/projects/generated-sessions";
 import { cn } from "@/lib/utils";
 import { SessionDeleteButton } from "./session-delete-button";
@@ -30,6 +31,14 @@ const STATUS_COLOR: Record<SessionStatus, string> = {
   failed: "text-brand-orange",
 };
 
+/** 상태 아이콘은 모양·색으로만 달라서 스크린리더용 글자를 따로 둔다. */
+const STATUS_TEXT: Record<SessionStatus, string> = {
+  not_run: "not run",
+  running: "running",
+  passed: "passed",
+  failed: "failed",
+};
+
 /** 목록(최신순)을 훑어 같은 batchId 가 연이어 나오면 한 그룹으로 묶는다. 단건은 자기 혼자 그룹. */
 function groupByBatch(sessions: GeneratedSession[]): GeneratedSession[][] {
   const groups: GeneratedSession[][] = [];
@@ -43,10 +52,20 @@ function groupByBatch(sessions: GeneratedSession[]): GeneratedSession[][] {
 
 function SessionRow({ projectRef, session }: { projectRef: string; session: GeneratedSession }) {
   const Icon = STATUS_ICON[session.status];
+  const href = `/project/${projectRef}/recommend/${session.id}`;
+  // 지금 보고 있는 세션. 파일 트리의 선택 파일과 같은 배경으로 표시한다.
+  const current = usePathname() === href;
   return (
-    <div className="group hover:bg-sidebar-accent/60 flex items-center gap-1 rounded-md pr-1">
+    <li
+      data-row
+      className={cn(
+        "group hover:bg-sidebar-accent/60 flex items-center gap-1 rounded-md pr-1",
+        current && "bg-sidebar-accent"
+      )}
+    >
       <Link
-        href={`/project/${projectRef}/recommend/${session.id}`}
+        href={href}
+        aria-current={current ? "page" : undefined}
         title={session.title}
         className="flex min-w-0 flex-1 items-start gap-2 px-2 py-1.5 text-left"
       >
@@ -60,6 +79,7 @@ function SessionRow({ projectRef, session }: { projectRef: string; session: Gene
           <span className="text-sidebar-foreground truncate text-xs">{session.title}</span>
           <span className="text-muted-foreground truncate text-[11px]">{session.meta}</span>
         </span>
+        <span className="sr-only">, {STATUS_TEXT[session.status]}</span>
       </Link>
       <SessionDeleteButton
         projectRef={projectRef}
@@ -67,7 +87,7 @@ function SessionRow({ projectRef, session }: { projectRef: string; session: Gene
         title={session.title}
         className="opacity-0 group-hover:opacity-100 focus:opacity-100"
       />
-    </div>
+    </li>
   );
 }
 
@@ -110,8 +130,18 @@ export function SessionNavList({
       </div>
 
       {/* 스크롤은 되지만 스크롤바는 숨긴다(좁은 사이드바에서 폭을 먹지 않게). */}
-      <div className="flex min-h-0 flex-1 [scrollbar-width:none] flex-col gap-1 overflow-y-auto [&::-webkit-scrollbar]:hidden">
-        <p className="text-muted-foreground px-2 text-[11px] font-medium tracking-wide uppercase">
+      {/* data-rows·tabIndex: 세션을 지운 뒤 포커스가 옮겨 갈 자리(lib/focus-neighbor.ts). */}
+      <nav
+        data-rows
+        tabIndex={-1}
+        aria-label="Recent sessions"
+        className="flex min-h-0 flex-1 [scrollbar-width:none] flex-col gap-1 overflow-y-auto outline-none [&::-webkit-scrollbar]:hidden"
+      >
+        {/* nav 이름과 같은 말이라 스크린리더에서는 한 번만 읽히게 숨긴다. */}
+        <p
+          aria-hidden="true"
+          className="text-muted-foreground px-2 text-[11px] font-medium tracking-wide uppercase"
+        >
           Recent sessions
         </p>
         {sessions.length === 0 && (
@@ -124,22 +154,31 @@ export function SessionNavList({
             No sessions in this state.
           </p>
         )}
-        {groups.map((group) =>
-          group.length > 1 ? (
-            // 한 프롬프트로 배치 생성된 세션들 — 왼쪽 선과 라벨로 묶어 보여준다.
-            <div key={group[0].id} className="border-border ml-2 flex flex-col gap-1 border-l pl-2">
-              <p className="text-muted-foreground px-1 text-[10px] font-medium tracking-wide uppercase">
-                Batch · {group.length}
-              </p>
-              {group.map((session) => (
-                <SessionRow key={session.id} projectRef={projectRef} session={session} />
-              ))}
-            </div>
-          ) : (
-            <SessionRow key={group[0].id} projectRef={projectRef} session={group[0]} />
-          )
+        {groups.length > 0 && (
+          <ul className="flex flex-col gap-1">
+            {groups.map((group) =>
+              group.length > 1 ? (
+                // 한 프롬프트로 배치 생성된 세션들 — 왼쪽 선과 라벨로 묶어 보여준다.
+                <li
+                  key={group[0].id}
+                  className="border-border ml-2 flex flex-col gap-1 border-l pl-2"
+                >
+                  <p className="text-muted-foreground px-1 text-[10px] font-medium tracking-wide uppercase">
+                    Batch · {group.length}
+                  </p>
+                  <ul className="flex flex-col gap-1">
+                    {group.map((session) => (
+                      <SessionRow key={session.id} projectRef={projectRef} session={session} />
+                    ))}
+                  </ul>
+                </li>
+              ) : (
+                <SessionRow key={group[0].id} projectRef={projectRef} session={group[0]} />
+              )
+            )}
+          </ul>
         )}
-      </div>
+      </nav>
     </div>
   );
 }

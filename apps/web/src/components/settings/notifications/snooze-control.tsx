@@ -1,10 +1,12 @@
 "use client";
 
 import { setSnooze } from "@/app/project/[projectRef]/settings/notifications/actions";
+import { announce } from "@/components/live-announcer";
 import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
+  SelectFieldLabel,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -24,15 +26,16 @@ const OPTIONS = [
 ];
 
 export function SnoozeControl({ projectRef }: { projectRef: string }) {
-  const submit = (formData: FormData) => {
+  const submit = async (formData: FormData) => {
     formData.set("tzOffset", String(new Date().getTimezoneOffset()));
-    return setSnooze(formData);
+    await setSnooze(formData);
+    // 화면에는 위쪽 배너만 생긴다. 스크린리더에는 따로 알린다.
+    announce("Notifications paused.");
   };
 
   return (
     <form action={submit} className="mt-4 flex max-w-2xl flex-wrap items-center gap-3">
       <input type="hidden" name="projectRef" value={projectRef} />
-      <span className="text-[13px]">Pause all notifications for</span>
 
       {/* 네이티브 <select> 대신 온보딩 레포 선택기(repo-picker.tsx)와 같은 것을
           쓴다. 네이티브는 OS 가 화살표를 그려서 좌우 여백이 어긋난다.
@@ -41,6 +44,7 @@ export function SnoozeControl({ projectRef }: { projectRef: string }) {
           폭을 고정하는 이유는 "Until I turn it off" 를 고르면 옆 버튼이 밀려서다.
           pr-2.5 는 기본값(pl-2.5 / pr-2)의 좌우 여백을 같게 맞춘다. */}
       <Select name="duration" defaultValue="1h" items={OPTIONS}>
+        <SelectFieldLabel className="text-[13px]">Pause all notifications for</SelectFieldLabel>
         <SelectTrigger size="sm" className="w-40 pr-2.5 text-[13px] data-[size=sm]:rounded-[4px]">
           <SelectValue />
         </SelectTrigger>

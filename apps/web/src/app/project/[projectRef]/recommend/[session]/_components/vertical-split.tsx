@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, type ReactNode } from "react";
+import { useElementSize, useResizeHandle } from "@/components/use-resize-handle";
 
 // 위(코드)·아래(터미널) 2-pane 을 드래그로 높이 조절한다 — ResizableSplit(좌우)의 세로 버전.
 // 구분선은 가운데 세로 구분선과 같은 인터랙션: hover 하면 색이 들어오고, 잡고 끌면 높이가 바뀐다.
@@ -24,6 +25,17 @@ export function VerticalSplit({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [bottomPx, setBottomPx] = useState(initialBottomPx);
+  const { height } = useElementSize(containerRef);
+  const handle = useResizeHandle({
+    label: "Resize terminal",
+    orientation: "horizontal",
+    value: bottomPx,
+    min: minBottomPx,
+    max: height - minTopPx,
+    step: 24,
+    onChange: setBottomPx,
+    grow: "backward",
+  });
 
   const onDown = (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -50,17 +62,16 @@ export function VerticalSplit({
       <div className="flex min-h-0 overflow-hidden">{bottom}</div>
 
       <div
-        role="separator"
-        aria-orientation="horizontal"
+        {...handle}
         onPointerDown={onDown}
         onPointerMove={onMove}
         style={{ bottom: `${bottomPx}px` }}
-        className="group absolute inset-x-0 z-10 flex h-2 -translate-y-1/2 cursor-row-resize touch-none items-center justify-center"
+        className="group absolute inset-x-0 z-10 flex h-2 -translate-y-1/2 cursor-row-resize touch-none items-center justify-center outline-none"
       >
-        {/* 쉬는 상태에도 은은한 선(bg-border), hover 하면 색이 들어온다. */}
-        <span className="bg-border group-hover:bg-brand-orange/70 h-px w-full transition-colors" />
+        {/* 쉬는 상태에도 은은한 선(bg-border), hover·키보드 포커스면 색이 들어온다. */}
+        <span className="bg-border group-hover:bg-brand-orange/70 group-focus-visible:bg-brand-orange h-px w-full transition-colors" />
         {/* 가운데 손잡이 — 여기가 드래그로 조절되는 구분선임을 알려준다. */}
-        <span className="bg-border group-hover:bg-brand-orange/70 absolute h-1 w-10 rounded-full transition-colors" />
+        <span className="bg-border group-hover:bg-brand-orange/70 group-focus-visible:bg-brand-orange absolute h-1 w-10 rounded-full transition-colors" />
       </div>
     </div>
   );

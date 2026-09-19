@@ -19,17 +19,37 @@ export function installationClient(installationId: bigint | number) {
 }
 
 /**
+ * 이보다 적게 남은 토큰은 샌드박스에 넘기지 않고 새로 받는다. 클론은 샌드박스를 띄우자마자 하지만,
+ * 설치·네트워크가 느린 레포에서도 클론이 끝날 때까지는 살아 있어야 한다.
+ */
+const MIN_TOKEN_LIFETIME_MS = 10 * 60 * 1000;
+
+/**
  * 설치 토큰 원문. runner 가 private 레포를 클론할 때 넘긴다.
  *
  * Octokit 클라이언트가 아니라 문자열이 필요한 자리는 여기뿐이다. 1시간 뒤 만료되고,
  * 권한은 설치에 준 것 그대로다.
+ *
+ * 매번 새로 발급받지 않는다. installationClient 와 같은 캐시(App 인스턴스의 설치 토큰 캐시,
+ * 59분)를 거친다. 캐시에서 온 토큰은 만료가 1분만 남았을 수도 있어서, 남은 시간이 짧으면
+ * refresh 로 새로 받는다(새 토큰이 캐시에도 들어간다).
  */
 export async function installationToken(installationId: bigint | number) {
-  const { data } = await githubApp().octokit.request(
-    "POST /app/installations/{installation_id}/access_tokens",
-    { installation_id: Number(installationId) }
-  );
-  return data.token;
+  const octokit = await installationClient(installationId);
+
+  const cached = tokenOf(await octokit.auth({ type: "installation" }));
+  if (Date.parse(cached.expiresAt) - Date.now() >= MIN_TOKEN_LIFETIME_MS) return cached.token;
+
+  return tokenOf(await octokit.auth({ type: "installation", refresh: true })).token;
+}
+
+/** octokit.auth 는 unknown 을 준다. 설치 토큰 모양(@octokit/auth-app)인지 확인하고 꺼낸다. */
+function tokenOf(auth: unknown): { token: string; expiresAt: string } {
+  const { token, expiresAt } = (auth ?? {}) as { token?: unknown; expiresAt?: unknown };
+  if (typeof token !== "string" || typeof expiresAt !== "string") {
+    throw new Error("GitHub App 설치 토큰을 받지 못했습니다.");
+  }
+  return { token, expiresAt };
 }
 
 export type RepoRef = { owner: string; repo: string };

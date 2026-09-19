@@ -7,14 +7,23 @@ import { requireUser } from "@/lib/auth/user";
 import { accessibleProjectWhere } from "@/lib/teams/access";
 import { invalidateRepoLookups } from "@/lib/github/lookup-cache";
 import { detectRuntimeCommands } from "@/lib/projects/detect-runtime";
-import { DEFAULT_TIMEOUT_MS, validateRuntimeInput } from "@/lib/projects/runtime";
+import {
+  DEFAULT_TIMEOUT_MS,
+  validateRuntimeInput,
+  type RuntimeFieldError,
+} from "@/lib/projects/runtime";
 
 // 실행 환경 설정 화면이 부르는 서버 액션.
 //
 // 폼 값은 전부 문자열로 온다. 여기서 한 번 좁히고 나면 아래(DB → runner)는
 // 타입 있는 값만 본다.
 
-export type SaveState = { error?: string; saved?: boolean } | null;
+// field: 어느 칸이 잘못됐는지. 화면이 그 칸에 aria-invalid 를 달고 포커스를 옮긴다.
+export type SaveState = {
+  error?: string;
+  field?: RuntimeFieldError["field"];
+  saved?: boolean;
+} | null;
 
 const settingsPath = (ref: string) => `/project/${ref}/settings/runtime`;
 
@@ -73,7 +82,7 @@ export async function saveRuntimeSettings(
   };
 
   const invalid = validateRuntimeInput(resolved);
-  if (invalid) return { error: invalid.message };
+  if (invalid) return { error: invalid.message, field: invalid.field };
 
   // 기본값과 같으면 null 로 되돌린다. 그래야 나중에 기본값을 바꿨을 때
   // "한 번도 안 건드린 프로젝트"가 새 기본값을 따라온다. 타임아웃도 같은 규칙이다.

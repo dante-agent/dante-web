@@ -5,11 +5,10 @@ import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 // 비밀값은 평문으로 두지 않는다(AGENTS.md). DB 가 통째로 새도 이 값들만은 못
 // 읽게 하려는 것이라, 열쇠는 DB 밖(환경변수)에 둔다.
 //
-// ⚠️ 지금 부르는 곳이 없다. 사용자 API 키가 사라졌고(Dante 가 프로바이더와 직접
-// 계약한다), GitHub 은 설치 토큰을 필요할 때마다 새로 발급받아 저장하지 않는다.
-// 그래도 지우지 않는 이유: ENCRYPTION_KEY 를 이미 발급해 굴리고 있고, 러너
-// 환경변수와 Enterprise BYO-cloud 에서 같은 것이 다시 필요하다. 그때 이 파일을
-// 다시 쓰는 편이, 같은 것을 다시 짜면서 v1 포맷을 잘못 맞추는 것보다 낫다.
+// 지금 암호화해 두는 값: 채팅 대화 제목·본문(lib/chat/conversations.ts), Slack 봇
+// 토큰(lib/slack/installation.ts), Discord 웹훅 URL(lib/notifications/store.ts).
+// 사용자 API 키는 없고(Dante 가 프로바이더와 직접 계약한다), GitHub 은 설치 토큰을
+// 필요할 때마다 새로 발급받아 저장하지 않는다.
 //
 // AES-256-GCM 을 쓰는 이유: CBC 같은 모드는 암호문을 조작해도 복호화가 그냥
 // 되기 때문에 별도 MAC 을 붙여야 한다. GCM 은 authTag 로 위조 검사까지 같이

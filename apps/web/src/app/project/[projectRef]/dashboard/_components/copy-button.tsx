@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Check, Copy } from "lucide-react";
+import { copyAndAnnounce } from "@/components/live-announcer";
 import { Button } from "@/components/ui/button";
 
 /** 레포 주소 복사. 메타 줄 안에 들어가는 아이콘 버튼이다. 성공 표시는 1.5초 뒤 원래대로 돌아간다. */
@@ -13,9 +14,8 @@ export function CopyButton({ value }: { value: string }) {
   useEffect(() => () => clearTimeout(timer.current ?? undefined), []);
 
   async function copy() {
-    // http 로 열었거나 권한이 없으면 clipboard 가 없다. 조용히 넘긴다.
-    if (!navigator.clipboard) return;
-    await navigator.clipboard.writeText(value);
+    // 결과(실패 포함)는 스크린리더에 알린다. 화면 표시는 성공일 때만 바뀐다.
+    if (!(await copyAndAnnounce(value))) return;
     setCopied(true);
     clearTimeout(timer.current ?? undefined);
     timer.current = setTimeout(() => setCopied(false), 1500);

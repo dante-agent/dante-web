@@ -7,6 +7,7 @@ import type {
   RecommendationOutcome,
   AiRecommendationResult,
 } from "@/lib/projects/ai-recommendations";
+import { useAnnounce } from "@/components/live-announcer";
 import type { TestRecommendation } from "@/lib/projects/recommendations";
 import { cn } from "@/lib/utils";
 import { rerankRecommendations } from "../actions";
@@ -35,7 +36,7 @@ const TONE_CLASS: Record<"muted" | "ok" | "warn" | "error", string> = {
 /**
  * 추천 목록 + "AI 로 정렬" + 여러 개를 골라 한 번에 만드는 배치 생성.
  *
- * 처음 뜨는 목록(initial)은 서버가 경로 휴리스틱으로 공짜로 만든 것이다. "Sort with AI"는
+ * 처음 뜨는 목록(initial)은 서버가 점수로 공짜로 만든 것이다. "Sort with AI"는
  * 재정렬만 한다. Select 를 켜면 카드의 화살표가 체크박스로 바뀌고, 목록 아래 시트에서
  * 고른 파일들을 생성 화면(/recommend/generate)으로 한 번에 넘긴다.
  */
@@ -54,6 +55,7 @@ export function SuggestedSection({
   const [pending, startTransition] = useTransition();
 
   function rerank() {
+    if (pending) return;
     startTransition(async () => {
       try {
         const result: AiRecommendationResult = await rerankRecommendations(projectRef);
@@ -96,6 +98,11 @@ export function SuggestedSection({
   const message = MESSAGE[status];
   const isError = message.tone === "error" || message.tone === "warn";
 
+  // 정렬 결과 문구와 선택 개수는 화면 글자만 바뀌어서 스크린리더용으로 따로 알린다.
+  // 정렬은 끝났을 때(pending 이 풀릴 때)마다, 개수는 고를 때마다.
+  useAnnounce(pending ? null : message.text, pending);
+  useAnnounce(selectMode ? `${selected.size} of ${MAX_SELECT} selected` : null, selected);
+
   return (
     <>
       <div className="flex items-center justify-between gap-3">
@@ -129,8 +136,9 @@ export function SuggestedSection({
           <button
             type="button"
             onClick={rerank}
-            disabled={pending}
-            className="border-border hover:bg-muted flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+            // 정렬 중에도 포커스가 버튼에 남게 aria-disabled. 중복 실행은 rerank() 가 막는다.
+            aria-disabled={pending}
+            className="border-border hover:bg-muted flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium aria-disabled:opacity-50"
           >
             <Sparkles className="size-3.5" />
             {pending ? "Sorting..." : "Sort with AI"}

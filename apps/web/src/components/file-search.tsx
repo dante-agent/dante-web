@@ -2,9 +2,12 @@
 
 // 최상단 헤더의 파일 검색. 포커스 시 Recent(최근 연 파일) → 타이핑하면 매칭 목록.
 // ↑↓ 이동 · Enter 열기 · Esc 닫기. 선택 시 폴더 뷰로 이동.
+// 스크린리더용으로 APG 콤보박스 패턴을 따른다: 포커스는 input 에 두고 aria-activedescendant 로
+// 고른 항목을 가리킨다. 결과 수는 늘 렌더되는 sr-only status 로 알린다.
 
-import { useMemo, useRef, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
 import { iconForFile } from "@/components/file-icons";
 import { Input } from "@/components/ui/input";
@@ -29,12 +32,28 @@ function matchFiles(files: string[], q: string): string[] {
     .map((x) => x.path);
 }
 
-export function FileSearch({ projectRef, files }: { projectRef: string; files: string[] }) {
+export function FileSearch({ projectRef }: { projectRef: string }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const recent = useRecent(projectRef);
+  const listId = useId();
+
+  // 레포 파일 목록은 검색창을 처음 열 때 받는다 — 프로젝트 페이지마다 GitHub 트리를 치지 않으려고
+  // 레이아웃이 아니라 여기서 가져온다. 캐시에 남아 두 번째부터는 즉시 뜬다.
+  const [touched, setTouched] = useState(false);
+  const { data: files = [] } = useQuery({
+    queryKey: ["project", "files", projectRef],
+    queryFn: async () => {
+      const response = await fetch(`/api/projects/${projectRef}/files`);
+      if (!response.ok) return [] as string[];
+      const body = (await response.json()) as { files: string[] };
+      return body.files;
+    },
+    enabled: touched,
+    staleTime: 5 * 60_000,
+  });
 
   const showRecent = query.trim() === "";
   const results = useMemo(
@@ -67,6 +86,16 @@ export function FileSearch({ projectRef, files }: { projectRef: string; files: s
     }
   };
 
+  const expanded = open && results.length > 0;
+  const optionId = (i: number) => `${listId}-${i}`;
+  // 입력 중일 때만 알린다. 포커스만 한 순간(Recent)까지 읽으면 시끄럽다.
+  const announcement =
+    open && !showRecent
+      ? results.length === 0
+        ? "No matching files"
+        : `${results.length} ${results.length === 1 ? "file" : "files"} found`
+      : "";
+
   return (
     <div className="relative w-full">
       <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
@@ -77,14 +106,27 @@ export function FileSearch({ projectRef, files }: { projectRef: string; files: s
           setQuery(e.target.value);
           setActive(0);
         }}
-        onFocus={() => setOpen(true)}
+        onFocus={() => {
+          setOpen(true);
+          setTouched(true);
+        }}
         onBlur={() => setOpen(false)}
         onKeyDown={onKeyDown}
         placeholder="Search files…"
+        aria-label="Search files"
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={expanded}
+        aria-controls={listId}
+        aria-activedescendant={expanded ? optionId(active) : undefined}
         className="h-7 pl-8 text-xs focus-visible:ring-0 md:text-xs"
       />
 
-      {open && results.length > 0 && (
+      <p role="status" className="sr-only">
+        {announcement}
+      </p>
+
+      {expanded && (
         // mousedown 기본동작 막아 input blur 전에 클릭이 먹도록
         <div
           onMouseDown={(e) => e.preventDefault()}
@@ -95,25 +137,32 @@ export function FileSearch({ projectRef, files }: { projectRef: string; files: s
               Recent
             </div>
           )}
-          <ul>
+          <ul
+            id={listId}
+            role="listbox"
+            aria-label={showRecent ? "Recent files" : "Matching files"}
+          >
             {results.map((path, i) => {
               const name = path.split("/").pop() ?? path;
               const dir = path.split("/").slice(0, -1).join("/");
               return (
-                <li key={path}>
-                  <button
-                    type="button"
-                    onMouseEnter={() => setActive(i)}
-                    onClick={() => go(path)}
-                    className={cn(
-                      "flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs",
-                      i === active && "bg-muted"
-                    )}
-                  >
-                    {iconForFile(name, { className: "size-3.5 shrink-0" })}
-                    <span className="font-medium">{name}</span>
-                    <span className="text-muted-foreground truncate">{dir}</span>
-                  </button>
+                // 옵션은 포커스를 받지 않는다(포커스는 input 에 남는다). 클릭은 li 가 직접 받는다.
+                <li
+                  key={path}
+                  id={optionId(i)}
+                  role="option"
+                  aria-selected={i === active}
+                  onMouseEnter={() => setActive(i)}
+                  onClick={() => go(path)}
+                  // 고른 줄은 배경(대비 1.11:1)만으로는 안 보여 왼쪽 막대를 더한다.
+                  className={cn(
+                    "flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-xs",
+                    i === active && "bg-muted shadow-[inset_2px_0_0_var(--ring)]"
+                  )}
+                >
+                  {iconForFile(name, { className: "size-3.5 shrink-0" })}
+                  <span className="font-medium">{name}</span>
+                  <span className="text-muted-foreground truncate">{dir}</span>
                 </li>
               );
             })}

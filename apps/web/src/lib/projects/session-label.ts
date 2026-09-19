@@ -23,11 +23,21 @@ interface LabelMessage {
 }
 
 // 예전 알림("…re-running it now.")도 잡도록 문장 앞부분으로 비교한다.
-const isFixed = (text: string) => text.startsWith("Fixed the test based on the failure logs");
-const isVersionNote = (text: string) =>
-  text.startsWith("Generated ") ||
-  text.startsWith("Updated the test with your request") ||
-  isFixed(text);
+const FIXED_PREFIX = "Fixed the test based on the failure logs";
+/**
+ * 버전 알림으로 치는 문장 앞부분. 사이드바 목록은 이 값으로 DB 에서 알림을 찾는다
+ * (generated-sessions.ts) — 규칙을 두 군데에 쓰지 않도록 내보낸다.
+ */
+export const VERSION_NOTE_PREFIXES = [
+  "Generated ",
+  "Updated the test with your request",
+  FIXED_PREFIX,
+] as const;
+/** 알림 판정에 필요한 앞부분 길이. DB 에서 알림 글자를 이만큼만 가져온다. */
+export const VERSION_NOTE_PREFIX_LENGTH = Math.max(...VERSION_NOTE_PREFIXES.map((p) => p.length));
+
+const isFixed = (text: string) => text.startsWith(FIXED_PREFIX);
+const isVersionNote = (text: string) => VERSION_NOTE_PREFIXES.some((p) => text.startsWith(p));
 
 /** 이 버전을 만든 요청. 찾을 수 없으면 null(부르는 쪽이 파일 이름으로 대신한다). */
 export function sessionLabel(messages: LabelMessage[]): string | null {

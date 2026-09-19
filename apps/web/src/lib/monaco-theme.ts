@@ -22,7 +22,23 @@ export const setupMonaco = (monaco: Monaco) => {
     },
   });
   // 목업 코드 뷰어 — 미설치 모듈("vitest" 등) 진단 안 띄운다.
+  // 문법 진단은 켜 둔다: 오타(`cosnt`, 닫히지 않은 괄호)는 보여야 한다.
+  // 예전에 이것까지 껐던 건 JSX 때문이었는데, 이제 에디터마다 .tsx 경로를 주므로
+  // TS 가 JSX 를 정상으로 읽는다(file-view 의 modelPath).
   const diag = { noSemanticValidation: true, noSuggestionDiagnostics: true };
   monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions(diag);
   monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions(diag);
+
+  // 경로가 .tsx 여도 jsx 옵션이 없으면 TS 가 JSX 를 거부한다. 기본값을 통째로 덮어쓰므로
+  // 원래 있던 allowNonTsExtensions·target 도 같이 적는다.
+  const compilerOptions = {
+    jsx: monaco.languages.typescript.JsxEmit.React,
+    target: monaco.languages.typescript.ScriptTarget.ESNext,
+    moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
+    allowNonTsExtensions: true,
+    allowJs: true,
+    esModuleInterop: true,
+  };
+  monaco.languages.typescript.typescriptDefaults.setCompilerOptions(compilerOptions);
+  monaco.languages.typescript.javascriptDefaults.setCompilerOptions(compilerOptions);
 };

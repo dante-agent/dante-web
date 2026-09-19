@@ -10,6 +10,12 @@
 
 const SLACK_API = "https://slack.com/api";
 
+/**
+ * 응답을 기다리는 상한. Slack 이 멈추면 PR 결과 전달(코멘트·체크)과 설정 화면이 같이 멈춘다.
+ * Discord 웹훅과 같은 값이다(discord-send.ts).
+ */
+const TIMEOUT_MS = 10_000;
+
 export class SlackApiError extends Error {
   constructor(
     readonly method: string,
@@ -30,6 +36,7 @@ export function isRevokedError(error: unknown) {
 /** 사람이 읽을 한 줄. Slack 오류면 코드, 아니면 메시지. */
 export function slackErrorDetail(error: unknown) {
   if (error instanceof SlackApiError) return error.code;
+  if (error instanceof Error && error.name === "TimeoutError") return "Slack did not answer";
   return error instanceof Error ? error.message : String(error);
 }
 
@@ -62,6 +69,7 @@ export async function slackCall<T extends object>(
       },
       body: form,
       cache: "no-store",
+      signal: AbortSignal.timeout(TIMEOUT_MS),
     })
   );
 }
@@ -78,6 +86,7 @@ export async function slackForm<T extends object>(
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams(form),
       cache: "no-store",
+      signal: AbortSignal.timeout(TIMEOUT_MS),
     })
   );
 }

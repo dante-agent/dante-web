@@ -72,21 +72,49 @@ export async function deliverRunSummary(
 
   const repo: RepoRef = { owner: project.repoOwner, repo: project.repoName };
 
-  // GitHub 설치 토큰을 못 받아도 Slack·Discord 는 보낼 수 있다. 그래서 먼저 보낸다.
-  await deliverSlack(project, pr.number, run, settings);
-  await deliverDiscord(
-    {
-      projectId: project.id,
-      repo: `${repo.owner}/${repo.repo}`,
-      prNumber: pr.number,
-      prUrl: `https://github.com/${repo.owner}/${repo.repo}/pull/${pr.number}`,
-    },
-    run,
-    settings
-  );
-
+  // 세 곳에 동시에 보낸다. Slack 이 멈춰도 체크의 결론(머지 차단 여부)이 늦어지지 않게 하고,
+  // GitHub 설치 토큰을 못 받아도 Slack·Discord 는 간다. 셋은 pullRequestSurface 의 서로 다른
+  // 칸만 고쳐서 동시에 써도 겹치지 않는다. 다만 행이 없을 때 셋이 동시에 처음 만들려 하면
+  // unique 충돌이 날 수 있어서, 이 PR 의 첫 전달이면 빈 행을 먼저 만든다.
   const surface = await loadSurface(project.id, pr.number);
+  if (!surface.exists) {
+    await prisma.pullRequestSurface.createMany({
+      data: [{ projectId: project.id, prNumber: pr.number }],
+      skipDuplicates: true,
+    });
+  }
 
+  const [slack, discord, github] = await Promise.allSettled([
+    deliverSlack(project, pr.number, run, settings),
+    deliverDiscord(
+      {
+        projectId: project.id,
+        repo: `${repo.owner}/${repo.repo}`,
+        prNumber: pr.number,
+        prUrl: `https://github.com/${repo.owner}/${repo.repo}/pull/${pr.number}`,
+      },
+      run,
+      settings
+    ),
+    deliverGitHub(project, repo, pr, run, settings, surface),
+  ]);
+
+  // Slack·Discord 는 보내기 실패를 스스로 전달 로그에 적는다. 여기 오는 건 그 밖(DB 등)의 실패다.
+  if (slack.status === "rejected") console.error("[deliver] slack failed", slack.reason);
+  if (discord.status === "rejected") console.error("[deliver] discord failed", discord.reason);
+  // GitHub 쪽 예상 못 한 실패는 전처럼 부르는 쪽으로 올린다(pull-request-job.ts failJob).
+  if (github.status === "rejected") throw github.reason;
+}
+
+/** PR 코멘트와 체크. */
+async function deliverGitHub(
+  project: NotifiableProject,
+  repo: RepoRef,
+  pr: PullRequestContext,
+  run: RunSummary,
+  settings: NotificationSettings,
+  surface: Awaited<ReturnType<typeof loadSurface>>
+) {
   let octokit: Octokit;
   try {
     octokit = await installationClient(project.installationId);
@@ -267,6 +295,7 @@ async function loadSurface(projectId: string, prNumber: number) {
   });
 
   return {
+    exists: row !== null,
     // DB 는 BigInt 로 들고 있지만 GitHub 의 코멘트·체크 ID 는 2^53 안쪽이라
     // number 로 좁혀 쓴다 (lib/github/repos.ts 와 같은 판단).
     commentId:

@@ -3,7 +3,7 @@ import { isSandboxConfigured, type RunRequest, type RunResult } from "@dante/san
 import { installationToken } from "@/lib/github/pull-request";
 import { runnerFramework, withPassThroughArgs } from "@/lib/notifications/runner-request";
 import { detectRuntimeCommands } from "@/lib/projects/detect-runtime";
-import { getOwnedProjectId, getProjectRepo } from "@/lib/projects/queries";
+import { getOwnedProject, projectRepoOf, type ProjectRepo } from "@/lib/projects/queries";
 import { resolveRuntimeSettings } from "@/lib/projects/runtime";
 
 // 저장된 테스트 버전 하나를 격리 환경에서 돌린다 (서버 전용).
@@ -31,7 +31,7 @@ export type RunTarget =
       versionId: string;
       testFile: { path: string; content: string };
       framework: NonNullable<ReturnType<typeof runnerFramework>>;
-      repo: NonNullable<Awaited<ReturnType<typeof getProjectRepo>>>;
+      repo: ProjectRepo;
       settings: ReturnType<typeof resolveRuntimeSettings>;
     }
   | { ok: false; view: TestRunView };
@@ -47,8 +47,10 @@ export async function loadRunTarget(
 ): Promise<RunTarget> {
   const fail = (message: string): RunTarget => ({ ok: false, view: preRunError(message) });
 
-  const projectId = await getOwnedProjectId(projectRef, userId);
-  if (!projectId) return fail("Project not found.");
+  // 라우트 핸들러에서도 부른다(cache 가 dedup 하지 않는다). id 와 repo 를 한 번에 읽는다.
+  const project = await getOwnedProject(projectRef, userId);
+  if (!project) return fail("Project not found.");
+  const projectId = project.id;
 
   const version = await prisma.testFileVersion.findFirst({
     where: { id: versionId, testFile: { component: { projectId } } },
@@ -85,8 +87,7 @@ export async function loadRunTarget(
     return fail("The test runner is not configured in this environment.");
   }
 
-  const repo = await getProjectRepo(projectRef, userId);
-  if (!repo) return fail("Project not found.");
+  const repo = projectRepoOf(project);
 
   // Runtime 탭 값이 우선이고, 비어 있으면 레포에서 감지한 기본값으로 채운다(화면과 같은 규칙).
   const defaults = await detectRuntimeCommands(projectRef, repo, settingsRow.testFramework);

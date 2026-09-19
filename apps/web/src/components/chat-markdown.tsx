@@ -12,12 +12,14 @@
 // - 원본 HTML: skipHtml 로 버린다. rehype-raw 같은 확장은 넣지 않는다.
 // - 링크: http(s) 만 링크로 만들고 새 탭 + noopener noreferrer.
 
-import { memo, useEffect, useMemo, useState, useTransition } from "react";
+import { memo, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Monaco } from "@monaco-editor/react";
 import { Check, Copy, FileCheck, Loader2 } from "lucide-react";
 import { applyTestCode } from "@/app/project/[projectRef]/folder/actions";
+import { requestTestApply } from "@/components/generation/test-apply-request";
+import { copyAndAnnounce } from "@/components/live-announcer";
 import { MONACO_THEME, setupMonaco } from "@/lib/monaco-theme";
 import { cn } from "@/lib/utils";
 
@@ -71,8 +73,19 @@ function loadMonaco(): Promise<Monaco> {
   return monacoPromise;
 }
 
-/** Apply 대상. 답변이 나온 파일(메시지의 filePath)이지 지금 열어 둔 파일이 아니다. */
-type ApplyTarget = { projectRef: string; filePath: string };
+/**
+ * Apply 대상. 답변이 나온 파일(메시지의 filePath)이지 지금 열어 둔 파일이 아니다.
+ *
+ * where 는 누른 결과다. "version" = 새 버전으로 저장(보기 모드), "after" = 수정 모드의
+ * After 칸에 꽂기만 하고 저장은 사용자가 Save 로 한다.
+ */
+type ApplyTarget = {
+  projectRef: string;
+  filePath: string;
+  where: "version" | "after";
+  /** 이 파일에 지금 저장돼 있는 테스트 코드. 같으면 Apply 를 막는다. 모르면 null. */
+  appliedCode: string | null;
+};
 
 /** 테스트 파일로 저장할 수 있는 코드펜스. 셸 명령·JSON 같은 블록엔 Apply 를 달지 않는다. */
 const isTestCode = (languageId: string | undefined) =>
@@ -80,26 +93,50 @@ const isTestCode = (languageId: string | undefined) =>
 
 function ApplyButton({ code, target }: { code: string; target: ApplyTarget }) {
   const [pending, startTransition] = useTransition();
-  const [state, setState] = useState<"idle" | "applied" | "failed">("idle");
+  // 연타 막기. disabled 는 state 라 리렌더 뒤에야 걸리는데, 저장은 서버 왕복이라 그 사이
+  // 두 번 눌리면 둘 다 같은 버전을 읽고 같은 내용이 두 번 쌓인다(서버 가드도 못 잡는다).
+  const firing = useRef(false);
+  const [clicked, setClicked] = useState<"idle" | "applied" | "failed">("idle");
   const name = target.filePath.split("/").pop() ?? target.filePath;
+  // 이 코드가 이미 저장된 테스트 그대로면 누른 적 없어도 "적용됨"이다 — 새로고침이나
+  // 보기 ↔ 수정 전환으로 clicked 가 초기화돼도 화면이 사실과 어긋나지 않게.
+  const state = clicked === "idle" && target.appliedCode === code ? "applied" : clicked;
 
-  const apply = () =>
+  const apply = () => {
+    // 버튼은 포커스를 지키려고 disabled 대신 aria-disabled 라, 막는 건 여기서 한다.
+    if (firing.current || state === "applied") return;
+    firing.current = true;
+    // 수정 모드에선 저장하지 않는다 — After 칸을 채울 뿐이라 실패할 일도, 기다릴 일도 없다.
+    // 잘못 눌렀으면 에디터에서 ⌘Z 로 되돌아간다(값 교체가 undo 스택에 쌓인다).
+    if (target.where === "after") {
+      requestTestApply(target.filePath, code);
+      setClicked("applied");
+      return;
+    }
     startTransition(async () => {
       try {
         const result = await applyTestCode(target.projectRef, target.filePath, code);
-        setState(result.ok ? "applied" : "failed");
+        setClicked(result.ok ? "applied" : "failed");
+        // 실패는 Retry 로 다시 누를 수 있어야 한다.
+        if (!result.ok) firing.current = false;
       } catch {
-        setState("failed");
+        setClicked("failed");
+        firing.current = false;
       }
     });
+  };
 
   return (
     <button
       type="button"
       onClick={apply}
       // 적용 뒤엔 막는다 — 다시 누르면 같은 내용이 새 버전으로 또 쌓인다.
-      disabled={pending || state === "applied"}
-      title={`Save as a new version of the test for ${target.filePath}`}
+      aria-disabled={pending || state === "applied"}
+      title={
+        target.where === "after"
+          ? `Put this code in the After editor for ${target.filePath}`
+          : `Save as a new version of the test for ${target.filePath}`
+      }
       // 브랜드 컬러 캡슐. 적용 뒤엔 색을 빼 "끝남"을 보이고, 실패는 테두리만 빨갛게.
       className={cn(
         "flex max-w-full min-w-0 items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium shadow-sm transition-[background-color,transform] active:scale-[0.97]",
@@ -107,7 +144,7 @@ function ApplyButton({ code, target }: { code: string; target: ApplyTarget }) {
           ? "bg-muted text-muted-foreground shadow-none"
           : state === "failed"
             ? "border-destructive text-destructive hover:bg-destructive/10 border"
-            : "bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-70"
+            : "bg-primary text-primary-foreground hover:bg-primary/90 aria-disabled:opacity-70"
       )}
     >
       {pending ? (
@@ -120,10 +157,14 @@ function ApplyButton({ code, target }: { code: string; target: ApplyTarget }) {
       {/* 파일명이 길면 줄이지 않고 말줄임 — 전체 경로는 title 에 있다. */}
       <span className="truncate">
         {state === "applied"
-          ? "Applied"
+          ? target.where === "after"
+            ? "Put in After"
+            : "Applied"
           : state === "failed"
             ? "Apply failed · Retry"
-            : `Apply to ${name}`}
+            : target.where === "after"
+              ? "Put in After"
+              : `Apply to ${name}`}
       </span>
     </button>
   );
@@ -178,10 +219,9 @@ function CodeBlock({
           <button
             type="button"
             onClick={() => {
-              void navigator.clipboard.writeText(code).then(() => setCopied(true));
+              void copyAndAnnounce(code).then((ok) => ok && setCopied(true));
             }}
             className="hover:text-foreground hover:bg-muted flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors"
-            aria-label="Copy code"
           >
             {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
             {copied ? "Copied" : "Copy"}
@@ -250,6 +290,7 @@ function buildComponents(streaming: boolean, applyTo: ApplyTarget | null): Compo
           className="text-brand-cobalt underline underline-offset-2"
         >
           {children}
+          <span className="sr-only"> (opens in new tab)</span>
         </a>
       ) : (
         <span>{children}</span>
@@ -295,16 +336,26 @@ export const ChatMarkdown = memo(function ChatMarkdown({
   streaming,
   projectRef,
   applyFile,
+  applyWhere = "version",
+  appliedCode = null,
 }: {
   text: string;
   streaming: boolean;
   projectRef: string;
   /** 이 답이 나온 파일. 있으면 테스트 코드블록에 Apply 가 붙는다. */
   applyFile: string | null;
+  /** 누르면 새 버전으로 저장할지, 수정 모드의 After 칸에 꽂을지. */
+  applyWhere?: ApplyTarget["where"];
+  /** 그 파일에 지금 저장돼 있는 테스트 코드. 같은 코드블록의 Apply 는 막힌다. */
+  appliedCode?: string | null;
 }) {
   const components = useMemo(
-    () => buildComponents(streaming, applyFile ? { projectRef, filePath: applyFile } : null),
-    [streaming, projectRef, applyFile]
+    () =>
+      buildComponents(
+        streaming,
+        applyFile ? { projectRef, filePath: applyFile, where: applyWhere, appliedCode } : null
+      ),
+    [streaming, projectRef, applyFile, applyWhere, appliedCode]
   );
   return (
     <div className="wrap-break-word">

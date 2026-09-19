@@ -34,10 +34,14 @@ import {
   X,
 } from "lucide-react";
 import { ChatMarkdown } from "@/components/chat-markdown";
+import { currentAfterCode } from "@/components/generation/test-apply-request";
 import { requestTestTyping } from "@/components/generation/test-typing-request";
+import { announce } from "@/components/live-announcer";
 import { requestTestRun } from "@/components/run-terminal";
 import { Button } from "@/components/ui/button";
+import { useElementSize, useResizeHandle } from "@/components/use-resize-handle";
 import { splitStream } from "@/lib/chat/stream-tail";
+import { neighborFocusTarget } from "@/lib/focus-neighbor";
 import { cn } from "@/lib/utils";
 
 /** 본문과 같은 높이(헤더 47px 만 빼면 화면 끝까지). file-view / folder-empty-state 와 같은 값. */
@@ -63,23 +67,31 @@ const MAX_MESSAGES = 50;
 const MAX_CONTEXT_TOKENS = 50_000;
 /** 이 비율부터 게이지를 경고 톤으로. 가득 차기 전에 새 대화를 떠올리게. */
 const WARN_RATIO = 0.8;
-/** 빈 대화에 띄우는 질문. 서버 도구(updateTestFile·runTests)로 할 수 있는 일을 보여준다. 테스트가 없으면 설명·실행할 게 없다. */
-const suggestedPrompts = (hasTest: boolean) =>
+/**
+ * 빈 대화에 띄우는 질문. 서버 도구(updateTestFile·runTests)로 할 수 있는 일을 보여준다.
+ * 테스트가 없으면 설명·실행할 게 없다. 수정 모드엔 도구도 터미널도 없으니 실행은 빼고,
+ * 고쳐 달라는 답은 After 에 꽂는 코드로 온다.
+ */
+const suggestedPrompts = (hasTest: boolean, editing: boolean) =>
   hasTest
     ? [
         "Explain the test code for this file",
         "Update the tests for this file",
-        "Run the tests for this file",
+        ...(editing ? [] : ["Run the tests for this file"]),
       ]
     : ["Write tests for this file"];
 
-/** 본문이 지금 연 파일에 테스트가 있는지 알리는 통로. dock 밖(PR 화면)에서는 아무 일도 안 한다. */
-const HasTestContext = createContext<(hasTest: boolean) => void>(() => {});
+/**
+ * 본문이 지금 연 파일의 테스트 코드를 알리는 통로(없으면 null). dock 밖(PR 화면)에서는 아무 일도 안 한다.
+ * 유무뿐 아니라 내용까지 싣는 이유: 답의 코드가 이미 저장된 내용과 같으면 Apply 를 막아야 하는데,
+ * 버튼의 "누름" 표시는 컴포넌트 state 라 새로고침·모드 전환에 초기화된다.
+ */
+const CurrentTestContext = createContext<(test: string | null) => void>(() => {});
 
-/** 본문(FileView)이 부른다. 채팅은 본문과 형제라 테스트 유무를 따로 받아오지 않고 이렇게 전해 받는다. */
-export function useReportHasTest(hasTest: boolean) {
-  const report = useContext(HasTestContext);
-  useEffect(() => report(hasTest), [report, hasTest]);
+/** 본문(FileView)이 부른다. 채팅은 본문과 형제라 테스트를 따로 받아오지 않고 이렇게 전해 받는다. */
+export function useReportCurrentTest(test: string | null) {
+  const report = useContext(CurrentTestContext);
+  useEffect(() => report(test), [report, test]);
 }
 
 // ── 서버 계약 (/api/chat, /api/chat/conversations) ─────────────────────────────
@@ -159,7 +171,15 @@ const MAX_RATIO = 0.6;
 
 export function AiChatDock({ projectRef, children }: { projectRef: string; children: ReactNode }) {
   const [open, setOpen] = useState(false);
-  const [hasTest, setHasTest] = useState(false);
+  // 여닫을 때 누른 버튼이 사라진다(열기 버튼은 열리면 없어지고, 닫기 버튼은 inert 안으로 들어간다).
+  // 열면 입력창으로, 닫으면 다시 나타난 열기 버튼으로 포커스를 옮긴다.
+  const openButtonRef = useRef<HTMLButtonElement>(null);
+  const toggled = useRef(false);
+  const toggle = (next: boolean) => {
+    toggled.current = true;
+    setOpen(next);
+  };
+  const [currentTest, setCurrentTest] = useState<string | null>(null);
 
   // null = 아직 끌지 않음 → 기본 폭(22rem / xl 26rem) 클래스를 쓴다. 끈 뒤에는 px.
   // 저장하지 않는다 — 새로고침하면 기본 폭으로 돌아간다.
@@ -183,16 +203,47 @@ export function AiChatDock({ projectRef, children }: { projectRef: string; child
   };
   const onDividerUp = () => setDragging(false);
 
+  // 키보드로도 폭을 바꾼다. 아직 끌지 않았으면(width null) 지금 그려진 폭에서 시작한다.
+  const asideRef = useRef<HTMLElement>(null);
+  const dockSize = useElementSize(dockRef);
+  const asideSize = useElementSize(asideRef);
+  const dividerHandle = useResizeHandle({
+    label: "Resize AI chat",
+    orientation: "vertical",
+    value: width ?? asideSize.width,
+    min: MIN_WIDTH,
+    max: dockSize.width * MAX_RATIO,
+    step: 24,
+    onChange: setWidth,
+    grow: "backward",
+  });
+
+  useEffect(() => {
+    if (!toggled.current) return;
+    toggled.current = false;
+    if (!open) {
+      openButtonRef.current?.focus();
+      return;
+    }
+    const aside = asideRef.current;
+    (
+      aside?.querySelector<HTMLElement>("textarea:not(:disabled)") ??
+      aside?.querySelector<HTMLElement>("button:not(:disabled)")
+    )?.focus();
+  }, [open]);
+
   return (
     <div ref={dockRef} className="flex">
       <div className="min-w-0 flex-1">
-        <HasTestContext value={setHasTest}>{children}</HasTestContext>
+        <CurrentTestContext value={setCurrentTest}>{children}</CurrentTestContext>
       </div>
 
       {/* 패널은 계속 붙어 있고 폭만 0 ↔ 기본 폭으로 움직인다. 그래야 본문이 같이
           부드럽게 줄고(늘고), 닫았다 열어도 대화가 남는다. 본문과는 border-l 한 줄로만
           나눈다 — 여백을 두면 에디터가 화면 끝까지 못 간다. */}
       <aside
+        ref={asideRef}
+        aria-label="AI chat"
         // 닫혀 있을 때 폭 0 짜리 안쪽 버튼·입력창으로 탭 이동이 들어가지 않게.
         inert={!open}
         style={open && width !== null ? { width } : undefined}
@@ -206,18 +257,16 @@ export function AiChatDock({ projectRef, children }: { projectRef: string; child
             왼쪽 끝 8px 을 잡는 영역으로 쓴다. 선은 border-l 자리에 겹쳐 보인다. */}
         {open && (
           <div
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Resize AI chat"
+            {...dividerHandle}
             onPointerDown={onDividerDown}
             onPointerMove={onDividerMove}
             onPointerUp={onDividerUp}
             onPointerCancel={onDividerUp}
-            className="group absolute inset-y-0 left-0 z-10 w-2 cursor-col-resize touch-none"
+            className="group absolute inset-y-0 left-0 z-10 w-2 cursor-col-resize touch-none outline-none"
           >
             <span
               className={cn(
-                "group-hover:bg-brand-orange/70 block h-full w-0.5 bg-transparent transition-colors",
+                "group-hover:bg-brand-orange/70 group-focus-visible:bg-brand-orange block h-full w-0.5 bg-transparent transition-colors",
                 dragging && "bg-brand-orange/70"
               )}
             />
@@ -230,15 +279,16 @@ export function AiChatDock({ projectRef, children }: { projectRef: string; child
             projectRef={projectRef}
             open={open}
             width={width}
-            hasTest={hasTest}
-            onClose={() => setOpen(false)}
+            currentTest={currentTest}
+            onClose={() => toggle(false)}
           />
         </Suspense>
       </aside>
 
       {!open && (
         <Button
-          onClick={() => setOpen(true)}
+          ref={openButtonRef}
+          onClick={() => toggle(true)}
           title="Open AI chat"
           className="animate-in fade-in zoom-in-95 fixed right-8 bottom-14 z-30 h-11 gap-2 rounded-full px-4 shadow-lg duration-200"
         >
@@ -255,8 +305,8 @@ type PanelProps = {
   open: boolean;
   /** 사용자가 끌어서 정한 폭(px). null 이면 기본 폭 클래스. */
   width: number | null;
-  /** 지금 연 파일에 테스트가 있는지. 추천 질문이 달라진다. */
-  hasTest: boolean;
+  /** 지금 연 파일의 테스트 코드(없으면 null). 추천 질문과 Apply 버튼 상태가 이걸로 갈린다. */
+  currentTest: string | null;
   onClose: () => void;
 };
 
@@ -265,18 +315,24 @@ type PanelProps = {
  * 다른 파일로 따라가지 않는다. 진행 중인 답은 언마운트에서 끊긴다(저장되지 않음).
  */
 function FileChatPanel(props: PanelProps) {
-  const file = useSearchParams().get("file");
-  return <ChatPanel key={file ?? ""} file={file} {...props} />;
+  const searchParams = useSearchParams();
+  const file = searchParams.get("file");
+  // 수정 모드에선 AI 가 파일을 저장하지 않는다(서버가 도구를 주지 않는다). 답의 코드는
+  // Apply 로 After 칸에 꽂고, 저장 여부는 사용자가 diff 를 보고 Save 로 정한다.
+  const editing = searchParams.get("mode") === "edit";
+  // key 는 파일뿐이다 — 보기 ↔ 수정을 오가도 대화는 이어진다.
+  return <ChatPanel key={file ?? ""} file={file} editing={editing} {...props} />;
 }
 
 function ChatPanel({
   projectRef,
   open,
   width,
-  hasTest,
+  currentTest,
   onClose,
   file,
-}: PanelProps & { file: string | null }) {
+  editing,
+}: PanelProps & { file: string | null; editing: boolean }) {
   const queryClient = useQueryClient();
   const router = useRouter();
 
@@ -335,6 +391,16 @@ function ChatPanel({
     el.style.height = `${el.scrollHeight}px`;
   }, [input, width, showHistory]);
 
+  // 보내는 동안 Send 자리에 Stop 이 뜨고, 끝나면 다시 Send 로 바뀐다. 바뀌는 순간 누르고 있던
+  // 버튼이 사라지므로 포커스는 입력창으로 돌린다.
+  const stopRef = useRef<HTMLButtonElement>(null);
+  const refocusInput = useRef(false);
+  useEffect(() => {
+    if (pending || !refocusInput.current) return;
+    refocusInput.current = false;
+    inputRef.current?.focus();
+  }, [pending]);
+
   const listRef = useRef<HTMLDivElement>(null);
   // messages 는 렌더마다 새 배열이라 의존성으로 쓰면 입력할 때마다 맨 아래로 튄다.
   useEffect(() => {
@@ -389,6 +455,7 @@ function ChatPanel({
     setInput("");
     setError(null);
     setPending(true);
+    announce("Waiting for AI reply…");
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -403,7 +470,15 @@ function ChatPanel({
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ projectRef, conversationId: sentTo, file, message: content }),
+        body: JSON.stringify({
+          projectRef,
+          conversationId: sentTo,
+          file,
+          mode: editing ? "edit" : "view",
+          // 수정 중이면 저장된 버전 말고 지금 치고 있는 내용을 보고 고치게 한다.
+          testCode: editing ? currentAfterCode() : null,
+          message: content,
+        }),
         signal: controller.signal,
       });
       if (!response.ok || !response.body) throw await toResponseError(response);
@@ -426,6 +501,8 @@ function ChatPanel({
         );
       }
       const { answer, tail } = splitStream(raw);
+      // 스트리밍 중에는 조각마다 읽히면 시끄러워서 알리지 않고, 다 받은 뒤 한 번에 알린다.
+      announce(`AI: ${answer}`);
       // 토큰 수를 못 받았으면 이전 값을 그대로 둔다.
       const contextTokens = tail?.contextTokens ?? undefined;
 
@@ -474,19 +551,24 @@ function ChatPanel({
             .filter((m) => m.role === "user" || m.content !== "")
             .map((m) => (m.role === "assistant" ? { ...m, aborted: true } : m))
         );
+        announce("Stopped. Not saved.");
         return;
       }
 
       if (e instanceof ResponseError && e.code === "conversation_full") setFullFromServer(true);
+      const message =
+        e instanceof Error ? e.message : "Request failed.\nPlease try again in a moment.";
       setError({
         kind: e instanceof ResponseError && e.status === 402 ? "limit" : "error",
-        message: e instanceof Error ? e.message : "Request failed.\nPlease try again in a moment.",
+        message,
       });
+      announce(message);
       // 저장되지 않은 턴은 화면에서 걷고 질문은 입력창에 돌려준다 — 다시 보내기 쉽게.
       // 보낸 것처럼 남겨두면 서버 대화와 화면이 어긋난다.
       setTail([]);
       setInput((current) => current || content);
     } finally {
+      if (document.activeElement === stopRef.current) refocusInput.current = true;
       setPending(false);
       abortRef.current = null;
     }
@@ -558,10 +640,20 @@ function ChatPanel({
       ) : (
         // 메시지 영역만 한 단계 어둡게(Mauve 1). 헤더·입력 영역(Mauve 2)이 위아래 틀이 되고
         // 내용은 그 사이에 들어앉은 것으로 읽힌다 — 셋이 같은 색이면 한 덩어리로 보인다.
-        <div ref={listRef} className="bg-background flex-1 space-y-3 overflow-y-auto p-3">
+        // 스크롤 영역에 키보드로 닿게 tabIndex. 새 글은 조각마다 읽히지 않게 aria-live="off" 로 두고,
+        // 다 받은 답만 공용 알림으로 읽는다(send).
+        <div
+          ref={listRef}
+          role="log"
+          aria-live="off"
+          aria-label="Messages"
+          tabIndex={0}
+          className="bg-background focus-visible:outline-ring flex-1 space-y-3 overflow-y-auto p-3 focus-visible:outline-2 focus-visible:-outline-offset-2"
+        >
           {conversation.isPending && conversationId !== null ? (
-            <div className="flex h-full items-center justify-center">
+            <div role="status" className="flex h-full items-center justify-center">
               <Loader2 className="text-muted-foreground size-4 animate-spin" />
+              <span className="sr-only">Loading chat…</span>
             </div>
           ) : conversation.isError ? (
             <p className="text-destructive text-sm leading-relaxed wrap-break-word whitespace-pre-line">
@@ -574,12 +666,13 @@ function ChatPanel({
               <div className="flex h-full flex-col items-center justify-center gap-3 px-6">
                 <p className="text-muted-foreground text-center text-sm">Ask about this file.</p>
                 <div className="flex flex-col items-stretch gap-2">
-                  {suggestedPrompts(hasTest).map((prompt) => (
+                  {suggestedPrompts(currentTest !== null, editing).map((prompt) => (
                     <Button
                       key={prompt}
                       variant="outline"
                       size="sm"
                       disabled={pending || full}
+                      focusableWhenDisabled
                       onClick={() => void send(prompt)}
                       className="animate-in fade-in slide-in-from-bottom-1 justify-start rounded-full duration-200"
                     >
@@ -611,6 +704,8 @@ function ChatPanel({
                       : "text-foreground max-w-full leading-relaxed"
                   )}
                 >
+                  {/* 누가 한 말인지는 말풍선 위치·색으로만 보여서 스크린리더용 글자를 붙인다. */}
+                  <span className="sr-only">{m.role === "user" ? "You:" : "AI:"}</span>
                   {m.role === "user" ? (
                     <CollapsibleText text={m.content} />
                   ) : m.content ? (
@@ -620,9 +715,21 @@ function ChatPanel({
                       streaming={pending && i === messages.length - 1}
                       projectRef={projectRef}
                       applyFile={m.filePath}
+                      // 지금 열어 둔 파일에 대한 답일 때만 After 에 꽂는다 — 다른 파일 답이면
+                      // 꽂을 에디터가 화면에 없다.
+                      applyWhere={editing && m.filePath === file ? "after" : "version"}
+                      // 저장하는 버튼일 때만 "이미 적용됨"을 따진다. 막는 이유가 같은 내용이
+                      // 새 버전으로 쌓이는 걸 피하려는 것인데, After 에 꽂는 건 버전을 만들지
+                      // 않는다. 같은 내용이면 Save 가 비활성이라 거기서 걸린다.
+                      appliedCode={!editing && m.filePath === file ? currentTest : null}
                     />
                   ) : (
-                    pending && <Loader2 className="text-muted-foreground size-4 animate-spin" />
+                    pending && (
+                      <>
+                        <Loader2 className="text-muted-foreground size-4 animate-spin" />
+                        <span className="sr-only">AI is replying…</span>
+                      </>
+                    )
                   )}
                   {"aborted" in m && m.aborted && (
                     <p className="text-muted-foreground mt-1 text-xs">Stopped · Not saved</p>
@@ -666,6 +773,8 @@ function ChatPanel({
         <form
           onSubmit={(e) => {
             e.preventDefault();
+            // Send 버튼을 눌렀으면 그 버튼이 곧 Stop 으로 바뀐다. 입력창에 포커스를 둔다.
+            inputRef.current?.focus();
             void send(input);
           }}
           className="bg-background shrink-0 px-3 pb-3"
@@ -696,14 +805,19 @@ function ChatPanel({
                 }
               }}
               placeholder="Ask anything — Enter to send"
+              aria-label="Message AI chat"
               className="text-foreground placeholder:text-muted-foreground block max-h-42 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent px-0.5 text-sm leading-7 outline-none disabled:cursor-not-allowed disabled:opacity-50"
             />
             {pending ? (
               <Button
+                ref={stopRef}
                 type="button"
                 size="icon-sm"
                 variant="ghost"
-                onClick={() => abortRef.current?.abort()}
+                onClick={() => {
+                  abortRef.current?.abort();
+                  inputRef.current?.focus();
+                }}
                 title="Stop"
                 aria-label="Stop"
               >
@@ -812,8 +926,9 @@ function HistoryList({
 
   if (list.isPending) {
     return (
-      <div className="bg-background flex flex-1 justify-center pt-10">
+      <div role="status" className="bg-background flex flex-1 justify-center pt-10">
         <Loader2 className="text-muted-foreground size-4 animate-spin" />
+        <span className="sr-only">Loading saved chats…</span>
       </div>
     );
   }
@@ -835,9 +950,15 @@ function HistoryList({
   }
 
   return (
-    <ul className="bg-background flex-1 space-y-0.5 overflow-y-auto p-2">
+    // data-rows·tabIndex: 대화를 지운 뒤 포커스가 옮겨 갈 자리(lib/focus-neighbor.ts).
+    <ul
+      data-rows
+      tabIndex={-1}
+      aria-label="Saved chats"
+      className="bg-background flex-1 space-y-0.5 overflow-y-auto p-2 outline-none"
+    >
       {chats.map((chat) => (
-        <li key={chat.id}>
+        <li key={chat.id} data-row>
           <div
             className={cn(
               // pl-4: 목록 p-2 와 합쳐 24px — 대화 화면 본문(p-3 + 말풍선)과 같은 들여쓰기.
@@ -859,10 +980,15 @@ function HistoryList({
             <Button
               size="icon-sm"
               variant="ghost"
-              onClick={() => onRemove(chat.id)}
+              onClick={(event) => {
+                // 지워진 줄과 함께 버튼이 사라지기 전에 이웃 줄로 포커스를 옮긴다.
+                neighborFocusTarget(event.currentTarget)?.focus();
+                onRemove(chat.id);
+              }}
               title="Delete"
               aria-label={`Delete ${chat.title}`}
-              className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
+              // 키보드로 포커스했을 때도 보이게 한다 — 평소엔 hover 때만 나타난다.
+              className="text-muted-foreground hover:text-destructive opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100"
             >
               <Trash2 />
             </Button>

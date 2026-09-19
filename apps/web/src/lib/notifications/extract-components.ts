@@ -19,27 +19,43 @@ export type ExtractedComponent = {
 
 const JSX_KINDS = [SyntaxKind.JsxElement, SyntaxKind.JsxSelfClosingElement, SyntaxKind.JsxFragment];
 
-export function extractComponents(filePath: string, source: string): ExtractedComponent[] {
+/**
+ * 모든 호출이 같이 쓰는 Project. 만들 때마다 컴파일러 호스트와 lib 선언 파일을 새로 올려서
+ * 파일 하나에 수십 ms 가 들었다. 하나를 두고 파일만 넣었다 뺀다.
+ */
+let shared: Project | null = null;
+
+function project() {
   // 디스크를 건드리지 않는다. 다른 파일을 찾아 읽지도 않으므로 `export { A } from "./A"`
   // 같은 재수출은 선언을 못 찾아 빠진다 — 그 파일이 바뀌었으면 그쪽에서 잡힌다.
-  const project = new Project({
+  shared ??= new Project({
     useInMemoryFileSystem: true,
     compilerOptions: { jsx: ts.JsxEmit.Preserve, allowJs: true },
   });
-  const file = project.createSourceFile(filePath, source);
+  return shared;
+}
 
-  const components: ExtractedComponent[] = [];
+export function extractComponents(filePath: string, source: string): ExtractedComponent[] {
+  // 동기 함수라 호출끼리 끼어들 틈이 없다. 끝나면 반드시 빼서 Project 에 이 파일 하나만 있게 한다 —
+  // 앞 파일이 남아 있으면 `export * from "./B"` 가 그 파일을 찾아 결과가 달라진다.
+  const file = project().createSourceFile(filePath, source, { overwrite: true });
 
-  for (const [exportName, declarations] of file.getExportedDeclarations()) {
-    if (exportName !== "default" && !/^[A-Z]/.test(exportName)) continue;
+  try {
+    const components: ExtractedComponent[] = [];
 
-    const declaration = declarations[0];
-    if (!declaration || !containsJsx(declaration)) continue;
+    for (const [exportName, declarations] of file.getExportedDeclarations()) {
+      if (exportName !== "default" && !/^[A-Z]/.test(exportName)) continue;
 
-    components.push({ exportName, name: declarationName(declaration) });
+      const declaration = declarations[0];
+      if (!declaration || !containsJsx(declaration)) continue;
+
+      components.push({ exportName, name: declarationName(declaration) });
+    }
+
+    return components;
+  } finally {
+    project().removeSourceFile(file);
   }
-
-  return components;
 }
 
 function containsJsx(node: Node) {

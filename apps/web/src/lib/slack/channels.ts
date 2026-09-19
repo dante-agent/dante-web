@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { slackCall } from "@/lib/slack/api";
 
 // ⚠️ 서버 전용. 채널 목록·확인과 메시지 보내기.
@@ -50,6 +51,31 @@ export async function listSlackChannels(token: string): Promise<SlackChannel[]> 
   }
 
   return channels.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * 채널 목록 캐시 수명(초). 설정 화면을 열 때마다 conversations.list 를 최대 5번 차례로 불렀다.
+ * 짧게 둔다 — 봇을 비공개 채널에 초대한 뒤 새로고침하면 곧 보여야 한다.
+ */
+const CHANNELS_TTL_SECONDS = 60;
+
+/**
+ * listSlackChannels 를 팀(연결) 단위로 잠깐 캐시한다.
+ *
+ * 키는 팀 id 와 연결 행의 updatedAt 이다. 토큰은 키에 넣지 않는다 — 캐시 키는 캐시 저장소에
+ * 그대로 남는다. 같은 팀·같은 updatedAt 이면 토큰도 같다. 다시 연결하면(다른 워크스페이스 포함)
+ * updatedAt 이 바뀌어 새 항목이 되므로 따로 지울 필요가 없고, 끊기면 loadSlackConnection 이
+ * null 이라 여기까지 오지 않는다. 실패는 캐시되지 않는다(던지면 저장하지 않는다).
+ */
+export function cachedSlackChannels(
+  teamId: string,
+  connection: { botToken: string; updatedAt: Date }
+): Promise<SlackChannel[]> {
+  return unstable_cache(
+    () => listSlackChannels(connection.botToken),
+    ["slack-channels", teamId, connection.updatedAt.toISOString()],
+    { revalidate: CHANNELS_TTL_SECONDS }
+  )();
 }
 
 /**

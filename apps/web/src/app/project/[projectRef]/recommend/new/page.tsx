@@ -47,7 +47,7 @@ export default async function NewRecommendSessionPage({
           </div>
 
           <div className="border-border flex h-12 shrink-0 items-center gap-2 border-b px-4">
-            <span className="truncate text-sm font-semibold">New test session</span>
+            <h1 className="truncate text-sm font-semibold">New test session</h1>
             <Sparkles className="text-brand-cobalt ml-auto size-4" />
           </div>
         </>

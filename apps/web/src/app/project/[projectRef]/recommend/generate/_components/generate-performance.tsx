@@ -4,12 +4,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, ArrowLeft, GitBranch, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { unstable_rethrow, useRouter } from "next/navigation";
+import { requestArrivalFocus } from "@/components/generation/arrival-focus";
 import { GenerationSteps } from "@/components/generation/generation-steps";
 import { SendingFiles } from "@/components/generation/sending-files";
 import {
   useGenerationPerformance,
   type GenerationOutcome,
 } from "@/components/generation/use-generation-performance";
+import { useAnnounce } from "@/components/live-announcer";
 import { ResizableSplit } from "../../[session]/_components/resizable-split";
 import { generatePlannedTests, saveRecommendChat, type GeneratedTestFile } from "../../actions";
 import { WritingCode } from "./writing-code";
@@ -82,6 +84,7 @@ export function GeneratePerformance({
   const finish = useCallback(async () => {
     const { saved, url } = resultRef.current;
     await Promise.all([saved.catch(() => undefined), wait(OPEN_DELAY_MS)]);
+    requestArrivalFocus();
     router.replace(url);
     // 좌측 사이드바는 레이아웃이라 이동만으로는 다시 그리지 않는다. 새 세션이 목록에 뜨게 새로고침한다.
     router.refresh();
@@ -106,6 +109,8 @@ export function GeneratePerformance({
   }, [start, generate]);
 
   const current = stage ?? "read";
+  // 일부 파일 실패는 조건부로 나타나는 문구라 스크린리더가 놓친다. 공용 알림으로 한 번 읽는다.
+  useAnnounce(failed.length > 0 ? `Couldn't generate ${failed.join(", ")}.` : null);
 
   return (
     <ResizableSplit
@@ -124,7 +129,7 @@ export function GeneratePerformance({
           </div>
 
           <div className="border-border flex h-12 shrink-0 items-center gap-2 border-b px-4">
-            <span className="truncate text-sm font-semibold">Generating tests</span>
+            <h1 className="truncate text-sm font-semibold">Generating tests</h1>
             <Sparkles className="text-brand-cobalt ml-auto size-4" />
           </div>
 
@@ -146,7 +151,7 @@ export function GeneratePerformance({
                 )}
                 {error && (
                   <div className="flex flex-col items-start gap-2">
-                    <p className="text-destructive flex items-center gap-1.5 text-sm">
+                    <p role="alert" className="text-destructive flex items-center gap-1.5 text-sm">
                       <AlertTriangle className="size-3.5 shrink-0" />
                       {error}
                     </p>

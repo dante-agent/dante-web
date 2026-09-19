@@ -77,9 +77,10 @@ export default async function TeamSlackPage({
         {installation ? (
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <p className="text-muted-foreground font-mono text-[10px] font-bold tracking-[0.12em] uppercase">
+              {/* 연결된 상태에도 섹션 제목이 있게 h2 로 둔다. 모양은 그대로. */}
+              <h2 className="text-muted-foreground font-mono text-[10px] font-bold tracking-[0.12em] uppercase">
                 Workspace
-              </p>
+              </h2>
               <p className="mt-2 truncate text-[15px] leading-snug font-medium">
                 {installation.slackTeamName}
               </p>

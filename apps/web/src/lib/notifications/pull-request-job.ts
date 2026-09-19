@@ -2,6 +2,7 @@ import { after } from "next/server";
 import { Prisma, prisma } from "@dante/db";
 import {
   fetchFileText,
+  fetchHeadCommitMessage,
   fetchPullRequestFiles,
   installationClient,
   type Octokit,
@@ -35,6 +36,7 @@ import {
   TEST_RUN_STALE_MS,
   type RunInput,
 } from "@/lib/notifications/test-run-rules";
+import { mapConcurrent } from "@/lib/map-concurrent";
 import { packageDependencies } from "@/lib/projects/test-generation-prompt";
 import { queuedRun, type RunSummary } from "@/lib/notifications/run-summary";
 
@@ -74,6 +76,21 @@ export type JobProject = {
   testTimeoutMs: number | null;
 };
 
+/**
+ * 웹훅이 넘기는 PR. head 커밋 메시지는 응답 뒤에 작업이 읽는다(runPullRequestJob) —
+ * 웹훅이 200 을 돌려주기 전에 GitHub 을 한 번 덜 부르게.
+ */
+export type PullRequestTarget = Omit<PullRequestContext, "headCommitMessage">;
+
+/**
+ * 생성 단계의 마감. 작업을 시작한 때부터 잰다.
+ *
+ * 라우트의 maxDuration(800초)에 잘리면 작업이 "running" 으로 남고 체크는 in_progress 로 돈다.
+ * 그 전에 생성을 끝내고 남은 파일은 건너뛴다. 남는 시간(약 200초)은 웹훅 응답 전 처리와
+ * 생성 뒤의 저장·결과 전달(코멘트·체크·Slack·Discord)에 쓴다.
+ */
+const GENERATION_DEADLINE_MS = 10 * 60 * 1000;
+
 /** 실행 함수가 프로젝트를 DB 에서 다시 읽을 때. JobProject 와 같은 필드다 */
 const JOB_PROJECT_SELECT = {
   id: true,
@@ -100,7 +117,7 @@ const JOB_PROJECT_SELECT = {
  */
 export async function enqueuePullRequestJob(
   project: JobProject,
-  pr: PullRequestContext,
+  pr: PullRequestTarget,
   payer: Payer
 ) {
   const key = { projectId: project.id, prNumber: pr.number, headSha: pr.headSha };
@@ -161,18 +178,24 @@ async function claimJob(
 async function runPullRequestJob(
   jobId: string,
   project: JobProject,
-  pr: PullRequestContext,
+  target: PullRequestTarget,
   payer: Payer
 ) {
+  const deadline = Date.now() + GENERATION_DEADLINE_MS;
   await prisma.pullRequestJob.update({
     where: { id: jobId },
     data: { status: "running", startedAt: new Date(), attempts: { increment: 1 } },
   });
 
+  // `[skip dante]` 판정(scope.ts)에 쓴다. 결과를 처음 보내기 전에만 있으면 된다.
+  const pr: PullRequestContext = {
+    ...target,
+    headCommitMessage: await commitMessage(project, target.headSha),
+  };
   const progress = progressReporter(jobId, project, pr);
 
   try {
-    const run = await pullRequestRun(jobId, project, pr, payer, progress);
+    const run = await pullRequestRun(jobId, project, pr, payer, progress, deadline);
 
     // 샌드박스 실행 줄에 세웠다. 결과 전달과 마무리는 차례가 오면 runQueuedTestRun 이 한다.
     if (run === "awaiting-run") {
@@ -336,6 +359,20 @@ async function failJob(
   }).catch(() => {});
 }
 
+/** `[skip dante]` 를 보려고 head 커밋 메시지를 읽는다. 못 읽으면 null 이다(평소대로 보낸다). */
+async function commitMessage(project: JobProject, sha: string) {
+  try {
+    const octokit = await installationClient(project.installationId);
+    return await fetchHeadCommitMessage(
+      octokit,
+      { owner: project.repoOwner, repo: project.repoName },
+      sha
+    );
+  } catch {
+    return null;
+  }
+}
+
 function finish(jobId: string, status: "done" | "failed" | "superseded", error?: string) {
   return prisma.pullRequestJob.update({
     where: { id: jobId },
@@ -431,7 +468,8 @@ async function pullRequestRun(
   project: JobProject,
   pr: PullRequestContext,
   payer: Payer,
-  progress: (run: RunSummary) => Promise<void>
+  progress: (run: RunSummary) => Promise<void>,
+  deadline: number
 ): Promise<RunSummary | "awaiting-run"> {
   const { number: prNumber, headSha } = pr;
   const run = queuedRun(danteLinks(project.ref, prNumber));
@@ -476,6 +514,7 @@ async function pullRequestRun(
     testFramework: project.testFramework,
     dependencies,
     sources,
+    deadline,
   });
   console.info(`[pull-request-job] generated tests for #${prNumber}`, {
     tests: generation.tests.length,
@@ -525,6 +564,12 @@ async function pullRequestRun(
 const MAX_FILES_TO_READ = 100;
 
 /**
+ * 파일 읽기를 동시에 몇 개까지 보낼지. 100개를 한꺼번에 보내면 GitHub 의 보조 레이트 리밋
+ * (동시 요청 수)에 걸릴 수 있다.
+ */
+const READ_CONCURRENCY = 8;
+
+/**
  * 후보 파일을 PR head 시점으로 읽어 실제 컴포넌트만 남긴다.
  *
  * 모르면 남긴다. 지워진 파일(읽을 내용이 없다), 못 읽은 파일, 상한을 넘은 파일은
@@ -539,37 +584,37 @@ async function componentsIn(
   headSha: string,
   files: ChangedFile[]
 ): Promise<{ components: LocatedComponent[]; sources: PullRequestSource[] }> {
-  const perFile = await Promise.all(
-    files.map(
-      async (
-        file,
-        index
-      ): Promise<{ components: LocatedComponent[]; source?: PullRequestSource }> => {
-        const fallback = {
-          components: [
-            {
-              name: fileComponentName(file.filePath),
-              change: file.change,
-              tests: 0,
-              filePath: file.filePath,
-            },
-          ],
-        };
-        if (file.change === "removed" || index >= MAX_FILES_TO_READ) return fallback;
+  const perFile = await mapConcurrent(
+    files,
+    READ_CONCURRENCY,
+    async (
+      file,
+      index
+    ): Promise<{ components: LocatedComponent[]; source?: PullRequestSource }> => {
+      const fallback = {
+        components: [
+          {
+            name: fileComponentName(file.filePath),
+            change: file.change,
+            tests: 0,
+            filePath: file.filePath,
+          },
+        ],
+      };
+      if (file.change === "removed" || index >= MAX_FILES_TO_READ) return fallback;
 
-        const source = await fetchFileText(octokit, ref, file.filePath, headSha);
-        if (source === null) return fallback;
+      const source = await fetchFileText(octokit, ref, file.filePath, headSha);
+      if (source === null) return fallback;
 
-        const components = extractComponents(file.filePath, source).map((component) => ({
-          name: component.name ?? fileComponentName(file.filePath),
-          change: file.change,
-          tests: 0,
-          filePath: file.filePath,
-        }));
-        if (components.length === 0) return { components };
-        return { components, source: { filePath: file.filePath, source } };
-      }
-    )
+      const components = extractComponents(file.filePath, source).map((component) => ({
+        name: component.name ?? fileComponentName(file.filePath),
+        change: file.change,
+        tests: 0,
+        filePath: file.filePath,
+      }));
+      if (components.length === 0) return { components };
+      return { components, source: { filePath: file.filePath, source } };
+    }
   );
 
   return {

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { unstable_rethrow, useRouter } from "next/navigation";
+import { requestArrivalFocus } from "@/components/generation/arrival-focus";
 import { GenerationSteps } from "@/components/generation/generation-steps";
 import { SendingFiles } from "@/components/generation/sending-files";
 import { useGenerationPerformance } from "@/components/generation/use-generation-performance";
@@ -67,6 +68,7 @@ export function ChatSession({
       saved.catch(() => undefined),
       new Promise((r) => setTimeout(r, OPEN_DELAY_MS)),
     ]);
+    requestArrivalFocus();
     router.push(url);
     // 좌측 사이드바는 레이아웃이라 이동만으로는 다시 그리지 않는다. 새 세션이 목록에 뜨게 새로고침한다.
     router.refresh();
