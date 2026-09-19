@@ -15,7 +15,7 @@ export const TEST_FRAMEWORKS = [
     id: "jest",
     name: "Jest",
     tagline: "The most widely used. CRA and Next examples ship in this shape.",
-    example: "src/utils/__tests__/format.test.ts",
+    example: "src/utils/format.test.ts",
   },
 ] as const;
 

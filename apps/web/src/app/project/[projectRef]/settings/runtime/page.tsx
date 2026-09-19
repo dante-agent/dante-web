@@ -6,6 +6,7 @@ import { ComingSoon, SettingsHeader } from "@/components/settings/settings-secti
 import { requireUser } from "@/lib/auth/user";
 import { accessibleProjectWhere } from "@/lib/teams/access";
 import { detectRuntimeCommands } from "@/lib/projects/detect-runtime";
+import { TEST_FRAMEWORKS, isTestFramework, type TestFrameworkId } from "@/lib/projects/frameworks";
 import { resolveRuntimeSettings } from "@/lib/projects/runtime";
 
 export const metadata: Metadata = { title: "Runtime settings" };
@@ -41,6 +42,20 @@ export default async function ProjectRuntimePage({
   // scripts.test 로 테스트 커맨드를. 못 읽으면 일반 기본값으로 떨어진다.
   const defaults = await detectRuntimeCommands(projectRef, project, project.testFramework);
 
+  // 러너를 바꾸면 기본 테스트 명령도 바뀐다. 폼이 저장 전에 바뀔 값을 보여줄 수
+  // 있게 러너마다 미리 구해 둔다. 레포 조회는 캐시돼 있어 GitHub 왕복은 늘지 않는다.
+  const testDefaults = Object.fromEntries(
+    await Promise.all(
+      TEST_FRAMEWORKS.map(
+        async (framework) =>
+          [
+            framework.id,
+            (await detectRuntimeCommands(projectRef, project, framework.id)).test,
+          ] as const
+      )
+    )
+  ) as Record<TestFrameworkId, string>;
+
   return (
     <>
       <SettingsHeader
@@ -52,6 +67,12 @@ export default async function ProjectRuntimePage({
         projectRef={projectRef}
         initial={resolveRuntimeSettings(project, defaults)}
         placeholders={defaults}
+        testFramework={
+          project.testFramework && isTestFramework(project.testFramework)
+            ? project.testFramework
+            : null
+        }
+        testDefaults={testDefaults}
       />
 
       <ComingSoon>
