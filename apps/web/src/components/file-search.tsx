@@ -5,6 +5,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
 import { iconForFile } from "@/components/file-icons";
 import { Input } from "@/components/ui/input";
@@ -29,12 +30,27 @@ function matchFiles(files: string[], q: string): string[] {
     .map((x) => x.path);
 }
 
-export function FileSearch({ projectRef, files }: { projectRef: string; files: string[] }) {
+export function FileSearch({ projectRef }: { projectRef: string }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const recent = useRecent(projectRef);
+
+  // 레포 파일 목록은 검색창을 처음 열 때 받는다 — 프로젝트 페이지마다 GitHub 트리를 치지 않으려고
+  // 레이아웃이 아니라 여기서 가져온다. 캐시에 남아 두 번째부터는 즉시 뜬다.
+  const [touched, setTouched] = useState(false);
+  const { data: files = [] } = useQuery({
+    queryKey: ["project", "files", projectRef],
+    queryFn: async () => {
+      const response = await fetch(`/api/projects/${projectRef}/files`);
+      if (!response.ok) return [] as string[];
+      const body = (await response.json()) as { files: string[] };
+      return body.files;
+    },
+    enabled: touched,
+    staleTime: 5 * 60_000,
+  });
 
   const showRecent = query.trim() === "";
   const results = useMemo(
@@ -77,7 +93,10 @@ export function FileSearch({ projectRef, files }: { projectRef: string; files: s
           setQuery(e.target.value);
           setActive(0);
         }}
-        onFocus={() => setOpen(true)}
+        onFocus={() => {
+          setOpen(true);
+          setTouched(true);
+        }}
         onBlur={() => setOpen(false)}
         onKeyDown={onKeyDown}
         placeholder="Search files…"
