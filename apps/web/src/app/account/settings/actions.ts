@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@dante/db";
+import { MAX_AI_INSTRUCTIONS, normalizeAiInstructions, parseAiPersona } from "@/lib/ai/persona";
 import { parseAiQuality } from "@/lib/ai/quality";
 import { requireUser } from "@/lib/auth/user";
 
@@ -24,6 +25,32 @@ export async function saveAiQuality(_prev: SaveState, formData: FormData): Promi
   if (!quality) return { error: "Pick Standard or Deep." };
 
   await prisma.user.update({ where: { id: user.id }, data: { aiQuality: quality } });
+
+  revalidatePath(AI_SETTINGS_PATH);
+  return { saved: true };
+}
+
+/**
+ * 채팅 스타일(성격 프리셋 + 지시문) 저장.
+ *
+ * 지시문 길이는 여기서 막는다. 폼의 maxLength 는 클라이언트가 우회할 수 있고, 긴 값이
+ * 저장되면 매 질문 입력 토큰으로 사용자 한도를 조용히 깎는다.
+ */
+export async function saveAiChatStyle(_prev: SaveState, formData: FormData): Promise<SaveState> {
+  const user = await requireUser();
+
+  const persona = parseAiPersona(formData.get("persona"));
+  if (!persona) return { error: "Pick a style." };
+
+  const instructions = normalizeAiInstructions(formData.get("instructions"));
+  if (instructions && instructions.length > MAX_AI_INSTRUCTIONS) {
+    return { error: `Keep instructions under ${MAX_AI_INSTRUCTIONS} characters.` };
+  }
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { aiPersona: persona, aiInstructions: instructions },
+  });
 
   revalidatePath(AI_SETTINGS_PATH);
   return { saved: true };

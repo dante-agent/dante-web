@@ -24,41 +24,47 @@ datasource db {
 /// (로그인 후 첫 요청에서 upsert).
 model User {
   /// = auth.users.id
-  id          String   @id @db.Uuid
-  email       String?
+  id             String   @id @db.Uuid
+  email          String?
   /// GitHub 로그인 핸들. 설치가 이 사용자 것인지 대조할 때 쓴다.
-  githubLogin String?  @map("github_login")
+  githubLogin    String?  @map("github_login")
   /// = GitHub 사용자 숫자 ID (auth 의 provider_id)
-  githubId    BigInt?  @map("github_id")
+  githubId       BigInt?  @map("github_id")
   /// 프로바이더가 준 프로필 이미지 URL (GitHub avatar_url / Google picture).
   /// 헤더는 로그인 세션의 값을 그대로 쓰지만, 세션 없이 사용자를 그려야 하는
   /// 자리(다른 사람이 보는 화면 등)를 위해 로그인마다 여기에 복사해둔다.
-  avatarUrl   String?  @map("avatar_url")
+  avatarUrl      String?  @map("avatar_url")
   /// AI 월 한도를 정하는 플랜. null 이면 환경변수 AI_MONTHLY_BUDGET_USD 가 기본 한도다
   /// (apps/web/src/lib/ai/budget.ts). 가입할 때 플랜을 고르는 흐름이 없어서 대부분 null 이다.
-  aiPlanId    String?  @map("ai_plan_id") @db.Uuid
+  aiPlanId       String?  @map("ai_plan_id") @db.Uuid
   /// 생성 품질 기본값. "standard" | "deep" (apps/web/src/lib/ai/quality.ts).
   /// 문자열인 이유는 testFramework 와 같다 — 단계가 늘 때마다 마이그레이션하지 않으려고.
   /// 권한에 쓰이는 값이 아니라서 모르는 값이 들어와도 standard 로 읽으면 된다.
-  aiQuality   String   @default("standard") @map("ai_quality")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  aiQuality      String   @default("standard") @map("ai_quality")
+  /// 채팅 성격 프리셋. "balanced" | "concise" | "mentor" | "reviewer" (apps/web/src/lib/ai/persona.ts).
+  /// aiQuality 와 같은 이유로 문자열이다. 모르는 값은 balanced 로 읽는다.
+  aiPersona      String   @default("balanced") @map("ai_persona")
+  /// 사용자가 쓴 채팅 지시문(custom instructions). 매 질문 시스템 프롬프트에 붙는다.
+  /// null 이면 없음. 길이 상한은 앱이 건다(MAX_AI_INSTRUCTIONS).
+  aiInstructions String?  @map("ai_instructions")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
   /// 이 사람이 연결한 설치·만든 프로젝트. 주인은 팀이라 권한과는 무관한 기록이다.
   createdInstallations GithubInstallation[]
   createdProjects      Project[]
-  extensionAuthCodes ExtensionAuthCode[]
-  extensionTokens    ExtensionToken[]
-  aiUsage            AiUsage[]
-  chatConversations  ChatConversation[]
-  teamMemberships    TeamMember[]
-  sentTeamInvites    TeamInvite[]
-  slackInstallations SlackInstallation[]
+  extensionAuthCodes   ExtensionAuthCode[]
+  extensionTokens      ExtensionToken[]
+  aiUsage              AiUsage[]
+  chatConversations    ChatConversation[]
+  teamMemberships      TeamMember[]
+  sentTeamInvites      TeamInvite[]
+  slackInstallations   SlackInstallation[]
   /// 가입할 때 자동으로 만든 "내 팀". 사용자당 하나다(Team.personalForUserId 가 unique).
-  personalTeam       Team?                @relation("PersonalTeam")
+  personalTeam         Team?                @relation("PersonalTeam")
   /// Restrict: 쓰는 사람이 있는 플랜을 지우면 그 사람들 한도가 조용히 기본값으로
   /// 바뀐다. 한도가 느슨해질 수도 있는 변경이라 DB 가 먼저 막게 한다.
-  aiPlan             AiPlan?              @relation(fields: [aiPlanId], references: [id], onDelete: Restrict)
+  aiPlan               AiPlan?              @relation(fields: [aiPlanId], references: [id], onDelete: Restrict)
 
   @@map("users")
 }
