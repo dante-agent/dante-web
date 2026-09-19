@@ -63,23 +63,31 @@ const MAX_MESSAGES = 50;
 const MAX_CONTEXT_TOKENS = 50_000;
 /** 이 비율부터 게이지를 경고 톤으로. 가득 차기 전에 새 대화를 떠올리게. */
 const WARN_RATIO = 0.8;
-/** 빈 대화에 띄우는 질문. 서버 도구(updateTestFile·runTests)로 할 수 있는 일을 보여준다. 테스트가 없으면 설명·실행할 게 없다. */
-const suggestedPrompts = (hasTest: boolean) =>
+/**
+ * 빈 대화에 띄우는 질문. 서버 도구(updateTestFile·runTests)로 할 수 있는 일을 보여준다.
+ * 테스트가 없으면 설명·실행할 게 없다. 수정 모드엔 도구도 터미널도 없으니 실행은 빼고,
+ * 고쳐 달라는 답은 After 에 꽂는 코드로 온다.
+ */
+const suggestedPrompts = (hasTest: boolean, editing: boolean) =>
   hasTest
     ? [
         "Explain the test code for this file",
         "Update the tests for this file",
-        "Run the tests for this file",
+        ...(editing ? [] : ["Run the tests for this file"]),
       ]
     : ["Write tests for this file"];
 
-/** 본문이 지금 연 파일에 테스트가 있는지 알리는 통로. dock 밖(PR 화면)에서는 아무 일도 안 한다. */
-const HasTestContext = createContext<(hasTest: boolean) => void>(() => {});
+/**
+ * 본문이 지금 연 파일의 테스트 코드를 알리는 통로(없으면 null). dock 밖(PR 화면)에서는 아무 일도 안 한다.
+ * 유무뿐 아니라 내용까지 싣는 이유: 답의 코드가 이미 저장된 내용과 같으면 Apply 를 막아야 하는데,
+ * 버튼의 "누름" 표시는 컴포넌트 state 라 새로고침·모드 전환에 초기화된다.
+ */
+const CurrentTestContext = createContext<(test: string | null) => void>(() => {});
 
-/** 본문(FileView)이 부른다. 채팅은 본문과 형제라 테스트 유무를 따로 받아오지 않고 이렇게 전해 받는다. */
-export function useReportHasTest(hasTest: boolean) {
-  const report = useContext(HasTestContext);
-  useEffect(() => report(hasTest), [report, hasTest]);
+/** 본문(FileView)이 부른다. 채팅은 본문과 형제라 테스트를 따로 받아오지 않고 이렇게 전해 받는다. */
+export function useReportCurrentTest(test: string | null) {
+  const report = useContext(CurrentTestContext);
+  useEffect(() => report(test), [report, test]);
 }
 
 // ── 서버 계약 (/api/chat, /api/chat/conversations) ─────────────────────────────
@@ -159,7 +167,7 @@ const MAX_RATIO = 0.6;
 
 export function AiChatDock({ projectRef, children }: { projectRef: string; children: ReactNode }) {
   const [open, setOpen] = useState(false);
-  const [hasTest, setHasTest] = useState(false);
+  const [currentTest, setCurrentTest] = useState<string | null>(null);
 
   // null = 아직 끌지 않음 → 기본 폭(22rem / xl 26rem) 클래스를 쓴다. 끈 뒤에는 px.
   // 저장하지 않는다 — 새로고침하면 기본 폭으로 돌아간다.
@@ -186,7 +194,7 @@ export function AiChatDock({ projectRef, children }: { projectRef: string; child
   return (
     <div ref={dockRef} className="flex">
       <div className="min-w-0 flex-1">
-        <HasTestContext value={setHasTest}>{children}</HasTestContext>
+        <CurrentTestContext value={setCurrentTest}>{children}</CurrentTestContext>
       </div>
 
       {/* 패널은 계속 붙어 있고 폭만 0 ↔ 기본 폭으로 움직인다. 그래야 본문이 같이
@@ -230,7 +238,7 @@ export function AiChatDock({ projectRef, children }: { projectRef: string; child
             projectRef={projectRef}
             open={open}
             width={width}
-            hasTest={hasTest}
+            currentTest={currentTest}
             onClose={() => setOpen(false)}
           />
         </Suspense>
@@ -255,8 +263,8 @@ type PanelProps = {
   open: boolean;
   /** 사용자가 끌어서 정한 폭(px). null 이면 기본 폭 클래스. */
   width: number | null;
-  /** 지금 연 파일에 테스트가 있는지. 추천 질문이 달라진다. */
-  hasTest: boolean;
+  /** 지금 연 파일의 테스트 코드(없으면 null). 추천 질문과 Apply 버튼 상태가 이걸로 갈린다. */
+  currentTest: string | null;
   onClose: () => void;
 };
 
@@ -265,18 +273,24 @@ type PanelProps = {
  * 다른 파일로 따라가지 않는다. 진행 중인 답은 언마운트에서 끊긴다(저장되지 않음).
  */
 function FileChatPanel(props: PanelProps) {
-  const file = useSearchParams().get("file");
-  return <ChatPanel key={file ?? ""} file={file} {...props} />;
+  const searchParams = useSearchParams();
+  const file = searchParams.get("file");
+  // 수정 모드에선 AI 가 파일을 저장하지 않는다(서버가 도구를 주지 않는다). 답의 코드는
+  // Apply 로 After 칸에 꽂고, 저장 여부는 사용자가 diff 를 보고 Save 로 정한다.
+  const editing = searchParams.get("mode") === "edit";
+  // key 는 파일뿐이다 — 보기 ↔ 수정을 오가도 대화는 이어진다.
+  return <ChatPanel key={file ?? ""} file={file} editing={editing} {...props} />;
 }
 
 function ChatPanel({
   projectRef,
   open,
   width,
-  hasTest,
+  currentTest,
   onClose,
   file,
-}: PanelProps & { file: string | null }) {
+  editing,
+}: PanelProps & { file: string | null; editing: boolean }) {
   const queryClient = useQueryClient();
   const router = useRouter();
 
@@ -403,7 +417,13 @@ function ChatPanel({
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ projectRef, conversationId: sentTo, file, message: content }),
+        body: JSON.stringify({
+          projectRef,
+          conversationId: sentTo,
+          file,
+          mode: editing ? "edit" : "view",
+          message: content,
+        }),
         signal: controller.signal,
       });
       if (!response.ok || !response.body) throw await toResponseError(response);
@@ -574,7 +594,7 @@ function ChatPanel({
               <div className="flex h-full flex-col items-center justify-center gap-3 px-6">
                 <p className="text-muted-foreground text-center text-sm">Ask about this file.</p>
                 <div className="flex flex-col items-stretch gap-2">
-                  {suggestedPrompts(hasTest).map((prompt) => (
+                  {suggestedPrompts(currentTest !== null, editing).map((prompt) => (
                     <Button
                       key={prompt}
                       variant="outline"
@@ -620,6 +640,12 @@ function ChatPanel({
                       streaming={pending && i === messages.length - 1}
                       projectRef={projectRef}
                       applyFile={m.filePath}
+                      // 지금 열어 둔 파일에 대한 답일 때만 After 에 꽂는다 — 다른 파일 답이면
+                      // 꽂을 에디터가 화면에 없다.
+                      applyWhere={editing && m.filePath === file ? "after" : "version"}
+                      // 지금 열어 둔 파일의 답일 때만 "이미 적용됨"을 알 수 있다. 다른 파일 답이면
+                      // 비교할 내용이 화면에 없으니 그냥 누를 수 있게 둔다.
+                      appliedCode={m.filePath === file ? currentTest : null}
                     />
                   ) : (
                     pending && <Loader2 className="text-muted-foreground size-4 animate-spin" />

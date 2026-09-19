@@ -179,6 +179,10 @@ export type SaveTestCodeResult =
  * code 도 filePath 도 사용자·모델이 보낸 값이다. 레포 트리에 있는 소스 경로만 받는다 —
  * 없는 경로로 Component 행이 생기지 않게. 내용은 검사하지 않는다(사용자 자신의 draft).
  * repo·projectId 는 부르는 쪽이 소유 확인을 마친 값이어야 한다.
+ *
+ * 내용이 지금 버전과 같으면 쌓지 않고 그 버전을 돌려준다. 부르는 쪽 화면 상태로는 못 막는다
+ * — 채팅 Apply 버튼의 "누름" 표시는 컴포넌트 state 라 새로고침·모드 전환에 초기화되고,
+ * 같은 코드가 다른 대화에도 나온다. 여기서 막아야 세 경로(Apply·Save·updateTestFile)가 다 막힌다.
  */
 export async function saveTestCode(args: {
   repo: ProjectRepo;
@@ -196,6 +200,8 @@ export async function saveTestCode(args: {
 
   // 경로는 지금 보여주는 테스트의 것을 잇는다. 처음이면 레포 규칙대로.
   const latest = await getLatestGeneratedTest(projectId, filePath);
+  // 같은 내용이면 새 버전이 아니다. 저장된 셈이니 부르는 쪽엔 성공으로 답한다.
+  if (latest?.code === code) return { ok: true, versionId: latest.id, version: latest.version };
   const versionId = await saveGeneratedVersion({
     projectId,
     sourceFilePath: filePath,
