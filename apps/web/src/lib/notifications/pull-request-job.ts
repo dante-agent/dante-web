@@ -75,6 +75,15 @@ export type JobProject = {
   testTimeoutMs: number | null;
 };
 
+/**
+ * 생성 단계의 마감. 작업을 시작한 때부터 잰다.
+ *
+ * 라우트의 maxDuration(800초)에 잘리면 작업이 "running" 으로 남고 체크는 in_progress 로 돈다.
+ * 그 전에 생성을 끝내고 남은 파일은 건너뛴다. 남는 시간(약 200초)은 웹훅 응답 전 처리와
+ * 생성 뒤의 저장·결과 전달(코멘트·체크·Slack·Discord)에 쓴다.
+ */
+const GENERATION_DEADLINE_MS = 10 * 60 * 1000;
+
 /** 실행 함수가 프로젝트를 DB 에서 다시 읽을 때. JobProject 와 같은 필드다 */
 const JOB_PROJECT_SELECT = {
   id: true,
@@ -165,6 +174,7 @@ async function runPullRequestJob(
   pr: PullRequestContext,
   payer: Payer
 ) {
+  const deadline = Date.now() + GENERATION_DEADLINE_MS;
   await prisma.pullRequestJob.update({
     where: { id: jobId },
     data: { status: "running", startedAt: new Date(), attempts: { increment: 1 } },
@@ -173,7 +183,7 @@ async function runPullRequestJob(
   const progress = progressReporter(jobId, project, pr);
 
   try {
-    const run = await pullRequestRun(jobId, project, pr, payer, progress);
+    const run = await pullRequestRun(jobId, project, pr, payer, progress, deadline);
 
     // 샌드박스 실행 줄에 세웠다. 결과 전달과 마무리는 차례가 오면 runQueuedTestRun 이 한다.
     if (run === "awaiting-run") {
@@ -432,7 +442,8 @@ async function pullRequestRun(
   project: JobProject,
   pr: PullRequestContext,
   payer: Payer,
-  progress: (run: RunSummary) => Promise<void>
+  progress: (run: RunSummary) => Promise<void>,
+  deadline: number
 ): Promise<RunSummary | "awaiting-run"> {
   const { number: prNumber, headSha } = pr;
   const run = queuedRun(danteLinks(project.ref, prNumber));
@@ -477,6 +488,7 @@ async function pullRequestRun(
     testFramework: project.testFramework,
     dependencies,
     sources,
+    deadline,
   });
   console.info(`[pull-request-job] generated tests for #${prNumber}`, {
     tests: generation.tests.length,
