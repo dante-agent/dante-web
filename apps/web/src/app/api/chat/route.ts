@@ -175,6 +175,8 @@ type Body = {
   file?: unknown;
   /** 화면이 수정 모드면 "edit". 그때는 도구를 주지 않아 AI 가 파일을 저장하지 못한다. */
   mode?: unknown;
+  /** 수정 모드에서 사용자가 지금 치고 있는 테스트(After 칸). 저장된 버전 대신 이걸 보여준다. */
+  testCode?: unknown;
   message?: unknown;
 };
 
@@ -190,6 +192,10 @@ export async function POST(request: Request) {
   const { projectRef, conversationId, message } = body;
   const file = typeof body.file === "string" ? body.file : null;
   const editing = body.mode === "edit";
+  // 저장 전 편집 내용이라 DB 에 없다. 클라이언트가 보낸 값이지만 사용자 자신의 draft 고
+  // <file> 블록 안에 데이터로만 들어간다 — 길이는 fileBlock 이 자른다.
+  const editedTest =
+    editing && typeof body.testCode === "string" && body.testCode.trim() ? body.testCode : null;
   if (
     typeof projectRef !== "string" ||
     typeof message !== "string" ||
@@ -281,11 +287,19 @@ export async function POST(request: Request) {
         }
       }
       if (text && test) {
-        const origin =
-          test.source === "repo" ? "from the repository" : `Dante draft v${test.version}`;
-        context += `\n\nIts current test file (${origin}):\n${fileBlock(test.testPath, test.code)}`;
+        // 수정 중이면 화면에 보이는 것(After 칸)이 기준이다. 저장된 버전을 보여주면 AI 가
+        // 사용자가 이미 고쳐 둔 걸 못 보고 원본에서 다시 고쳐 그 편집을 되돌린다.
+        const shown = editedTest ?? test.code;
+        const origin = editedTest
+          ? "being edited right now and not saved yet — change this exact code"
+          : test.source === "repo"
+            ? "from the repository"
+            : `Dante draft v${test.version}`;
+        context += `\n\nIts current test file (${origin}):\n${fileBlock(test.testPath, shown)}`;
         // 이 버전의 마지막 실행. 수정 후 아직 안 돌렸으면 없다 — 옛 버전 로그는 지금 코드와 안 맞는다.
-        const run = await getLastFinishedRun(test.id);
+        // 저장 전 편집을 보여주는 중이면 로그는 그 코드의 것이 아니라 붙이지 않는다.
+        const run =
+          editedTest && editedTest !== test.code ? null : await getLastFinishedRun(test.id);
         if (run) context += `\n\n${runLogBlock(run)}`;
       } else if (text) {
         context += "\n\nThis file has no test yet.";

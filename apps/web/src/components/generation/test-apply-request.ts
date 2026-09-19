@@ -22,3 +22,27 @@ export function onTestApplyRequest(file: string, handle: (code: string) => void)
   window.addEventListener(APPLY_REQUEST, listener);
   return () => window.removeEventListener(APPLY_REQUEST, listener);
 }
+
+// ── 반대 방향: After 칸 내용을 채팅이 가져간다 ────────────────────────────────
+//
+// 수정 모드에서 "고쳐줘" 하면 AI 는 저장된 버전이 아니라 사용자가 지금 치고 있는 내용을
+// 봐야 한다. 안 그러면 절반쯤 고쳐 둔 걸 못 보고 원본에서 다시 고쳐 내 편집을 되돌린다.
+//
+// 상태를 흘려보내지 않고 "필요할 때 물어보는" 방식인 이유: 편집 내용은 글자마다 바뀌는데
+// 그걸 채팅까지 내려보내면 한 글자 칠 때마다 대화 전체가 다시 그려진다.
+
+let readAfter: (() => string) | null = null;
+
+/** FileView 가 수정 모드일 때 등록한다. 해제 함수를 돌려준다(useEffect 정리용). */
+export function provideAfterCode(read: () => string) {
+  readAfter = read;
+  return () => {
+    // 다른 파일의 FileView 가 이미 등록했으면 그건 건드리지 않는다.
+    if (readAfter === read) readAfter = null;
+  };
+}
+
+/** 지금 After 칸 내용. 수정 모드가 아니면 null. */
+export function currentAfterCode(): string | null {
+  return readAfter?.() ?? null;
+}
