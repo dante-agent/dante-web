@@ -24,7 +24,7 @@ import { notificationBadges } from "@/lib/notifications/status";
 import { recentDeliveries } from "@/lib/notifications/store";
 import type { ProjectRepo } from "@/lib/projects/queries";
 import { isRevokedError, slackErrorDetail } from "@/lib/slack/api";
-import { listSlackChannels, type SlackChannel } from "@/lib/slack/channels";
+import { cachedSlackChannels, type SlackChannel } from "@/lib/slack/channels";
 import { loadSlackConnection, markSlackRevoked } from "@/lib/slack/installation";
 
 /** 전달 로그의 재시도 서버 액션이 after() 로 PR 작업을 돈다. api/github/webhook/route.ts 와 같은 이유 */
@@ -181,7 +181,7 @@ async function slackState(teamId: string) {
   let channels: SlackChannel[] = [];
   let error: string | null = null;
   try {
-    channels = await listSlackChannels(connection.botToken);
+    channels = await cachedSlackChannels(teamId, connection);
   } catch (caught) {
     if (isRevokedError(caught)) {
       await markSlackRevoked(teamId);
