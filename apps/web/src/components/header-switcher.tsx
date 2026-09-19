@@ -19,6 +19,7 @@ export function SwitcherRow({ children, onClick }: { children: ReactNode; onClic
 }
 
 export function HeaderSwitcher({
+  kind,
   icon,
   value,
   items,
@@ -26,6 +27,8 @@ export function HeaderSwitcher({
   onSelect,
   footer,
 }: {
+  /** 무엇을 바꾸는지. 트리거 이름("Team: acme")과 팝업 이름에 쓴다 — 값만 읽히면 뭘 바꾸는지 모른다. */
+  kind: "Team" | "Organization" | "Repository";
   icon: ReactNode;
   value: string;
   items: Item[];
@@ -45,7 +48,10 @@ export function HeaderSwitcher({
         if (!open) setQ("");
       }}
     >
-      <Popover.Trigger className="hover:bg-muted flex items-center gap-2.5 rounded-md px-2 py-1 text-sm leading-none outline-none">
+      <Popover.Trigger
+        aria-label={`${kind}: ${current?.label ?? value}`}
+        className="hover:bg-muted focus-visible:ring-ring flex items-center gap-2.5 rounded-md px-2 py-1 text-sm leading-none outline-none focus-visible:ring-2"
+      >
         {icon}
         <span className="max-w-[9rem] truncate font-medium">{current?.label ?? value}</span>
         {/* 팝업은 이 아이콘에 붙는다 (Supabase 처럼) */}
@@ -61,7 +67,10 @@ export function HeaderSwitcher({
           sideOffset={8}
           className="z-50"
         >
-          <Popover.Popup className="border-border bg-popover data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-open:slide-in-from-top-1 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 w-64 origin-[var(--transform-origin)] overflow-hidden rounded-lg border shadow-md duration-100 outline-none">
+          <Popover.Popup
+            aria-label={`Switch ${kind.toLowerCase()}`}
+            className="border-border bg-popover data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-open:slide-in-from-top-1 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 w-64 origin-[var(--transform-origin)] overflow-hidden rounded-lg border shadow-md duration-100 outline-none"
+          >
             <div className="border-border relative border-b">
               <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2" />
               <input
@@ -69,6 +78,7 @@ export function HeaderSwitcher({
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 placeholder={findLabel}
+                aria-label={findLabel.replace(/…$/, "")}
                 className="placeholder:text-muted-foreground h-9 w-full bg-transparent pr-3 pl-8 text-sm outline-none"
               />
             </div>
@@ -79,6 +89,7 @@ export function HeaderSwitcher({
                   <button
                     type="button"
                     onClick={() => onSelect(i.value)}
+                    aria-current={i.value === value ? "true" : undefined}
                     className="hover:bg-muted flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm"
                   >
                     <span className="truncate">{i.label}</span>

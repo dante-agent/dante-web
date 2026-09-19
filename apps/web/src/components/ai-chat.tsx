@@ -723,6 +723,7 @@ function ChatPanel({
                 }
               }}
               placeholder="Ask anything — Enter to send"
+              aria-label="Message AI chat"
               className="text-foreground placeholder:text-muted-foreground block max-h-42 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent px-0.5 text-sm leading-7 outline-none disabled:cursor-not-allowed disabled:opacity-50"
             />
             {pending ? (

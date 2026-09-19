@@ -105,6 +105,13 @@ function SelectLabel({ className, ...props }: SelectPrimitive.GroupLabel.Props) 
   );
 }
 
+// 트리거의 이름표. Base UI 는 Select.Label(또는 Field.Label)로만 트리거와 label 을 잇는다 —
+// 옆에 span 을 두거나 aria-labelledby 를 직접 달면 이름 없는 콤보박스로 읽힌다.
+// <Select> 안에 두어야 한다. 위 SelectLabel 은 목록 안 그룹 제목(GroupLabel)이다.
+function SelectFieldLabel({ className, ...props }: SelectPrimitive.Label.Props) {
+  return <SelectPrimitive.Label data-slot="select-field-label" className={className} {...props} />;
+}
+
 function SelectItem({ className, children, ...props }: SelectPrimitive.Item.Props) {
   return (
     <SelectPrimitive.Item
@@ -178,6 +185,7 @@ function SelectScrollDownButton({
 export {
   Select,
   SelectContent,
+  SelectFieldLabel,
   SelectGroup,
   SelectItem,
   SelectLabel,

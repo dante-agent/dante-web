@@ -48,6 +48,7 @@ export function PromptInput({ projectRef }: { projectRef: string }) {
           onChange={(event) => setValue(event.target.value)}
           disabled={navigating}
           placeholder="Describe which component you need tests for..."
+          aria-label="Describe which component you need tests for"
           className="text-foreground placeholder:text-muted-foreground flex-1 bg-transparent pl-1 text-sm outline-none disabled:opacity-50"
         />
         <button

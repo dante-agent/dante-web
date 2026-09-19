@@ -94,6 +94,7 @@ export function FileTree({ entries }: { entries: FileEntry[] }) {
             key={key}
             type="button"
             title={title}
+            aria-pressed={filter === key}
             onClick={() => setFilter(key)}
             className={cn(
               "rounded-md px-1.5 py-0.5 text-xs transition-colors",
@@ -152,6 +153,7 @@ function Node({
         <button
           type="button"
           onClick={() => toggle(node.path)}
+          aria-expanded={opened}
           style={pad}
           className="text-sidebar-foreground/80 hover:bg-sidebar-accent/60 flex h-7 w-full items-center gap-1 rounded-md pr-2 text-sm"
         >
@@ -185,6 +187,7 @@ function Node({
       <button
         type="button"
         onClick={() => onOpenFile(node.path)}
+        aria-current={active ? "page" : undefined}
         style={pad}
         className={cn(
           "flex h-7 w-full items-center gap-1.5 rounded-md pr-2 text-sm",
@@ -202,13 +205,13 @@ function Node({
 }
 
 // size-3 박스에 중앙 정렬 → ml-auto 로 접기 버튼 아이콘과 오른쪽 끝이 맞는다.
+// 상태는 sr-only 글자로 전한다 — role 없는 span 의 aria-label 은 스크린리더가 무시할 수 있다.
 function StatusDot({ status }: { status: FileEntry["status"] }) {
   return (
-    <span
-      aria-label={status === "has" ? "Has tests" : "No tests"}
-      className="ml-auto flex size-3 shrink-0 items-center justify-center"
-    >
+    <span className="ml-auto flex size-3 shrink-0 items-center justify-center">
+      <span className="sr-only">{status === "has" ? ", has tests" : ", no tests"}</span>
       <span
+        aria-hidden="true"
         className={cn(
           "size-1.5 rounded-full",
           status === "has" ? "bg-brand-mint" : "border-muted-foreground border"

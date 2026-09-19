@@ -78,6 +78,7 @@ export function AppHeader({
 
         <Slash />
         <HeaderSwitcher
+          kind="Organization"
           value={owner}
           items={owners.map((o) => ({ value: o, label: o }))}
           findLabel="Find organization…"
@@ -97,6 +98,7 @@ export function AppHeader({
 
         <Slash />
         <HeaderSwitcher
+          kind="Repository"
           value={project.ref}
           items={ownerProjects.map((p) => ({ value: p.ref, label: p.name }))}
           findLabel="Find repository…"

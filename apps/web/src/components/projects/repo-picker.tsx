@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
+  SelectFieldLabel,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -76,6 +77,7 @@ export function RepoPicker({
             화살표를 직접 그리면서 좌우 여백이 어긋나고, 열었을 때 팝업 위치도
             OS 가 정해서 CSS 로 못 맞춘다. 옆의 검색 입력과 글꼴·배경도 달랐다. */}
         <Select value={activeOwner} onValueChange={(value) => setOwner(String(value))}>
+          <SelectFieldLabel className="sr-only">GitHub account</SelectFieldLabel>
           {/* SelectTrigger 의 기본 클래스에 data-[size=default]:h-8 이 들어 있어
               h-9 만으로는 안 먹는다(선택자가 달라 tailwind-merge 가 못 합친다).
               옆 검색 입력과 높이를 맞추려면 같은 선택자로 덮어야 한다. */}
@@ -101,6 +103,7 @@ export function RepoPicker({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search repositories"
+            aria-label="Search repositories"
             className="bg-card h-9 rounded-[4px] pl-9 text-sm md:text-sm"
           />
         </div>

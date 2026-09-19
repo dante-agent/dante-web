@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
+  SelectFieldLabel,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -105,10 +106,6 @@ export function SlackNotificationsForm({
         />
 
         <div className="border-border border-b p-4">
-          <span className="block text-[13px] leading-tight">Channel</span>
-          <span className="text-muted-foreground mt-1 block text-[12px] leading-relaxed">
-            Private channels only show up after you invite @dante to them.
-          </span>
           {/* name 을 주면 Base UI 가 숨은 input 을 만들어 폼에 값이 실린다 (runtime-form.tsx). */}
           <Select
             name="slackChannelId"
@@ -116,7 +113,15 @@ export function SlackNotificationsForm({
             onValueChange={(value) => setChannelId(String(value ?? ""))}
             items={items}
           >
+            <SelectFieldLabel className="block text-[13px] leading-tight">Channel</SelectFieldLabel>
+            <span
+              id="slack-channel-hint"
+              className="text-muted-foreground mt-1 block text-[12px] leading-relaxed"
+            >
+              Private channels only show up after you invite @dante to them.
+            </span>
             <SelectTrigger
+              aria-describedby="slack-channel-hint"
               size="sm"
               className="mt-3 w-64 pr-2.5 text-[13px] data-[size=sm]:rounded-[4px]"
             >

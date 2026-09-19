@@ -113,6 +113,7 @@ export function ChatThread({
             }}
             disabled={disabled}
             placeholder={placeholder}
+            aria-label="Follow-up request"
             className="text-foreground placeholder:text-muted-foreground flex-1 bg-transparent text-sm outline-none disabled:opacity-50"
           />
           <button
