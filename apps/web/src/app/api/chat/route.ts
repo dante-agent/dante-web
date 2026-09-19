@@ -10,6 +10,8 @@ import {
 import { z } from "zod";
 import { getMonthlyBudgetStatus, reserveAiBudget } from "@/lib/ai/budget";
 import { chatModel, MODEL } from "@/lib/ai/chat-model";
+import { chatPreferencesBlock } from "@/lib/ai/persona";
+import { getUserAiChatPreferences } from "@/lib/ai/persona-queries";
 import { maxCostUsd } from "@/lib/ai/pricing";
 import { settleAiUsage } from "@/lib/ai/usage";
 import {
@@ -237,9 +239,11 @@ export async function POST(request: Request) {
   // 대화는 프로젝트에 붙어 저장되므로 프로젝트 없이는 받지 않는다. 권한 확인을 겸한다
   // (projectRef 는 클라이언트가 보낸 값이다). 없음과 권한 없음을 구분하지 않는다.
   // 행은 한 번만 읽는다 — 러너·id 와 GitHub 호출용 필드가 같은 행에 있다.
-  const [budget, project] = await Promise.all([
+  // 채팅 스타일(설정 > AI)도 같은 사용자 행이라 함께 읽는다.
+  const [budget, project, preferences] = await Promise.all([
     getMonthlyBudgetStatus(user.id),
     getOwnedProject(projectRef, user.id),
+    getUserAiChatPreferences(user.id),
   ]);
   if (budget.exceeded) return budgetExceeded(budget.limitUsd);
   if (!project) return fail(404, "Project not found.");
@@ -419,7 +423,12 @@ export async function POST(request: Request) {
   // 예약이 정산 없이 버려지는 경로가 없다. chatModel() 도 예약 전에 불러 둔다 — 키가 없어
   // 던지면 예약이 남는다.
   const model = chatModel();
-  const system = systemPrompt(runner, tools !== undefined) + context;
+  // 사용자 선호는 고정 규칙 바로 뒤, 파일 컨텍스트 앞에 둔다 — 규칙과 한 덩어리로 읽히고,
+  // 레포 본문(데이터) 뒤에 두면 파일 속 문구와 구분이 흐려진다. 예약 금액은 이 길이까지 센다.
+  const system =
+    systemPrompt(runner, tools !== undefined) +
+    chatPreferencesBlock(preferences.persona, preferences.instructions) +
+    context;
   const messages: ModelMessage[] = [...history, { role: "user", content: message }];
   const reserved = await reserveAiBudget({
     userId: user.id,
