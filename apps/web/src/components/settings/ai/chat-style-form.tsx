@@ -57,16 +57,9 @@ export function AiChatStyleForm({
 
       {/* 이름은 제목만, 긴 안내는 aria-describedby 로 — label 이 안내까지 감싸면 이름이 문단이 된다. */}
       <div className="mt-6">
-        <div className="flex items-baseline justify-between gap-4">
-          <label htmlFor="ai-instructions" className="text-[13px] font-medium">
-            Custom instructions
-          </label>
-          <span
-            className={`font-mono text-[11px] ${length > MAX_AI_INSTRUCTIONS ? "text-destructive" : "text-muted-foreground"}`}
-          >
-            {length}/{MAX_AI_INSTRUCTIONS}
-          </span>
-        </div>
+        <label htmlFor="ai-instructions" className="block text-[13px] font-medium">
+          Custom instructions
+        </label>
         <p
           id="ai-instructions-hint"
           className="text-muted-foreground mt-1 text-[12px] leading-relaxed"
@@ -74,16 +67,25 @@ export function AiChatStyleForm({
           Added to every chat answer. For example: answer in Korean, name tests in plain sentences,
           prefer userEvent over fireEvent. It can&apos;t change what the chat is allowed to do.
         </p>
-        <textarea
-          id="ai-instructions"
-          aria-describedby="ai-instructions-hint"
-          name="instructions"
-          defaultValue={initial.instructions ?? ""}
-          maxLength={MAX_AI_INSTRUCTIONS}
-          onChange={(e) => setLength(e.target.value.length)}
-          rows={5}
-          className="border-border bg-background mt-3 w-full resize-y border p-3 text-[13px] leading-relaxed"
-        />
+        {/* 카운터는 칸 오른쪽 아래에 겹쳐 둔다. 글이 그 밑으로 들어가지 않게 아래 여백(pb-8)을 둔다. */}
+        <div className="relative mt-3">
+          <textarea
+            id="ai-instructions"
+            aria-describedby="ai-instructions-hint"
+            name="instructions"
+            defaultValue={initial.instructions ?? ""}
+            maxLength={MAX_AI_INSTRUCTIONS}
+            onChange={(e) => setLength(e.target.value.length)}
+            rows={5}
+            placeholder="e.g. Answer in Korean. Keep test names short."
+            className="border-border bg-background placeholder:text-muted-foreground block w-full resize-none border p-3 pb-8 text-[13px] leading-relaxed"
+          />
+          <span
+            className={`pointer-events-none absolute right-3 bottom-2 font-mono text-[11px] ${length > MAX_AI_INSTRUCTIONS ? "text-destructive" : "text-muted-foreground"}`}
+          >
+            {length}/{MAX_AI_INSTRUCTIONS}
+          </span>
+        </div>
       </div>
 
       <div className="mt-4 flex items-center gap-3">
