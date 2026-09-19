@@ -390,6 +390,19 @@ export function FileView({
       void start(id);
     });
   }, [terminal, mode, file, start]);
+  // ⌘/Ctrl+J 로 여닫는다(VS Code 의 패널 토글과 같은 키). 서브 사이드바의 ⌘B 와 같은 방식으로
+  // capture 단계에서 받는다 — Monaco 가 먼저 키를 삼키지 못하게.
+  useEffect(() => {
+    if (!terminal || mode !== "view") return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey || e.repeat) return;
+      if (e.key.toLowerCase() !== "j") return;
+      e.preventDefault();
+      setTerminalOpen((open) => !open);
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [terminal, mode]);
   const onTerminalResizeDown = (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);

@@ -22,7 +22,13 @@ export const setupMonaco = (monaco: Monaco) => {
     },
   });
   // 목업 코드 뷰어 — 미설치 모듈("vitest" 등) 진단 안 띄운다.
-  const diag = { noSemanticValidation: true, noSuggestionDiagnostics: true };
+  // 문법 진단까지 끄는 건 JSX 때문이다: 모델에 경로(.tsx)가 없어 TS 가 .ts 로 보고
+  // 모든 JSX 태그에 빨간 물결을 친다. 경로를 주면 Before|After 가 모델을 공유해 깨진다.
+  const diag = {
+    noSemanticValidation: true,
+    noSuggestionDiagnostics: true,
+    noSyntaxValidation: true,
+  };
   monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions(diag);
   monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions(diag);
 };
