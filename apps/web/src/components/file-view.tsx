@@ -32,7 +32,13 @@ import {
   type GenerationOutcome,
 } from "@/components/generation/use-generation-performance";
 import { useTypewriter } from "@/components/generation/use-typewriter";
-import { onTestRunRequest, RunPanel, useLiveRun } from "@/components/run-terminal";
+import {
+  onTestRunRequest,
+  RunPanel,
+  useLiveRunStore,
+  useRunRunning,
+  type LiveRun,
+} from "@/components/run-terminal";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { MONACO_THEME as THEME, setupMonaco } from "@/lib/monaco-theme";
 import { pushRecent } from "@/lib/recent-files";
@@ -228,6 +234,24 @@ function GenerateTest({ projectRef, file }: { projectRef: string; file: string }
   );
 }
 
+/** Test Code 칸의 실행 버튼. 실행 중인지만 구독해 시작·끝날 때만 다시 그린다. */
+function RunTestsButton({ run, onRun }: { run: LiveRun; onRun: () => void }) {
+  const running = useRunRunning(run);
+  return (
+    <Button
+      size="icon-sm"
+      variant="ghost"
+      onClick={onRun}
+      disabled={running}
+      title={running ? "Running…" : "Run tests"}
+      aria-label="Run tests"
+      className="text-brand-orange"
+    >
+      {running ? <Loader2 className="animate-spin" /> : <Play />}
+    </Button>
+  );
+}
+
 function Cell({
   className,
   show = true,
@@ -377,7 +401,9 @@ export function FileView({
   }
 
   // 실행 상태는 파일마다 따로다(부모가 key={file} 로 새로 띄운다). 파일을 옮기면 실행도 멈춘다.
-  const run = useLiveRun(projectRef);
+  // 실행 상태는 구독하지 않는다 — 로그가 프레임마다 붙어도 FileView(두 에디터 칸)는 다시 그리지 않는다.
+  // 상태를 읽는 건 실행 버튼(RunTestsButton)과 터미널(RunPanel)뿐이다.
+  const run = useLiveRunStore(projectRef);
   // 하단 터미널. 접혀 있어도 바는 보인다. Run 을 누르면 펼친다.
   const shellRef = useRef<HTMLDivElement>(null);
   const [terminalOpen, setTerminalOpen] = useState(false);
@@ -594,20 +620,13 @@ export function FileView({
             <div className="ml-auto flex items-center gap-0.5">
               {/* 실행은 저장된 버전(레포에서 가져온 것·AI draft 모두)을 돌린다. 한 번에 하나만. */}
               {versionId && (
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  onClick={() => {
+                <RunTestsButton
+                  run={run}
+                  onRun={() => {
                     setTerminalOpen(true);
                     void run.start(versionId);
                   }}
-                  disabled={run.view?.running}
-                  title={run.view?.running ? "Running…" : "Run tests"}
-                  aria-label="Run tests"
-                  className="text-brand-orange"
-                >
-                  {run.view?.running ? <Loader2 className="animate-spin" /> : <Play />}
-                </Button>
+                />
               )}
               {/* 레포에서 온 테스트든 Dante 에서 만든 테스트든 고칠 수 있다. Before 는 지금 저장된 내용이다. */}
               <Link
@@ -678,7 +697,7 @@ export function FileView({
       </div>
       {terminal && (
         <RunPanel
-          view={run.view}
+          run={run}
           open={terminalOpen}
           height={terminalHeight}
           onToggle={() => setTerminalOpen((open) => !open)}
