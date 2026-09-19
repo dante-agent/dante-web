@@ -142,7 +142,7 @@ function ApplyButton({ code, target }: { code: string; target: ApplyTarget }) {
           ? "bg-muted text-muted-foreground shadow-none"
           : state === "failed"
             ? "border-destructive text-destructive hover:bg-destructive/10 border"
-            : "bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-70"
+            : "bg-primary text-primary-foreground hover:bg-primary-hover disabled:opacity-70"
       )}
     >
       {pending ? (

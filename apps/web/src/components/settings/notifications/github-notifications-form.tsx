@@ -274,7 +274,7 @@ function RequiredCheckNote({
           >
             Add it as a required check on GitHub
           </a>{" "}
-          <span className="text-muted-foreground/70">
+          <span className="text-muted-foreground">
             We cannot read classic branch protection with the permissions this App has, so we do not
             claim it is missing — only that we could not confirm it.
           </span>
@@ -304,7 +304,7 @@ function CommentPreview({
   return (
     <div className="mt-8 w-full shrink-0 xl:sticky xl:top-20 xl:mt-16 xl:w-[26rem] xl:self-start">
       <div className="flex items-center justify-between">
-        <p className="text-muted-foreground/70 font-mono text-[10px] font-bold tracking-[0.12em] uppercase">
+        <p className="text-muted-foreground font-mono text-[10px] font-bold tracking-[0.12em] uppercase">
           Preview
         </p>
         <div className="flex gap-1">

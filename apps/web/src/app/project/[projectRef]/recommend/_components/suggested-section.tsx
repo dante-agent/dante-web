@@ -183,7 +183,7 @@ export function SuggestedSection({
                   <Sparkles className="size-3.5" />
                   Generate tests
                   {/* 개수를 라벨 밖 배지로 뺀다 — 라벨 안에 넣으면 고를 때마다 버튼 폭이 흔들린다. */}
-                  <span className="bg-primary-foreground/20 grid h-[18px] min-w-[18px] place-items-center rounded-full px-1.5 text-[11px] tabular-nums">
+                  <span className="grid h-[18px] min-w-[18px] place-items-center rounded-full bg-white/25 px-1.5 text-[11px] tabular-nums">
                     {selected.size}
                   </span>
                 </button>

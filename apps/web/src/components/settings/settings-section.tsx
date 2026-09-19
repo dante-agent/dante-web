@@ -23,7 +23,7 @@ export function SettingsHeader({ title, description }: { title: string; descript
 export function ComingSoon({ children }: { children: ReactNode }) {
   return (
     <div className="border-border bg-card/40 mt-8 max-w-2xl border p-5">
-      <p className="text-muted-foreground/70 font-mono text-[10px] font-bold tracking-[0.12em] uppercase">
+      <p className="text-muted-foreground font-mono text-[10px] font-bold tracking-[0.12em] uppercase">
         Not built yet
       </p>
       <div className="text-muted-foreground mt-3 text-[13px] leading-relaxed">{children}</div>

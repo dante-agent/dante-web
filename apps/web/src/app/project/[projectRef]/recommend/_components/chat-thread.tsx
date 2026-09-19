@@ -125,7 +125,7 @@ export function ChatThread({
             <ArrowRight className="size-4" />
           </button>
         </div>
-        <p className="text-muted-foreground/70 mt-2 text-center text-[11px]">
+        <p className="text-muted-foreground mt-2 text-center text-[11px]">
           AI can make mistakes, so be sure to review the generated code.
         </p>
       </div>

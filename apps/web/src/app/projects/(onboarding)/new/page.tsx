@@ -65,9 +65,9 @@ export default function NewProjectPage() {
 function ComingSoon({ name }: { name: string }) {
   return (
     <div className="border-border/60 flex items-center gap-4 border border-dashed px-6 py-4">
-      <Lock className="text-muted-foreground/60 size-4 shrink-0" />
+      <Lock className="text-muted-foreground size-4 shrink-0" />
       <span className="text-muted-foreground font-heading flex-1 text-lg font-medium">{name}</span>
-      <span className="text-muted-foreground/70 border-border shrink-0 border px-2 py-0.5 font-mono text-[10px] font-bold tracking-[0.12em]">
+      <span className="text-muted-foreground border-border shrink-0 border px-2 py-0.5 font-mono text-[10px] font-bold tracking-[0.12em]">
         SOON
       </span>
     </div>

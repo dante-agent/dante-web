@@ -26,7 +26,7 @@ export function UserMenu({ user }: { user: HeaderUser }) {
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger
         aria-label={`${user.name} profile`}
-        className="focus-visible:ring-ring/50 cursor-pointer rounded-full opacity-100 transition-opacity outline-none hover:opacity-80 focus-visible:ring-2"
+        className="focus-visible:ring-ring cursor-pointer rounded-full opacity-100 transition-opacity outline-none hover:opacity-80 focus-visible:ring-2"
       >
         <UserAvatar src={user.avatarUrl} name={user.name} />
       </Popover.Trigger>
@@ -34,7 +34,7 @@ export function UserMenu({ user }: { user: HeaderUser }) {
         <Popover.Positioner side="bottom" align="end" sideOffset={8} className="z-50">
           <Popover.Popup className="border-border bg-popover data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-open:slide-in-from-top-1 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 w-56 origin-[var(--transform-origin)] overflow-hidden rounded-lg border shadow-md duration-100 outline-none">
             <div className="border-border border-b px-3 py-2.5">
-              <p className="text-muted-foreground/70 font-mono text-[10px] font-bold tracking-[0.12em] uppercase">
+              <p className="text-muted-foreground font-mono text-[10px] font-bold tracking-[0.12em] uppercase">
                 Signed in as
               </p>
               <p className="mt-0.5 truncate text-sm font-medium" title={user.name}>

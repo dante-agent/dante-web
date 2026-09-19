@@ -104,7 +104,7 @@ export function StepRail() {
                       ? "text-[#ff801f]"
                       : isDone
                         ? "text-foreground/60"
-                        : "text-muted-foreground/60"
+                        : "text-muted-foreground"
                   }`}
                 >
                   {String(number).padStart(2, "0")}
@@ -115,7 +115,7 @@ export function StepRail() {
                       ? "text-foreground font-medium"
                       : isDone
                         ? "text-foreground/60"
-                        : "text-muted-foreground/60"
+                        : "text-muted-foreground"
                   }`}
                 >
                   {step.label}
