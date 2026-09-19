@@ -25,6 +25,12 @@ export type FileScore = {
   score: number;
   priority: RecommendationPriority;
   reason: string;
+  /**
+   * 종류 배수(kindFactor)로 구조상 깎인 파일인지 — 배럴·타입 전용·스토리·단순 UI 처럼
+   * 테스트할 로직이 거의 없는 파일. AI 재정렬이 이런 파일을 함부로 상단으로 올리지 못하게
+   * 하는 데 쓴다(ai-recommendations 의 mergeRanking).
+   */
+  deprioritized: boolean;
 };
 
 // 틀리면 크게 다치는 도메인. 경로를 단어로 쪼갠 뒤 단어 단위로 맞춘다 — "border" 가 order 로,
@@ -60,6 +66,28 @@ const DOMAIN_WORDS = new Set([
   "webhook",
 ]);
 
+// 한글로 이름 지은 파일·폴더(예: "결제/", "로그인.tsx")를 위한 도메인 단어. words() 는 ascii 만
+// 남기고 한글을 버려서 위 집합으로는 못 잡는다. 한글은 단어가 서로 뚜렷해 부분 문자열로 봐도
+// "border 가 order 로 걸리는" 류의 오탐이 거의 없으므로, 경로 조각에 이 말이 들어 있으면 맞춘다.
+const DOMAIN_WORDS_KO = [
+  "결제",
+  "인증",
+  "로그인",
+  "로그아웃",
+  "회원가입",
+  "가입",
+  "비밀번호",
+  "권한",
+  "주문",
+  "구독",
+  "청구",
+  "환불",
+  "보안",
+  "토큰",
+  "암호화",
+  "웹훅",
+];
+
 // 대체로 단순한 표현용 UI.
 const UI_WORDS = new Set([
   "icon",
@@ -89,14 +117,21 @@ function isDomainWord(word: string): boolean {
   return DOMAIN_WORDS.has(word) || (word.endsWith("s") && DOMAIN_WORDS.has(word.slice(0, -1)));
 }
 
+/** 경로 조각 하나에서 영어 단어(단어 단위) 또는 한글 도메인 말(부분 문자열)을 찾는다. */
+function domainWordIn(segment: string): string | null {
+  return (
+    words(segment).find(isDomainWord) ?? DOMAIN_WORDS_KO.find((w) => segment.includes(w)) ?? null
+  );
+}
+
 /** 파일 이름에서 걸리면 1, 폴더에서만 걸리면 0.7. 걸린 단어도 사유에 쓴다. */
 function domainRisk(path: string): { value: number; word: string | null } {
   const segments = path.split("/");
   const file = (segments.pop() ?? "").replace(/\.[^.]+$/, "");
-  const inFile = words(file).find(isDomainWord);
+  const inFile = domainWordIn(file);
   if (inFile) return { value: 1, word: inFile };
   for (const dir of segments.reverse()) {
-    const hit = words(dir).find(isDomainWord);
+    const hit = domainWordIn(dir);
     if (hit) return { value: 0.7, word: hit };
   }
   return { value: 0, word: null };
@@ -184,7 +219,10 @@ export function scoreFile(path: string, signals: FileSignals): FileScore {
   let reason: string;
   if (kind.reason) reason = kind.reason;
   else if (labels.length > 0) reason = capitalize(labels.join(", "));
+  // 코드를 못 읽은 폴백(큰 레포 등)에서 도메인 신호조차 없으면, 분기·피참조 같은 근거 없이
+  // 경로·크기만으로 매긴 것이다. "왜 이 순서인지"를 솔직히 밝혀 약한 정렬임을 알린다.
+  else if (!code) reason = "Ranked by path only — code wasn't analyzed";
   else reason = "No test file yet";
 
-  return { score, priority, reason };
+  return { score, priority, reason, deprioritized: kind.factor < 1 };
 }
