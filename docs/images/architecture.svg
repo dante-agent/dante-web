@@ -35,7 +35,7 @@
 
   <!-- ── edges ────────────────────────────────────────────── -->
   <path class="line-cobalt" d="M290 150 H340 V134 H420" marker-end="url(#a-cobalt)" />
-  <path class="line-cobalt" d="M290 410 H372 V170 H420" marker-end="url(#a-cobalt)" />
+  <path class="line-cobalt" d="M290 410 H372 V170 H420" marker-end="url(#a-cobalt)" opacity="0.4" />
   <path class="line" d="M720 134 H790 V150 H850" marker-end="url(#a-dim)" />
   <path class="line" d="M720 170 H790 V410 H850" marker-end="url(#a-dim)" />
   <path class="line" d="M575 210 V340" stroke-dasharray="6 5" marker-end="url(#a-dim)" />
@@ -47,7 +47,7 @@
   <!-- ── edge labels ──────────────────────────────────────── -->
   <g text-anchor="middle" dominant-baseline="middle">
     <rect class="pill" x="344" y="121" width="64" height="26" rx="6" /><text class="m edge-label" x="376" y="135">HTTPS</text>
-    <rect class="pill" x="333" y="277" width="78" height="26" rx="6" /><text class="m edge-label" x="372" y="291">/api/v1</text>
+    <g opacity="0.4"><rect class="pill" x="333" y="277" width="78" height="26" rx="6" /><text class="m edge-label" x="372" y="291">/api/v1</text></g>
     <rect class="pill" x="731" y="121" width="48" height="26" rx="6" /><text class="m edge-label" x="755" y="135">SQL</text>
     <rect class="pill" x="737" y="267" width="106" height="26" rx="6" /><text class="t edge-label" x="790" y="281">Chat stream</text>
     <rect class="pill" x="531" y="262" width="88" height="26" rx="6" /><text class="m edge-label" x="575" y="276">proxy.ts</text>
@@ -64,9 +64,13 @@
     <text class="t title" x="165" y="142">Browser</text>
     <text class="t sub" x="165" y="172">Dashboard · Editor</text>
 
-    <rect class="box" x="40" y="350" width="250" height="120" rx="12" fill="#171D37" stroke="#687FF5" />
-    <text class="t title" x="165" y="402">Extension</text>
-    <text class="m sub" x="165" y="432">Bearer token</text>
+    <g opacity="0.4">
+      <rect class="box" x="40" y="350" width="250" height="120" rx="12" fill="#171D37" stroke="#687FF5" />
+      <text class="t title" x="165" y="394">Extension</text>
+      <text class="m sub" x="165" y="420">Bearer token</text>
+    </g>
+    <rect x="104" y="434" width="122" height="26" rx="13" fill="#0D0F16" stroke="#3A499C" stroke-width="1" />
+    <text class="m" x="165" y="447" font-size="13" letter-spacing="1.5" fill="#95AFFF" dominant-baseline="middle">COMING SOON</text>
 
     <!-- Dante server -->
     <rect class="box" x="430" y="90" width="290" height="120" rx="12" fill="#1E150F" stroke="#FF570A" />
