@@ -3,6 +3,7 @@ import { Geist } from "next/font/google";
 import localFont from "next/font/local";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
+import { Clarity } from "@/components/clarity";
 import { GoogleAnalytics } from "@/components/google-analytics";
 import { SkipLink } from "@/components/skip-link";
 import { siteUrl } from "@/lib/site-url";
@@ -76,6 +77,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         */}
         <Analytics />
         <GoogleAnalytics />
+        {/*
+          Clarity 는 세션 레코딩·히트맵으로 "화면에서 무엇을 했나"를 본다(집계가 아니라
+          행동). 로그인 사용자는 user id·로그인 여부만 붙이고 개인정보는 보내지 않는다.
+        */}
+        <Clarity />
       </body>
     </html>
   );
