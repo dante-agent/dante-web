@@ -77,7 +77,6 @@ husky + lint-staged + commitlint + prettier (설정은 리포 루트). Conventio
 
 - `apps/web/CLAUDE.md` 도 `next dev`가 관리(`@AGENTS.md` 한 줄). 마커 안쪽 영문 블록은 번역해도 `next dev` 실행 시 되돌아온다.
 - 데이터 모델은 `packages/db/prisma/schema.prisma`, 마이그레이션은 `packages/db/prisma/migrations/` 에 있다.
-- 스택 버전은 리포 루트 `README.md` 참고.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
