@@ -3,7 +3,11 @@
 import { useState, useTransition } from "react";
 import { LoaderCircle, Send } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { MAX_USER_PROMPT } from "@/lib/projects/prompt-limits";
 import { Button } from "@/components/ui/button";
+
+// 남은 글자가 이 값 이하로 떨어지면 카운터를 보여준다 — 평소엔 감춰 두고 한계에 가까울 때만 알린다.
+const COUNTER_THRESHOLD = 40;
 
 /**
  * 상단 프롬프트 바. 자연어로 대상을 설명하고 제출하면 곧장 새 채팅 세션(/recommend/new)으로
@@ -23,6 +27,7 @@ export function PromptInput({ projectRef }: { projectRef: string }) {
   const [value, setValue] = useState("");
   const [navigating, startNavigate] = useTransition();
   const trimmed = value.trim();
+  const remaining = MAX_USER_PROMPT - value.length;
 
   function go(prompt: string) {
     if (!prompt || navigating) return;
@@ -47,6 +52,9 @@ export function PromptInput({ projectRef }: { projectRef: string }) {
           type="text"
           value={value}
           onChange={(event) => setValue(event.target.value)}
+          // 서버(actions.ts)가 MAX_USER_PROMPT 로 자르므로, 여기서 같은 값으로 막아 말없이
+          // 잘리지 않게 한다 — 넘겨 쓴 뒷부분이 조용히 사라지는 걸 미리 방지.
+          maxLength={MAX_USER_PROMPT}
           // 이동 중에도 포커스를 잃지 않게 disabled 대신 readOnly 로 막는다.
           readOnly={navigating}
           aria-disabled={navigating}
@@ -54,6 +62,12 @@ export function PromptInput({ projectRef }: { projectRef: string }) {
           aria-label="Describe which component you need tests for"
           className="text-foreground placeholder:text-muted-foreground flex-1 bg-transparent pl-1 text-sm outline-none aria-disabled:opacity-50"
         />
+        {/* 한계에 가까울 때만 남은 글자를 알린다 — 잘리기 전에 보이게. 평소엔 감춰 공간을 안 뺏는다. */}
+        {remaining <= COUNTER_THRESHOLD && (
+          <span aria-live="polite" className="text-muted-foreground shrink-0 text-xs tabular-nums">
+            {remaining}
+          </span>
+        )}
         <button
           type="submit"
           // 비었을 때만 진짜 disabled. 보내는 중(navigating)은 포커스를 지키려고 aria-disabled 로

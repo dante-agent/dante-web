@@ -20,6 +20,7 @@ import {
   setSessionFeedback,
 } from "@/lib/projects/generated-sessions";
 import { saveGeneratedVersion } from "@/lib/projects/generated-versions";
+import { MAX_USER_PROMPT } from "@/lib/projects/prompt-limits";
 import { getOwnedProject, projectRepoOf, type ProjectRepo } from "@/lib/projects/queries";
 import { getTestRecommendations, type TestRecommendation } from "@/lib/projects/recommendations";
 import { FIXED_NOTE, UPDATED_NOTE } from "@/lib/projects/session-label";
@@ -99,9 +100,6 @@ async function generateAndSave(args: {
     versionId,
   };
 }
-
-/** 상단 프롬프트 자유 문구 상한. AI 매칭 프롬프트에 그대로 실리므로 토큰·악용을 막으려 자른다. */
-const MAX_USER_PROMPT = 200;
 
 /** 생성 계획에 실을 대상 한 개(경로 + 표시용 이름). */
 export type PlanTarget = { filePath: string; componentName: string };
