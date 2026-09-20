@@ -22,6 +22,7 @@
     "@supabase/ssr": "^0.12.6",
     "@supabase/supabase-js": "^2.115.0",
     "@tanstack/react-query": "^5.102.8",
+    "@vercel/analytics": "^2.0.1",
     "ai": "^7.0.93",
     "anser": "2.3.5",
     "class-variance-authority": "^0.7.1",
