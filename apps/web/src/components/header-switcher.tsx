@@ -5,7 +5,7 @@ import { Popover } from "@base-ui/react/popover";
 import { Check, ChevronsUpDown, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Item = { value: string; label: string };
+export type Item = { value: string; label: string };
 
 export function SwitcherRow({ children, onClick }: { children: ReactNode; onClick: () => void }) {
   return (
@@ -16,6 +16,69 @@ export function SwitcherRow({ children, onClick }: { children: ReactNode; onClic
     >
       {children}
     </button>
+  );
+}
+
+/**
+ * 찾기 input + 목록 + footer. 데스크톱 팝오버(HeaderSwitcher)와 모바일 바텀시트(PathSheet)가
+ * 같은 걸 쓴다 — 목록 모양이 두 곳에서 갈라지지 않게.
+ */
+export function SwitcherList({
+  items,
+  value,
+  findLabel,
+  onSelect,
+  footer,
+  autoFocus,
+  listClassName,
+}: {
+  items: Item[];
+  value: string;
+  findLabel: string;
+  onSelect: (v: string) => void;
+  footer?: ReactNode;
+  autoFocus?: boolean;
+  listClassName?: string;
+}) {
+  const [q, setQ] = useState("");
+  const needle = q.trim().toLowerCase();
+  const filtered = needle ? items.filter((i) => i.label.toLowerCase().includes(needle)) : items;
+
+  return (
+    <>
+      <div className="border-border relative border-b">
+        <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2" />
+        <input
+          autoFocus={autoFocus}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder={findLabel}
+          aria-label={findLabel.replace(/…$/, "")}
+          className="placeholder:text-muted-foreground h-9 w-full bg-transparent pr-3 pl-8 text-sm outline-none"
+        />
+      </div>
+
+      <ul className={cn("max-h-64 overflow-y-auto p-1", listClassName)}>
+        {filtered.map((i) => (
+          <li key={i.value}>
+            <button
+              type="button"
+              onClick={() => onSelect(i.value)}
+              aria-current={i.value === value ? "true" : undefined}
+              className="hover:bg-muted flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm"
+            >
+              <span className="truncate">{i.label}</span>
+              {i.value === value && <Check className="size-4 shrink-0" />}
+            </button>
+          </li>
+        ))}
+        {filtered.length === 0 && (
+          <li className="text-muted-foreground px-2 py-2 text-center text-xs">No match</li>
+        )}
+      </ul>
+
+      {footer && <div className="border-border border-t p-1">{footer}</div>}
+    </>
   );
 }
 
@@ -40,18 +103,11 @@ export function HeaderSwitcher({
   /** 헤더가 좁아질 때 이 스위처만 안 줄이고 싶을 때(레포 이름) 쓴다. */
   className?: string;
 }) {
-  const [q, setQ] = useState("");
   const anchorRef = useRef<HTMLSpanElement>(null);
   const current = items.find((i) => i.value === value);
-  const needle = q.trim().toLowerCase();
-  const filtered = needle ? items.filter((i) => i.label.toLowerCase().includes(needle)) : items;
 
   return (
-    <Popover.Root
-      onOpenChange={(open) => {
-        if (!open) setQ("");
-      }}
-    >
+    <Popover.Root>
       <Popover.Trigger
         aria-label={`${kind}: ${current?.label ?? value}`}
         // min-w-0 을 주면 아이콘·화살표까지 밖으로 넘쳐 클릭 범위가 어긋난다.
@@ -84,38 +140,14 @@ export function HeaderSwitcher({
             aria-label={`Switch ${kind.toLowerCase()}`}
             className="border-border bg-popover data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-open:slide-in-from-top-1 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 w-64 origin-[var(--transform-origin)] overflow-hidden rounded-lg border shadow-md duration-100 outline-none"
           >
-            <div className="border-border relative border-b">
-              <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2" />
-              <input
-                autoFocus
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder={findLabel}
-                aria-label={findLabel.replace(/…$/, "")}
-                className="placeholder:text-muted-foreground h-9 w-full bg-transparent pr-3 pl-8 text-sm outline-none"
-              />
-            </div>
-
-            <ul className="max-h-64 overflow-y-auto p-1">
-              {filtered.map((i) => (
-                <li key={i.value}>
-                  <button
-                    type="button"
-                    onClick={() => onSelect(i.value)}
-                    aria-current={i.value === value ? "true" : undefined}
-                    className="hover:bg-muted flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm"
-                  >
-                    <span className="truncate">{i.label}</span>
-                    {i.value === value && <Check className="size-4 shrink-0" />}
-                  </button>
-                </li>
-              ))}
-              {filtered.length === 0 && (
-                <li className="text-muted-foreground px-2 py-2 text-center text-xs">No match</li>
-              )}
-            </ul>
-
-            {footer && <div className="border-border border-t p-1">{footer}</div>}
+            <SwitcherList
+              autoFocus
+              items={items}
+              value={value}
+              findLabel={findLabel}
+              onSelect={onSelect}
+              footer={footer}
+            />
           </Popover.Popup>
         </Popover.Positioner>
       </Popover.Portal>
