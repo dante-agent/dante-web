@@ -63,6 +63,9 @@ export function ChatSession({
   // 확인 메시지 id → 그 시점에 세운 계획(확정 시 어떤 파일을 생성할지). 액션 버튼 클릭 때 꺼내 쓴다.
   const plansRef = useRef(new Map<string, { matched: PlanTarget[]; top: PlanTarget[] }>());
   const startedRef = useRef(false);
+  // 생성이 도는 중인지. 확정 버튼의 disabled 는 재렌더 뒤에야 걸려서, 그 사이 더블클릭이면
+  // generate 가 두 번 돌아 배치가 이중 생성·이중 과금될 수 있다. 이 래치로 두 번째를 버린다.
+  const generatingRef = useRef(false);
   // 생성 연출. 확정한 대상 파일과, 연출이 끝난 뒤 이동할 주소·대화 저장 완료를 들고 있다.
   const [chosenTargets, setChosenTargets] = useState<PlanTarget[]>([]);
   const afterRef = useRef({ url: "", saved: Promise.resolve() as Promise<unknown> });
@@ -152,6 +155,10 @@ export function ChatSession({
   }
 
   function generate(chosen: PlanTarget[]) {
+    // 이미 생성이 도는 중이면(더블클릭) 두 번째 호출을 버린다. 실패로 끝나면 아래에서 풀어
+    // 같은 버튼으로 재시도할 수 있게 한다. 성공하면 세션으로 이동하므로 풀 필요가 없다.
+    if (generatingRef.current) return;
+    generatingRef.current = true;
     setChosenTargets(chosen);
     performance.start(async () => {
       try {
@@ -160,6 +167,7 @@ export function ChatSession({
           chosen.map((t) => t.filePath)
         );
         if (!result.ok) {
+          generatingRef.current = false;
           pushAssistant(ERROR_MESSAGE[result.reason]);
           return { ok: false, message: ERROR_MESSAGE[result.reason] };
         }
@@ -185,6 +193,7 @@ export function ChatSession({
         };
         return { ok: true, files: result.files };
       } catch (error) {
+        generatingRef.current = false;
         unstable_rethrow(error);
         pushAssistant(ERROR_MESSAGE.failed);
         return { ok: false, message: ERROR_MESSAGE.failed };
