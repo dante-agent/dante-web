@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" width="1600" height="900" role="img" aria-label="Dante architecture">
+  <title>Dante architecture</title>
+
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#1A181D" stroke-width="1" />
+    </pattern>
+    <marker id="a-dim" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 1L9 5L0 9z" fill="#4A464F" />
+    </marker>
+    <marker id="a-mint" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 1L9 5L0 9z" fill="#46E1A5" />
+    </marker>
+    <marker id="a-cobalt" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 1L9 5L0 9z" fill="#687FF5" />
+    </marker>
+  </defs>
+
+  <style>
+    .t { font-family: "Geist", -apple-system, "Segoe UI", sans-serif; }
+    .m { font-family: "Hack", ui-monospace, "SF Mono", Menlo, monospace; }
+    .title { font-size: 22px; font-weight: 600; fill: #EEEDF0; }
+    .sub { font-size: 15px; fill: #7D7982; }
+    .edge-label { font-size: 15px; fill: #B5B2B9; }
+    .legend { font-size: 16px; fill: #B5B2B9; }
+    .box { stroke-width: 1.5; }
+    .line { fill: none; stroke: #3C3841; stroke-width: 1.5; }
+    .line-mint { fill: none; stroke: #46E1A5; stroke-width: 1.5; }
+    .line-cobalt { fill: none; stroke: #687FF5; stroke-width: 1.5; }
+    .pill { fill: #121014; }
+  </style>
+
+  <rect width="1600" height="900" rx="16" fill="#121014" />
+  <rect width="1600" height="900" rx="16" fill="url(#grid)" />
+
+  <!-- ── edges ────────────────────────────────────────────── -->
+  <path class="line-cobalt" d="M290 150 H340 V134 H420" marker-end="url(#a-cobalt)" />
+  <path class="line-cobalt" d="M290 410 H372 V170 H420" marker-end="url(#a-cobalt)" />
+  <path class="line" d="M720 134 H790 V150 H850" marker-end="url(#a-dim)" />
+  <path class="line" d="M720 170 H790 V410 H850" marker-end="url(#a-dim)" />
+  <path class="line" d="M575 210 V340" stroke-dasharray="6 5" marker-end="url(#a-dim)" />
+  <path class="line-mint" d="M290 670 H420" marker-end="url(#a-mint)" />
+  <path class="line" d="M720 640 H790 V440 H850" marker-end="url(#a-dim)" />
+  <path class="line-mint" d="M720 670 H850" marker-end="url(#a-mint)" />
+  <path class="line-mint" d="M1150 670 H1280" stroke-dasharray="6 5" marker-end="url(#a-mint)" />
+
+  <!-- ── edge labels ──────────────────────────────────────── -->
+  <g text-anchor="middle" dominant-baseline="middle">
+    <rect class="pill" x="344" y="121" width="64" height="26" rx="6" /><text class="m edge-label" x="376" y="135">HTTPS</text>
+    <rect class="pill" x="333" y="277" width="78" height="26" rx="6" /><text class="m edge-label" x="372" y="291">/api/v1</text>
+    <rect class="pill" x="731" y="121" width="48" height="26" rx="6" /><text class="m edge-label" x="755" y="135">SQL</text>
+    <rect class="pill" x="737" y="267" width="106" height="26" rx="6" /><text class="t edge-label" x="790" y="281">Chat stream</text>
+    <rect class="pill" x="531" y="262" width="88" height="26" rx="6" /><text class="m edge-label" x="575" y="276">proxy.ts</text>
+    <rect class="pill" x="307" y="657" width="96" height="26" rx="6" /><text class="t edge-label" x="355" y="671">PR webhook</text>
+    <rect class="pill" x="727" y="537" width="126" height="26" rx="6" /><text class="t edge-label" x="790" y="551">Generate tests</text>
+    <rect class="pill" x="740" y="657" width="90" height="26" rx="6" /><text class="t edge-label" x="785" y="671">Run tests</text>
+    <rect class="pill" x="1184" y="657" width="64" height="26" rx="6" /><text class="t edge-label" x="1216" y="671">Result</text>
+  </g>
+
+  <!-- ── nodes ────────────────────────────────────────────── -->
+  <g text-anchor="middle">
+    <!-- Frontend -->
+    <rect class="box" x="40" y="90" width="250" height="120" rx="12" fill="#171D37" stroke="#687FF5" />
+    <text class="t title" x="165" y="142">Browser</text>
+    <text class="t sub" x="165" y="172">Dashboard · Editor</text>
+
+    <rect class="box" x="40" y="350" width="250" height="120" rx="12" fill="#171D37" stroke="#687FF5" />
+    <text class="t title" x="165" y="402">Extension</text>
+    <text class="m sub" x="165" y="432">Bearer token</text>
+
+    <!-- Dante server -->
+    <rect class="box" x="430" y="90" width="290" height="120" rx="12" fill="#1E150F" stroke="#FF570A" />
+    <text class="m title" x="575" y="142">apps/web</text>
+    <text class="t sub" x="575" y="172">Next.js App Router · BFF</text>
+
+    <rect class="box" x="430" y="610" width="290" height="120" rx="12" fill="#1E150F" stroke="#FF570A" />
+    <text class="t title" x="575" y="662">PR Pipeline</text>
+    <text class="m sub" x="575" y="692">webhook · api/internal</text>
+
+    <!-- Isolated sandbox -->
+    <rect class="box" x="860" y="610" width="290" height="120" rx="12" fill="#062619" stroke="#46E1A5" />
+    <text class="t title" x="1005" y="662">Vercel Sandbox</text>
+    <text class="m sub" x="1005" y="692">packages/sandbox</text>
+
+    <!-- Data · external -->
+    <rect class="box" x="860" y="90" width="290" height="120" rx="12" fill="#1A181D" stroke="#3C3841" />
+    <text class="t title" x="1005" y="142">PostgreSQL</text>
+    <text class="m sub" x="1005" y="172">Prisma · packages/db</text>
+
+    <rect class="box" x="430" y="350" width="290" height="120" rx="12" fill="#1A181D" stroke="#3C3841" />
+    <text class="t title" x="575" y="402">Supabase Auth</text>
+    <text class="t sub" x="575" y="432">Session refresh</text>
+
+    <rect class="box" x="860" y="350" width="290" height="120" rx="12" fill="#1A181D" stroke="#3C3841" />
+    <text class="t title" x="1005" y="402">LLM Providers</text>
+    <text class="t sub" x="1005" y="432">Anthropic · OpenAI · Google</text>
+
+    <rect class="box" x="40" y="610" width="250" height="120" rx="12" fill="#1A181D" stroke="#3C3841" />
+    <text class="t title" x="165" y="662">GitHub App</text>
+    <text class="t sub" x="165" y="692">PR events · Octokit</text>
+
+    <rect class="box" x="1290" y="610" width="270" height="120" rx="12" fill="#1A181D" stroke="#3C3841" />
+    <text class="t title" x="1425" y="662">Slack · Discord</text>
+    <text class="t sub" x="1425" y="692">Run notifications</text>
+  </g>
+
+  <!-- ── legend ───────────────────────────────────────────── -->
+  <g>
+    <rect x="40" y="802" width="24" height="24" rx="6" fill="#171D37" stroke="#687FF5" stroke-width="1.5" />
+    <text class="t legend" x="78" y="815" dominant-baseline="middle">Frontend</text>
+
+    <rect x="240" y="802" width="24" height="24" rx="6" fill="#1E150F" stroke="#FF570A" stroke-width="1.5" />
+    <text class="t legend" x="278" y="815" dominant-baseline="middle">Dante server (BFF)</text>
+
+    <rect x="500" y="802" width="24" height="24" rx="6" fill="#062619" stroke="#46E1A5" stroke-width="1.5" />
+    <text class="t legend" x="538" y="815" dominant-baseline="middle">Isolated sandbox</text>
+
+    <rect x="740" y="802" width="24" height="24" rx="6" fill="#1A181D" stroke="#3C3841" stroke-width="1.5" />
+    <text class="t legend" x="778" y="815" dominant-baseline="middle">Data · External services</text>
+  </g>
+</svg>
