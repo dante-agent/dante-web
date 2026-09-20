@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import localFont from "next/font/local";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
+import { GoogleAnalytics } from "@/components/google-analytics";
 import { SkipLink } from "@/components/skip-link";
 import { siteUrl } from "@/lib/site-url";
 import { Providers } from "./providers";
@@ -66,6 +68,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body>
         <SkipLink />
         <Providers>{children}</Providers>
+        {/*
+          방문 집계 두 벌. Vercel Analytics 는 배포 대시보드에서 바로 보이고
+          (쿠키 없이 방문자를 세므로 로그인 전 유입을 보기 좋다), GA4 는 유입 경로·
+          행동을 길게 쌓는다. 둘 다 본문 뒤에 둔다 — 화면을 그리는 데 필요한 스크립트가
+          아니라서 먼저 실행될 이유가 없다.
+        */}
+        <Analytics />
+        <GoogleAnalytics />
       </body>
     </html>
   );
