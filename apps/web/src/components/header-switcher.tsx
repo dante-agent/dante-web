@@ -3,6 +3,7 @@
 import { useRef, useState, type ReactNode } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { Check, ChevronsUpDown, Search } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 type Item = { value: string; label: string };
 
@@ -26,6 +27,7 @@ export function HeaderSwitcher({
   findLabel,
   onSelect,
   footer,
+  className,
 }: {
   /** 무엇을 바꾸는지. 트리거 이름("Team: acme")과 팝업 이름에 쓴다 — 값만 읽히면 뭘 바꾸는지 모른다. */
   kind: "Team" | "Organization" | "Repository";
@@ -35,6 +37,8 @@ export function HeaderSwitcher({
   findLabel: string;
   onSelect: (v: string) => void;
   footer?: ReactNode;
+  /** 헤더가 좁아질 때 이 스위처만 안 줄이고 싶을 때(레포 이름) 쓴다. */
+  className?: string;
 }) {
   const [q, setQ] = useState("");
   const anchorRef = useRef<HTMLSpanElement>(null);
@@ -50,10 +54,19 @@ export function HeaderSwitcher({
     >
       <Popover.Trigger
         aria-label={`${kind}: ${current?.label ?? value}`}
-        className="hover:bg-muted focus-visible:ring-ring flex items-center gap-2.5 rounded-md px-2 py-1 text-sm leading-none outline-none focus-visible:ring-2"
+        // min-w-0 을 주면 아이콘·화살표까지 밖으로 넘쳐 클릭 범위가 어긋난다.
+        // 기본 min-width:auto 가 "아이콘+화살표" 를 바닥으로 잡아주고, 줄어드는 건 라벨뿐이다.
+        // gap 은 md 아래에서 좁힌다 — 라벨이 말줄임으로 0 이 되면 gap 만 남아 호버 박스가 내용보다 넓어진다.
+        className={cn(
+          "hover:bg-muted focus-visible:ring-ring flex items-center gap-1 rounded-md px-2 py-1 text-sm leading-none outline-none focus-visible:ring-2 md:gap-2.5",
+          className
+        )}
       >
         {icon}
-        <span className="max-w-[9rem] truncate font-medium">{current?.label ?? value}</span>
+        {/* min-w 가 없으면 flex 가 0 까지 줄여버려 말줄임이 아니라 그냥 사라진다. */}
+        <span className="max-w-[9rem] min-w-[4ch] truncate font-medium">
+          {current?.label ?? value}
+        </span>
         {/* 팝업은 이 아이콘에 붙는다 (Supabase 처럼) */}
         <span ref={anchorRef} className="flex">
           <ChevronsUpDown className="text-muted-foreground size-3.5 shrink-0 translate-y-[0.5px]" />

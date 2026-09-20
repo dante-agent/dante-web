@@ -1,6 +1,7 @@
 "use client";
 
 // 최상단 헤더 (project 스코프). 로고 / owner / repo 브레드크럼 · 검색 · Feedback · 프로필.
+// 검색은 오른쪽 그룹 옆에 붙는다(GitHub 식) — 브레드크럼과 같은 flex 줄이라 겹칠 수가 없다.
 // 데이터는 project layout 이 넘겨준다. 파일 검색 목록은 PR B(레포 트리)에서 연결.
 // 프로필은 드롭다운(user-menu). Feedback 은 구글폼 설문을 새 탭으로 연다.
 
@@ -64,7 +65,8 @@ export function AppHeader({
         </Link>
       </div>
 
-      <nav aria-label="Breadcrumb" className="flex shrink-0 items-center gap-4">
+      {/* 좁아지면 앞 세그먼트부터 말줄임된다. 숨기지는 않는다 — 경로는 지금 어디인지를 알려주는 유일한 표시다. */}
+      <nav aria-label="Breadcrumb" className="flex min-w-0 shrink items-center gap-4">
         {/* 팀은 쿠키가 아니라 이 프로젝트의 팀이다(lib/teams/current.ts). */}
         <Slash />
         <TeamSwitcher teams={teams} value={project.teamId} landing="projects" />
@@ -98,18 +100,20 @@ export function AppHeader({
           onSelect={goto}
           icon={<Box className="text-muted-foreground size-3.5 shrink-0" />}
           footer={newRow("New repository", "/projects/new/github")}
+          // 레포 이름은 안 줄인다 — 셋 중 제일 중요하다.
+          className="shrink-0"
         />
       </nav>
 
-      {/* 검색창은 브레드크럼 길이와 무관하게 화면 중앙 고정 (레이아웃 시프트 방지).
-          absolute 라 DOM 순서와 화면 위치가 무관하다 — 탭 순서가 로고·브레드크럼 다음이 되게 뒤에 둔다. */}
-      <div className="pointer-events-none absolute inset-x-0 flex justify-center px-3">
-        <div className="pointer-events-auto w-full max-w-[556px]">
-          <FileSearch projectRef={project.ref} />
-        </div>
+      {/* ml-auto 는 검색창이 가져간다 — 오른쪽 그룹에 붙어 고정되니 브레드크럼이 길어져도 안 밀린다.
+          shrink-0 을 주면 안 된다: 좁아질 때 검색창이 320px 을 붙들고 있어 브레드크럼만 찌그러진다. */}
+      <div className="ml-auto flex min-w-0 shrink items-center pl-3">
+        <FileSearch projectRef={project.ref} />
       </div>
 
-      <div className="ml-auto flex shrink-0 items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2 pl-3">
+        {/* 없으면 검색창이 Feedback·프로필과 한 덩어리로 읽힌다. */}
+        <span aria-hidden="true" className="bg-border mr-1 h-4 w-px" />
         <FeedbackLink />
         <UserMenu user={user} />
       </div>
