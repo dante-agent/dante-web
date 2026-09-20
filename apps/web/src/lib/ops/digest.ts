@@ -27,27 +27,32 @@ const TIGHT_RATIO = 0.8;
  * 알리려면 이미 알렸는지를 어딘가에 적어 둬야 하고, 그러자고 표를 하나 만들면
  * 알림 하나 때문에 마이그레이션과 RLS 가 따라온다. 요약은 상태가 필요 없고,
  * 답해야 하는 질문("지금 몇 명 들어왔나")에도 더 곧장 답한다.
+ *
+ * 문구는 한국어로 고정한다. 알림 설정의 NotificationLocale 을 따르지 않는 이유:
+ * 그건 팀마다 받는 사람이 다른 PR 알림용이고, 이 요약은 운영자 한 팀만 보는
+ * 채널로 간다 — 고를 사람이 없는 설정을 만들 이유가 없다. 받는 사람이 늘어
+ * 언어가 갈리면 그때 discord.ts 처럼 COPY 표를 둔다.
  */
 export function renderOpsDigest(metrics: OpsMetrics, opsUrl: string | null): string {
-  const lines = ["**dante · ops**"];
+  const lines = ["**dante · 운영 현황**"];
 
   lines.push(
-    `Signups **${count(metrics.signups.total)}** (+${count(metrics.signups.last24h)} today)`,
-    `Projects **${count(metrics.projects.total)}** (+${count(metrics.projects.last24h)} today)`,
-    `Test runs **${count(metrics.testRuns.total)}** (+${count(metrics.testRuns.last24h)} today)`
+    `가입 **${count(metrics.signups.total)}명** (오늘 +${count(metrics.signups.last24h)})`,
+    `프로젝트 **${count(metrics.projects.total)}개** (오늘 +${count(metrics.projects.last24h)})`,
+    `테스트 실행 **${count(metrics.testRuns.total)}건** (오늘 +${count(metrics.testRuns.last24h)})`
   );
 
   const errored = metrics.runStatuses.find((row) => row.status === "error")?.count ?? 0;
   // error 는 테스트가 떨어진 게 아니라 실행 자체가 안 된 것이다(TestRun.status 주석).
   // 우리가 볼 거리라 0 이 아닐 때만, 따로 적는다.
-  if (errored > 0) lines.push(`-# ${count(errored)} run(s) could not finish`);
+  if (errored > 0) lines.push(`-# 실행을 끝내지 못한 건 ${count(errored)}건`);
 
-  lines.push("", `AI spend **${formatUsd(metrics.ai.costUsd)}** · ${metrics.ai.periodLabel}`);
+  lines.push("", `AI 지출 **${formatUsd(metrics.ai.costUsd)}** · ${metrics.ai.periodLabel}`);
 
   const demo = demoLine(metrics.demoBudget);
   if (demo) lines.push(demo);
 
-  if (opsUrl) lines.push("", `[Open ops](<${opsUrl}>)`);
+  if (opsUrl) lines.push("", `[지표 화면 열기](<${opsUrl}>)`);
 
   const content = lines.join("\n");
   // 넘칠 일이 거의 없는 길이지만, 넘치면 Discord 가 메시지 전체를 거절한다 —
@@ -63,16 +68,20 @@ function demoLine(budget: OpsMetrics["demoBudget"]): string | null {
   if (!budget) return null;
 
   // 한도가 0 이면 AI 가 꺼져 있다는 뜻이다(budget.ts). 0 으로 나누지 않고 그대로 말한다.
-  if (budget.limitUsd <= 0) return "Demo budget **off** (limit is 0)";
+  if (budget.limitUsd <= 0) return "데모 계정 예산 **꺼짐** (한도가 0)";
 
   const percent = Math.min(100, Math.round((budget.usedUsd / budget.limitUsd) * 100));
-  const line = `Demo budget **${formatUsd(budget.usedUsd)} / ${formatUsd(budget.limitUsd)}** (${percent}%)`;
+  const line = `데모 계정 예산 **${formatUsd(budget.usedUsd)} / ${formatUsd(budget.limitUsd)}** (${percent}%)`;
 
-  if (budget.exceeded) return `${line} — **exhausted, AI is blocked for that account**`;
-  if (budget.usedUsd / budget.limitUsd >= TIGHT_RATIO) return `${line} — running out`;
+  if (budget.exceeded) return `${line} — **다 썼습니다. 이 계정의 AI 가 막혀 있습니다**`;
+  if (budget.usedUsd / budget.limitUsd >= TIGHT_RATIO) return `${line} — 곧 소진됩니다`;
   return line;
 }
 
+/**
+ * 숫자는 한국어 문장 안에서도 en-US 자릿수 구분(1,234)으로 찍는다. ko-KR 도 같은
+ * 모양이지만, /ops 화면과 금액(formatUsd)이 전부 en-US 라 한 곳만 다르게 둘 이유가 없다.
+ */
 function count(value: number) {
   return value.toLocaleString("en-US");
 }
